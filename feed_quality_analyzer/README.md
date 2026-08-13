@@ -13,7 +13,8 @@ The analyzer evaluates macro candle continuity (M1 bars) and micro tick silence 
    - **Micro (Tick Stream):** Evaluates tick density, sub-second latency spikes ($> 15\text{s}$ silence), and bid-ask spread glitches.
 
 2. **Custom Intraday Working Hours Filter (`--work-hours`):**
-   - Restricts feed quality evaluation exclusively to active trading windows (e.g., `--work-hours 6-23` or `--work-hours 08:30-17:30`).
+   - Supports explicit ranges (e.g., `--work-hours 6-23`, `--work-hours 08:30-17:30`) as well as **`--work-hours auto`**.
+   - **Dynamic MT5 Feed Session Detection (`--work-hours auto`):** Automatically detects each symbol's actual active operating hours from MT5 market data (e.g. `01:00–23:59` for Metals, `03:00–23:59` for US Indices/Oil).
    - Ignores off-hours overnight gaps when computing uptime % and quality scores.
 
 3. **Timezone Alignment (`--tz`):**

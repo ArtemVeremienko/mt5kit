@@ -47,21 +47,28 @@ class DateRangePreparer:
         else:
             start_dt = end_dt - timedelta(days=days)
 
+        # Floor start_dt and end_dt to minute boundaries for clean grid alignment
+        start_dt = start_dt.replace(second=0, microsecond=0)
+        end_dt = end_dt.replace(second=0, microsecond=0)
+
         return ensure_utc(start_dt), ensure_utc(end_dt)
 
     @staticmethod
     def parse_work_hours(work_hours_str: Optional[str]) -> Optional[Tuple[time, time]]:
         """
-        Parses working hours strings such as '6-23', '06:00-23:00', '8:30-17:30'.
-        Returns (start_time, end_time) or None if work_hours_str is empty/None.
+        Parses working hours strings such as '6-23', '06:00-23:00', '8:30-17:30', or 'auto'.
+        Returns (start_time, end_time) tuple, 'auto' marker string, or None if work_hours_str is empty/None.
         """
         if not work_hours_str or not str(work_hours_str).strip():
             return None
 
-        clean_str = str(work_hours_str).strip()
+        clean_str = str(work_hours_str).strip().lower()
+        if clean_str == "auto":
+            return "auto"  # Marker for dynamic session detection per symbol
+
         parts = clean_str.split("-")
         if len(parts) != 2:
-            raise ValueError(f"Invalid --work-hours format '{work_hours_str}'. Expected 'H-H' or 'HH:MM-HH:MM' (e.g. '6-23' or '06:00-23:00').")
+            raise ValueError(f"Invalid --work-hours format '{work_hours_str}'. Expected 'auto', 'H-H', or 'HH:MM-HH:MM' (e.g. 'auto', '6-23', or '06:00-23:00').")
 
         def _parse_time(t_str: str) -> time:
             t_str = t_str.strip()
@@ -78,11 +85,11 @@ class DateRangePreparer:
     @staticmethod
     def is_within_work_hours(
         dt_utc: datetime,
-        work_hours: Optional[Tuple[time, time]],
+        work_hours: Optional[Any],
         user_tz_name: str = "local"
     ) -> bool:
         """Checks if dt_utc (when converted to user_tz_name) falls within work_hours."""
-        if work_hours is None:
+        if work_hours is None or work_hours == "auto" or not isinstance(work_hours, tuple):
             return True
 
         start_t, end_t = work_hours
@@ -100,9 +107,34 @@ class DateRangePreparer:
         t_local = dt_local.time()
 
         if start_t <= end_t:
-            return start_t <= t_local < end_t
+            return start_t <= t_local <= end_t
         else:  # Overnight range, e.g. 22:00 to 06:00
-            return t_local >= start_t or t_local < end_t
+            return t_local >= start_t or t_local <= end_t
+
+
+class SymbolSessionDetector:
+    """Dynamically detects active trading hours for a symbol from MT5 market data."""
+
+    @staticmethod
+    def detect_active_hours_from_data(df_m1: pd.DataFrame) -> Optional[Tuple[time, time]]:
+        """Extracts (min_active_time, max_active_time) from M1 bar timestamp distribution."""
+        if df_m1.empty or "datetime" not in df_m1.columns:
+            return None
+
+        # Filter out weekends if any
+        df_weekday = df_m1[df_m1["datetime"].dt.weekday < 5]
+        if df_weekday.empty:
+            return None
+
+        active_hours = df_weekday["datetime"].dt.hour.unique()
+        if len(active_hours) == 0:
+            return None
+
+        min_hour = int(active_hours.min())
+        max_hour = int(active_hours.max())
+
+        end_t = time(23, 59) if max_hour == 23 else time(max_hour, 59)
+        return time(min_hour, 0), end_t
 
 
 # =====================================================================
@@ -134,16 +166,36 @@ class MarketSessionRules:
         if weekday == 6 and hour < 23:
             return False
 
-        # 2. Daily Maintenance Rollover Breaks for Indices / Commodities / Metals
-        # Symbols like .USTECHCash, WTI, XAUUSD close daily between 23:00 and 00:00 MT5 time (17:00-18:00 ET)
-        is_index_or_commodity = any(
-            x in symbol.upper() for x in ["USTECH", "US500", "US30", "WTI", "BRENT", "XAUUSD", "XAGUSD", "GOLD"]
+        sym_upper = symbol.upper()
+
+        # 2. Global Equity Indices & Commodities Session Rules
+        # European Equity Indices (e.g. .DE40Cash, GER40, EU50, UK100, CAC40, STOXX): Open 09:00 to 23:00 (Closed 23:00 to 09:00)
+        if any(eu in sym_upper for eu in ["DE40", "GER40", "EU50", "UK100", "CAC40", "STOXX"]):
+            if hour < 9 or hour >= 23:
+                return False
+
+        # Asian Equity Indices (e.g. JP225, HK50, CN50, AUS200)
+        if any(asia in sym_upper for asia in ["JP225", "HK50", "CN50", "AUS200"]):
+            if hour < 2 or hour >= 22:
+                return False
+
+        # US Indices, Energy & Metals Rollover Breaks
+        is_us_index_or_commodity = any(
+            x in sym_upper for x in ["USTECH", "US500", "US30", "WTI", "BRENT", "XAUUSD", "XAGUSD", "GOLD"]
         )
 
-        if is_index_or_commodity and weekday in range(0, 5):  # Mon - Fri
-            # Daily break 23:00 to 23:59 MT5 Server time
-            if hour == 23:
-                return False
+        if is_us_index_or_commodity and weekday in range(0, 5):  # Mon - Fri
+            if any(m in sym_upper for m in ["XAUUSD", "XAGUSD", "GOLD"]):
+                # Metals daily closure break (00:00 to 01:00)
+                if hour == 0:
+                    return False
+            elif any(idx in sym_upper for idx in ["USTECH", "US500", "US30", "WTI", "BRENT"]):
+                # US Indices and Energy daily closure break (23:00 to 03:00)
+                if hour in [23, 0, 1, 2]:
+                    return False
+            else:
+                if hour == 23:
+                    return False
 
         return True
 
@@ -205,11 +257,15 @@ class MT5DataFetcher:
     def fetch_m1_bars(self, symbol: str, start_dt: datetime, end_dt: datetime) -> pd.DataFrame:
         """Fetches M1 OHLCV bars for target date range."""
         start_dt, end_dt = ensure_utc(start_dt), ensure_utc(end_dt)
-        rates = mt5.copy_rates_range(symbol, mt5.TIMEFRAME_M1, start_dt, end_dt)
+        # Shift query start back by 1 minute to ensure MT5 includes the boundary bar at start_dt
+        fetch_start = start_dt - timedelta(minutes=1)
+        rates = mt5.copy_rates_range(symbol, mt5.TIMEFRAME_M1, fetch_start, end_dt)
         if rates is None or len(rates) == 0:
             return pd.DataFrame()
         df = pd.DataFrame(rates)
         df["datetime"] = pd.to_datetime(df["time"], unit="s", utc=True)
+        # Filter to exact requested start_dt to end_dt window
+        df = df[(df["datetime"] >= start_dt) & (df["datetime"] <= end_dt)]
         return df
 
     def fetch_ticks(self, symbol: str, start_dt: datetime, end_dt: datetime) -> pd.DataFrame:
@@ -289,16 +345,26 @@ class DataQualityEngine:
             df_ticks["delta_sec"] = df_ticks["time_msc"].diff() / 1000.0
             df_ticks["spread"] = df_ticks["ask"] - df_ticks["bid"]
 
-            # Filter tick gaps during active hours and within specified working hours
+            # Filter tick gaps during active hours and within specified working hours (ignoring non-trading breaks > 30m)
             raw_gaps = df_ticks[df_ticks["delta_sec"] >= self.tick_gap_threshold_sec]
             for _, row in raw_gaps.iterrows():
-                gap_time = row["datetime"]
-                if MarketSessionRules.is_market_open(symbol, gap_time) and DateRangePreparer.is_within_work_hours(gap_time, work_hours, user_tz_name):
-                    gap_duration = row["delta_sec"]
-                    start_gap = gap_time - timedelta(seconds=gap_duration)
+                gap_duration = row["delta_sec"]
+                # Ignore gaps > 1800s (30 mins) as non-trading session breaks
+                if gap_duration > 1800.0:
+                    continue
+
+                gap_end = row["datetime"]
+                gap_start = gap_end - timedelta(seconds=gap_duration)
+
+                if (
+                    MarketSessionRules.is_market_open(symbol, gap_start)
+                    and MarketSessionRules.is_market_open(symbol, gap_end)
+                    and DateRangePreparer.is_within_work_hours(gap_start, work_hours, user_tz_name)
+                    and DateRangePreparer.is_within_work_hours(gap_end, work_hours, user_tz_name)
+                ):
                     tick_gaps.append({
-                        "start": start_gap,
-                        "end": gap_time,
+                        "start": gap_start,
+                        "end": gap_end,
                         "duration_sec": round(gap_duration, 2)
                     })
 
@@ -550,7 +616,14 @@ def main():
                 continue
             df_m1 = fetcher.fetch_m1_bars(sym, start_dt, end_dt)
             df_ticks = fetcher.fetch_ticks(sym, start_dt, end_dt)
-            res = engine.analyze_symbol(sym, start_dt, end_dt, df_m1, df_ticks, work_hours=work_hours, user_tz_name=args.tz)
+
+            sym_work_hours = work_hours
+            if work_hours == "auto":
+                sym_work_hours = SymbolSessionDetector.detect_active_hours_from_data(df_m1)
+                if sym_work_hours:
+                    logger.info(f"Auto-detected active trading hours for {sym}: {sym_work_hours[0].strftime('%H:%M')}-{sym_work_hours[1].strftime('%H:%M')}")
+
+            res = engine.analyze_symbol(sym, start_dt, end_dt, df_m1, df_ticks, work_hours=sym_work_hours, user_tz_name=args.tz)
             results.append(res)
 
         if results:
