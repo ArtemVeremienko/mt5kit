@@ -1,7 +1,8 @@
+import os
 from datetime import datetime, timedelta, time, timezone
 import pandas as pd
 import pytest
-from feed_quality_analyzer import MarketSessionRules, DataQualityEngine, DateRangePreparer
+from feed_quality_analyzer import MarketSessionRules, DataQualityEngine, DateRangePreparer, DEFAULT_HTML_REPORT, build_parser
 
 
 def test_parse_work_hours():
@@ -153,3 +154,13 @@ def test_spread_anomaly_detection():
     res = engine.analyze_symbol("EURUSD", start_dt, end_dt, df_m1, df_ticks)
 
     assert res["spread_anomalies_count"] == 2
+
+
+def test_default_html_path():
+    parser = build_parser()
+    args = parser.parse_args([])
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    expected_path = os.path.join(script_dir, "index.html")
+    assert args.html == expected_path
+    assert os.path.basename(args.html) == "index.html"
+    assert DEFAULT_HTML_REPORT == expected_path

@@ -9,6 +9,7 @@ Generates CLI console reports and interactive Plotly HTML dashboards.
 import argparse
 from datetime import datetime, timedelta, time, timezone
 import logging
+import os
 from typing import Dict, List, Optional, Tuple, Any
 from zoneinfo import ZoneInfo
 import numpy as np
@@ -583,7 +584,10 @@ class QualityReportPresenter:
 # 5. Main Execution Entrypoint
 # =====================================================================
 
-def main():
+DEFAULT_HTML_REPORT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MetaTrader 5 Data Feed Quality Analyzer")
     parser.add_argument("--symbols", nargs="+", default=["EURUSD", "XAUUSD", ".USTECHCash", "WTI"], help="Symbols to analyze")
     parser.add_argument("--days", type=int, default=1, help="Days delta back from current day")
@@ -593,8 +597,12 @@ def main():
     parser.add_argument("--work-hours", type=str, default=None, help="Daily working hours range, e.g. '6-23' or '06:00-23:00'")
     parser.add_argument("--tz", type=str, default="local", help="Timezone context for --work-hours (default 'local')")
     parser.add_argument("--gap-type", type=str, choices=["m1", "tick", "both"], default="both", help="Gap highlight mode for HTML dashboard ('m1', 'tick', or 'both')")
-    parser.add_argument("--html", type=str, default="feed_quality_report.html", help="Output filepath for interactive HTML report")
+    parser.add_argument("--html", type=str, default=DEFAULT_HTML_REPORT, help="Output filepath for interactive HTML report (default: index.html in script folder)")
+    return parser
 
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
 
     fetcher = MT5DataFetcher()

@@ -57,24 +57,24 @@ uv add metatrader5 pandas plotly pytest
 
 ## 💻 CLI Usage Examples
 
-### 1. Basic Analysis (Default Symbols, Last 2 Days)
+### 1. Basic Analysis (Default Symbols, Last 2 Days, outputs index.html)
 ```powershell
-python feed_quality_analyzer.py --symbols EURUSD XAUUSD .USTECHCash WTI --days 2 --html feed_quality_report.html
+python feed_quality_analyzer.py --symbols EURUSD XAUUSD .USTECHCash WTI --days 2
 ```
 
 ### 2. Analysis Restricted to Working Hours (06:00 to 23:00 Local Time)
 ```powershell
-python feed_quality_analyzer.py --symbols EURUSD XAUUSD .USTECHCash WTI --days 2 --work-hours 6-23 --tz local --html feed_quality_report.html
+python feed_quality_analyzer.py --symbols EURUSD XAUUSD .USTECHCash WTI --days 2 --work-hours 6-23 --tz local
 ```
 
 ### 3. Focus Dashboard Highlights on Tick Silence Gaps
 ```powershell
-python feed_quality_analyzer.py --symbols EURUSD XAUUSD .USTECHCash WTI --days 2 --work-hours 6-23 --gap-type tick --html feed_quality_report.html
+python feed_quality_analyzer.py --symbols EURUSD XAUUSD .USTECHCash WTI --days 2 --work-hours 6-23 --gap-type tick
 ```
 
-### 4. Focus Dashboard Highlights on M1 Candle Gaps
+### 4. Focus Dashboard Highlights on M1 Candle Gaps (Custom Output File)
 ```powershell
-python feed_quality_analyzer.py --symbols EURUSD XAUUSD .USTECHCash WTI --days 2 --work-hours 6-23 --gap-type m1 --html feed_quality_report.html
+python feed_quality_analyzer.py --symbols EURUSD XAUUSD .USTECHCash WTI --days 2 --work-hours 6-23 --gap-type m1 --html custom_report.html
 ```
 
 ---
@@ -93,8 +93,8 @@ uv run pytest test_feed_quality_analyzer.py -v
 
 ```text
 feed_quality_analyzer/
-├── feed_quality_analyzer.py   # Core analyzer CLI & engine script
+├── feed_quality_analyzer.py      # Core analyzer CLI & engine script
 ├── test_feed_quality_analyzer.py # Automated unit tests
-├── feed_quality_report.html   # Standalone Plotly interactive dashboard
-└── README.md                  # Documentation and usage guide
+├── index.html                    # Standalone Plotly interactive dashboard (default HTML output)
+└── README.md                     # Documentation and usage guide
 ```

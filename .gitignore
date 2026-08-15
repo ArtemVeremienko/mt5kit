@@ -1,3 +1,27 @@
+# Python & Virtual Environments
 .venv/
-.pytest_cache/
+env/
+venv/
 __pycache__/
+*.py[cod]
+*$py.class
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints/
+
+# Generated Reports & Analyzer Outputs
+*.html
+**/output/
+**/reports/
+*.log
+
+# IDE & OS Specific
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
