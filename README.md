@@ -137,5 +137,13 @@ metatrader5/
 ├── tick_chart_interactive.ipynb             # Interactive Plotly tick & spread timeline
 ├── tpo_profile_interactive.ipynb            # TPO Market Profile, POC & Value Area (VAH/VAL)
 ├── pyproject.toml                           # Python project metadata & dependencies
+├── LICENSE                                  # MIT License
 └── README.md                                # Main project documentation
 ```
+
+---
+
+## 📄 License
+
+This project is licensed under the terms of the [MIT License](LICENSE). Copyright (c) 2026 Artem Veremiienko.
+
