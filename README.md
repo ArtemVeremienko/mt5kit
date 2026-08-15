@@ -14,7 +14,6 @@ A comprehensive suite of production-grade Python analytics engines, interactive 
   - [Market Microstructure & Spreads](#market-microstructure--spreads)
   - [Interactive Price & Tick Charting](#interactive-price--tick-charting)
   - [Quantitative & Market Profile Analytics](#quantitative--market-profile-analytics)
-- [Standalone Scripts](#-standalone-scripts)
 - [Running Automated Tests](#-running-automated-tests)
 
 ---
@@ -76,7 +75,6 @@ pip install metatrader5 pandas numpy matplotlib plotly pytest scipy statsmodels
 |---|---|---|
 | [`1min_spread_chart.ipynb`](file:///d:/projects/metatrader5/1min_spread_chart.ipynb) | **1-Minute Resolution Spread Analysis & Bar Chart** | Computes 1-minute average bid-ask spreads over a strict 1-day boundary (00:00:00–23:59:59) with adaptive unit scaling (`pips`, `cents`, `points`) and collision-free legend formatting. |
 | [`session_liquidity_volatility_heatmap.ipynb`](file:///d:/projects/metatrader5/session_liquidity_volatility_heatmap.ipynb) | **24-Hour Cumulative Session Liquidity & Volatility Heatmap** | Aggregates 24-hour profiles over Day/Week/Month periods for spreads, volatility, and execution efficiency across global sessions (Asian, London, NY, Rollover) with robust outlier saturation. |
-| [`spread.ipynb`](file:///d:/projects/metatrader5/spread.ipynb) | **Multi-Day Tick Spread Statistics & Outlier Explorer** | Resamples multi-day raw ticks to 5-minute spread statistics, flagging extreme spread widening events and rollover spikes. |
 
 ---
 
@@ -86,7 +84,6 @@ pip install metatrader5 pandas numpy matplotlib plotly pytest scipy statsmodels
 |---|---|---|
 | [`candlestick_chart_interactive.ipynb`](file:///d:/projects/metatrader5/candlestick_chart_interactive.ipynb) | **Second-Based Candlestick Chart (Plotly)** | Resamples raw MT5 tick data into sub-minute/second-based OHLC candlesticks (`1s`, `5s`, `10s`) with synchronized tick volume histograms and range sliders. |
 | [`tick_chart_interactive.ipynb`](file:///d:/projects/metatrader5/tick_chart_interactive.ipynb) | **Interactive Tick Price & Spread Dashboard** | Full-day interactive Plotly chart showing synchronized Bid/Ask step lines, real-time spread subplots, rich tooltips, and zoom/pan controls. |
-| [`tick_chart.ipynb`](file:///d:/projects/metatrader5/tick_chart.ipynb) | **Static Tick Chart & Movement Visualizer** | Matplotlib-based tick chart comparing full-day price trajectories with zoomed step-wise tick dynamics. |
 | [`historical_view.ipynb`](file:///d:/projects/metatrader5/historical_view.ipynb) | **Multi-Timeframe Historical Candlestick Explorer** | Fetches historical price action from 2–5 years ago across H1 (macro 3-day context), M5 (intraday), and M1 (microstructure) timeframes. |
 
 ---
@@ -97,16 +94,6 @@ pip install metatrader5 pandas numpy matplotlib plotly pytest scipy statsmodels
 |---|---|---|
 | [`cross_asset_correlation_cointegration_screener.ipynb`](file:///d:/projects/metatrader5/cross_asset_correlation_cointegration_screener.ipynb) | **Cross-Asset Correlation & Cointegration Divergence Screener** | Quantitative pairs trading and statistical arbitrage engine using Engle-Granger two-step regression, Augmented Dickey-Fuller (ADF) stationarity tests, half-life of mean reversion, and rolling Z-score spread divergence signals. |
 | [`tpo_profile_interactive.ipynb`](file:///d:/projects/metatrader5/tpo_profile_interactive.ipynb) | **TPO (Time Price Opportunity) Market Profile** | Calculates TPO price distribution, Point of Control (POC), and Value Area High/Low (VAH/VAL ~70% volume range) alongside interactive Plotly price action charts. |
-
----
-
-## ⚡ Standalone Scripts
-
-- **[`multi_symbol_screener.py`](file:///d:/projects/metatrader5/multi_symbol_screener.py)**:
-  Quick command-line market screener displaying real-time Bid, Ask, Spread (adaptive pips/cents/pts), Daily High/Low, and 24-hour Daily Range across major Forex, Metals, Commodities, and Index assets.
-  ```powershell
-  python multi_symbol_screener.py
-  ```
 
 ---
 
@@ -146,10 +133,7 @@ metatrader5/
 ├── candlestick_chart_interactive.ipynb      # Sub-minute / second-based candlestick chart (1s/5s/10s)
 ├── cross_asset_correlation_cointegration_screener.ipynb # Cointegration, ADF test & pairs trading screener
 ├── historical_view.ipynb                    # Multi-timeframe historical charts (H1/M5/M1)
-├── multi_symbol_screener.py                 # Live CLI market scanner
 ├── session_liquidity_volatility_heatmap.ipynb # 24h session liquidity, volatility & efficiency heatmaps
-├── spread.ipynb                             # Multi-day spread statistics & outlier events
-├── tick_chart.ipynb                         # Static tick chart visualizer
 ├── tick_chart_interactive.ipynb             # Interactive Plotly tick & spread timeline
 ├── tpo_profile_interactive.ipynb            # TPO Market Profile, POC & Value Area (VAH/VAL)
 ├── pyproject.toml                           # Python project metadata & dependencies
