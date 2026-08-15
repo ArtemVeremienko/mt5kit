@@ -267,3 +267,75 @@ def test_build_dashboard_m1_fallback():
     vrect_ann = [a.text for a in fig.layout.annotations if "M1 Window" in getattr(a, "text", "")]
     assert len(vrect_ann) > 0
 
+
+def test_infer_digits():
+    from history_viewer.history_viewer import infer_digits
+
+    df_eur = pd.DataFrame({"close": [1.08523, 1.08530]})
+    assert infer_digits([df_eur]) == 5
+
+    df_wti = pd.DataFrame({"close": [68.50, 68.65]})
+    assert infer_digits([df_wti]) == 2
+
+
+def test_detect_rangebreaks():
+    from history_viewer.history_viewer import detect_rangebreaks
+
+    # Synthetic Daily with a missing Tuesday (Holiday)
+    d1_dates = [
+        datetime(2026, 5, 11, tzinfo=timezone.utc),  # Mon
+        # Tue 2026-05-12 missing (Holiday)
+        datetime(2026, 5, 13, tzinfo=timezone.utc),  # Wed
+        datetime(2026, 5, 14, tzinfo=timezone.utc),  # Thu
+        datetime(2026, 5, 15, tzinfo=timezone.utc),  # Fri
+    ]
+    df_d1 = pd.DataFrame({"time_utc": d1_dates, "close": [1.0, 1.1, 1.2, 1.3]})
+
+    # Synthetic H1 with missing hours 00:00 to 03:00
+    h1_dates = []
+    for day in range(3):
+        base = datetime(2026, 5, 13, tzinfo=timezone.utc) + timedelta(days=day)
+        for h in range(3, 24):
+            h1_dates.append(base.replace(hour=h))
+    df_h1 = pd.DataFrame({"time_utc": h1_dates, "close": np.linspace(1.0, 1.5, len(h1_dates))})
+
+    daily_rb, h1_rb, intraday_rb = detect_rangebreaks(df_d1, df_h1, hide_gaps=True)
+
+    # Weekend check
+    assert any(rb.get("bounds") == ["sat", "mon"] for rb in daily_rb)
+    # Holiday check (2026-05-12)
+    assert any("2026-05-12" in rb.get("values", []) for rb in daily_rb)
+    # Non-trading hours check (bounds=[0, 3])
+    assert any(rb.get("pattern") == "hour" and rb.get("bounds") == [0, 3] for rb in h1_rb)
+
+
+def test_symbol_precision_formatting():
+    target = datetime(2026, 5, 15, 12, 0, tzinfo=timezone.utc)
+    ranges = resolve_timeframe_ranges(target)
+
+    daily_dates = pd.date_range(ranges.daily_start, ranges.daily_end, freq="1D", tz="UTC")
+    df_daily = pd.DataFrame({
+        "time_utc": daily_dates,
+        "open": np.linspace(65.0, 70.0, len(daily_dates)),
+        "high": np.linspace(65.5, 70.5, len(daily_dates)),
+        "low": np.linspace(64.5, 69.5, len(daily_dates)),
+        "close": np.linspace(65.2, 70.2, len(daily_dates)),
+    })
+    df_h1 = df_daily.copy()
+
+    viewer = HistoryViewer()
+    fig = viewer.build_dashboard(
+        symbol="WTI",
+        target_dt=target,
+        df_daily=df_daily,
+        df_h1=df_h1,
+        ranges=ranges,
+        digits=2
+    )
+
+    # Y-axis format should be .2f
+    assert fig.layout.yaxis.tickformat == ".2f"
+    # Hovertemplate should contain .2f
+    assert ".2f" in fig.data[0].hovertemplate
+
+

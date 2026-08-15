@@ -143,40 +143,140 @@ def resolve_timeframe_ranges(
 
 def downsample_ticks(df_ticks: pd.DataFrame, max_points: int = 50000) -> pd.DataFrame:
     """
-    Intelligent adaptive peak-and-trough preserving downsampler for tick data.
-    If the tick count exceeds max_points, groups ticks into buckets and selects
-    the first, min(bid), max(ask), and last ticks per bucket in exact chronological order.
-    Preserves exact price ranges and spread extremities while keeping Plotly rendering fast.
+    NumPy-vectorized peak-and-trough preserving downsampler for tick data.
+    Executes in pure C contiguous array space, eliminating Pandas slicing overhead.
     """
     if df_ticks is None or len(df_ticks) <= max_points:
         return df_ticks
 
     n = len(df_ticks)
-    # 4 points per bucket (first, min bid, max ask, last)
     num_buckets = max(1, max_points // 4)
-    bucket_size = n / num_buckets
+    edges = np.linspace(0, n, num_buckets + 1, dtype=np.int64)
 
-    indices_to_keep = set()
+    has_bid = "bid" in df_ticks.columns
+    has_ask = "ask" in df_ticks.columns
+
+    bid_arr = df_ticks["bid"].to_numpy() if has_bid else None
+    ask_arr = df_ticks["ask"].to_numpy() if has_ask else None
+
+    # Pre-allocate indices array (up to 4 indices per bucket)
+    selected_indices = np.empty(num_buckets * 4, dtype=np.int64)
+    idx_count = 0
 
     for i in range(num_buckets):
-        start_idx = int(i * bucket_size)
-        end_idx = int((i + 1) * bucket_size) if i < num_buckets - 1 else n
-        if start_idx >= end_idx:
+        s_idx = edges[i]
+        e_idx = edges[i + 1]
+        if s_idx >= e_idx:
             continue
 
-        chunk = df_ticks.iloc[start_idx:end_idx]
-        indices_to_keep.add(chunk.index[0])  # First
-        indices_to_keep.add(chunk.index[-1])  # Last
+        # First and Last points in bucket
+        selected_indices[idx_count] = s_idx
+        selected_indices[idx_count + 1] = e_idx - 1
+        idx_count += 2
 
-        if "bid" in chunk.columns:
-            indices_to_keep.add(chunk["bid"].idxmin())
-            indices_to_keep.add(chunk["bid"].idxmax())
-        if "ask" in chunk.columns:
-            indices_to_keep.add(chunk["ask"].idxmin())
-            indices_to_keep.add(chunk["ask"].idxmax())
+        # Extreme peaks (min and max)
+        if has_bid:
+            chunk_bid = bid_arr[s_idx:e_idx]
+            selected_indices[idx_count] = s_idx + np.argmin(chunk_bid)
+            selected_indices[idx_count + 1] = s_idx + np.argmax(chunk_bid)
+            idx_count += 2
+        elif has_ask:
+            chunk_ask = ask_arr[s_idx:e_idx]
+            selected_indices[idx_count] = s_idx + np.argmin(chunk_ask)
+            selected_indices[idx_count + 1] = s_idx + np.argmax(chunk_ask)
+            idx_count += 2
 
-    sorted_indices = sorted(list(indices_to_keep))
-    return df_ticks.loc[sorted_indices].sort_values("time_utc").reset_index(drop=True)
+    # Vectorized unique sorted indices
+    unique_sorted = np.unique(selected_indices[:idx_count])
+    return df_ticks.iloc[unique_sorted].reset_index(drop=True)
+
+
+def infer_digits(dfs: List[Optional[pd.DataFrame]], default: int = 5) -> int:
+    """
+    Infers the number of decimal digits from price arrays using NumPy.
+    """
+    for df in dfs:
+        if df is not None and not df.empty:
+            for col in ["close", "bid", "ask", "open"]:
+                if col in df.columns:
+                    vals = df[col].to_numpy(dtype=np.float64)
+                    valid_mask = ~np.isnan(vals)
+                    if np.any(valid_mask):
+                        sample = float(vals[valid_mask][0])
+                        str_rep = f"{sample:.8f}".rstrip("0")
+                        if "." in str_rep:
+                            dec_places = len(str_rep.split(".")[1])
+                            return max(2, min(dec_places, 8))
+    return default
+
+
+def detect_rangebreaks(
+    df_daily: Optional[pd.DataFrame] = None,
+    df_h1: Optional[pd.DataFrame] = None,
+    df_intraday: Optional[pd.DataFrame] = None,
+    hide_gaps: bool = True
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Vectorized non-trading gap detector:
+    1. Weekend gaps (Saturday 00:00 to Monday 00:00)
+    2. Weekday full-day holidays (missing calendar days on Mon-Fri)
+    3. Daily recurring non-trading hours (e.g. 23:00 to 03:00 or 00:00 to 03:00)
+
+    Returns (daily_rangebreaks, h1_rangebreaks, intraday_rangebreaks)
+    """
+    if not hide_gaps:
+        return [], [], []
+
+    # 1. Base weekend rangebreaks
+    base_rb = [dict(bounds=["sat", "mon"])]
+
+    # 2. Vectorized weekday holiday detection from daily data using NumPy datetime64
+    holidays = []
+    if df_daily is not None and not df_daily.empty and "time_utc" in df_daily.columns:
+        times_d = df_daily["time_utc"].to_numpy(dtype="datetime64[D]")
+        if len(times_d) > 1:
+            start_day = times_d[0]
+            end_day = times_d[-1]
+            all_days = np.arange(start_day, end_day + np.timedelta64(1, "D"), dtype="datetime64[D]")
+            # Day of week for datetime64[D] (0=Mon, 4=Fri, 5=Sat, 6=Sun)
+            day_of_week = (all_days.view(np.int64) + 3) % 7
+            weekdays = all_days[day_of_week < 5]
+            missing_weekdays = np.setdiff1d(weekdays, times_d)
+            if len(missing_weekdays) > 0:
+                holidays = missing_weekdays.astype(str).tolist()
+
+    daily_rb = list(base_rb)
+    if holidays:
+        daily_rb.append(dict(values=holidays))
+
+    # 3. Vectorized daily non-trading hours detection using NumPy
+    hour_rb = []
+    intraday_source = df_h1 if (df_h1 is not None and not df_h1.empty) else df_intraday
+    if intraday_source is not None and not intraday_source.empty and "time_utc" in intraday_source.columns:
+        times_h = intraday_source["time_utc"].to_numpy(dtype="datetime64[h]")
+        if len(times_h) > 0:
+            hours = times_h.view(np.int64) % 24
+            unique_hours = np.unique(hours)
+            all_24 = np.arange(24, dtype=np.int64)
+            missing_hours = np.setdiff1d(all_24, unique_hours).tolist()
+
+            if missing_hours and len(missing_hours) <= 16:
+                if 0 in missing_hours and 23 in missing_hours:
+                    morning = [h for h in missing_hours if h < 12]
+                    evening = [h for h in missing_hours if h >= 12]
+                    if evening and morning:
+                        close_h = min(evening)
+                        open_h = max(morning) + 1
+                        hour_rb.append(dict(bounds=[close_h, open_h], pattern="hour"))
+                else:
+                    diffs = np.diff(missing_hours)
+                    if len(diffs) == 0 or np.all(diffs == 1):
+                        hour_rb.append(dict(bounds=[missing_hours[0], missing_hours[-1] + 1], pattern="hour"))
+
+    h1_rb = list(daily_rb) + hour_rb
+    intraday_rb = list(daily_rb) + hour_rb
+
+    return daily_rb, h1_rb, intraday_rb
 
 
 class HistoryViewer:
@@ -215,6 +315,15 @@ class HistoryViewer:
             mt5.shutdown()
             self._connected = False
             logger.info("MT5 connection closed.")
+
+    def get_symbol_digits(self, symbol: str) -> Optional[int]:
+        """Gets precision digits from MT5 symbol info."""
+        if not self._connected or mt5 is None:
+            return None
+        info = mt5.symbol_info(symbol)
+        if info is not None:
+            return int(info.digits)
+        return None
 
     def fetch_rates(self, symbol: str, timeframe: int, start_dt: datetime, end_dt: datetime) -> pd.DataFrame:
         """Fetches candlestick bar data from MT5 between start_dt and end_dt in UTC."""
@@ -270,6 +379,7 @@ class HistoryViewer:
         df_ticks: Optional[pd.DataFrame] = None,
         df_m1: Optional[pd.DataFrame] = None,
         ranges: Optional[TimeframeRanges] = None,
+        digits: Optional[int] = None,
         downsample: bool = True,
         theme: str = "dark",
         hide_weekends: bool = True,
@@ -277,7 +387,8 @@ class HistoryViewer:
     ) -> go.Figure:
         """
         Constructs the unified 3-panel interactive Plotly figure.
-        Supports tick Bid/Ask lines or M1 Candlestick fallback if tick data is missing.
+        Supports tick Bid/Ask lines or M1 Candlestick fallback if tick data is missing,
+        with exact symbol precision on Y-axes and tooltips, plus gap removal.
         """
         if ranges is None:
             ranges = resolve_timeframe_ranges(target_dt)
@@ -286,6 +397,12 @@ class HistoryViewer:
             df_ticks = pd.DataFrame()
         if df_m1 is None:
             df_m1 = pd.DataFrame()
+
+        # Infer digits if not explicitly provided
+        if digits is None:
+            digits = infer_digits([df_daily, df_h1, df_m1, df_ticks])
+
+        fmt_price = f".{digits}f"
 
         is_dark = theme.lower() == "dark"
         bg_color = "#131722" if is_dark else "#FFFFFF"
@@ -352,6 +469,22 @@ class HistoryViewer:
             )
         )
 
+        daily_hover = (
+            "<b>Date:</b> %{x|%Y-%m-%d}<br>"
+            f"<b>Open:</b> %{{open:{fmt_price}}}<br>"
+            f"<b>High:</b> %{{high:{fmt_price}}}<br>"
+            f"<b>Low:</b> %{{low:{fmt_price}}}<br>"
+            f"<b>Close:</b> %{{close:{fmt_price}}}<extra></extra>"
+        )
+
+        h1_hover = (
+            "<b>Time:</b> %{x|%Y-%m-%d %H:%M}<br>"
+            f"<b>Open:</b> %{{open:{fmt_price}}}<br>"
+            f"<b>High:</b> %{{high:{fmt_price}}}<br>"
+            f"<b>Low:</b> %{{low:{fmt_price}}}<br>"
+            f"<b>Close:</b> %{{close:{fmt_price}}}<extra></extra>"
+        )
+
         # ----------------------------------------------------
         # 1. DAILY CHART (ROW 1, COL 1)
         # ----------------------------------------------------
@@ -368,6 +501,7 @@ class HistoryViewer:
                     increasing_fillcolor=up_color,
                     decreasing_line_color=down_color,
                     decreasing_fillcolor=down_color,
+                    hovertemplate=daily_hover,
                     showlegend=False
                 ),
                 row=1, col=1
@@ -412,6 +546,7 @@ class HistoryViewer:
                     increasing_fillcolor=up_color,
                     decreasing_line_color=down_color,
                     decreasing_fillcolor=down_color,
+                    hovertemplate=h1_hover,
                     showlegend=False
                 ),
                 row=1, col=2
@@ -453,7 +588,7 @@ class HistoryViewer:
                         name="Bid",
                         mode="lines",
                         line=dict(color="#2962FF", width=1.2, shape="hv"),
-                        hovertemplate="<b>Bid:</b> %{y:.5f}<br><b>Time:</b> %{x|%Y-%m-%d %H:%M:%S.%f}<extra></extra>"
+                        hovertemplate=f"<b>Bid:</b> %{{y:{fmt_price}}}<br><b>Time:</b> %{{x|%Y-%m-%d %H:%M:%S.%f}}<extra></extra>"
                     ),
                     row=2, col=1
                 )
@@ -466,7 +601,7 @@ class HistoryViewer:
                         name="Ask",
                         mode="lines",
                         line=dict(color="#F23645", width=1.2, shape="hv"),
-                        hovertemplate="<b>Ask:</b> %{y:.5f}<br><b>Time:</b> %{x|%Y-%m-%d %H:%M:%S.%f}<extra></extra>"
+                        hovertemplate=f"<b>Ask:</b> %{{y:{fmt_price}}}<br><b>Time:</b> %{{x|%Y-%m-%d %H:%M:%S.%f}}<extra></extra>"
                     ),
                     row=2, col=1
                 )
@@ -482,6 +617,13 @@ class HistoryViewer:
             )
         elif has_m1:
             # Render M1 Candlesticks as fallback
+            m1_hover = (
+                "<b>Time:</b> %{x|%Y-%m-%d %H:%M}<br>"
+                f"<b>Open:</b> %{{open:{fmt_price}}}<br>"
+                f"<b>High:</b> %{{high:{fmt_price}}}<br>"
+                f"<b>Low:</b> %{{low:{fmt_price}}}<br>"
+                f"<b>Close:</b> %{{close:{fmt_price}}}<extra></extra>"
+            )
             fig.add_trace(
                 go.Candlestick(
                     x=df_m1["time_utc"],
@@ -494,6 +636,7 @@ class HistoryViewer:
                     increasing_fillcolor=up_color,
                     decreasing_line_color=down_color,
                     decreasing_fillcolor=down_color,
+                    hovertemplate=m1_hover,
                     showlegend=False
                 ),
                 row=2, col=1
@@ -534,21 +677,49 @@ class HistoryViewer:
             )
         )
 
-        # Configure xaxes: remove rangesliders, slice off weekend gaps, apply theme grid
-        xaxes_kwargs = dict(
+        # Detect and apply rangebreaks (weekends, full-day holidays, daily non-trading hours)
+        daily_rb, h1_rb, intraday_rb = detect_rangebreaks(
+            df_daily=df_daily,
+            df_h1=df_h1,
+            df_intraday=df_ticks if has_ticks else df_m1,
+            hide_gaps=hide_weekends
+        )
+
+        # Crosshair styling for both X (vertical) and Y (horizontal) cursor lines
+        spike_color = "rgba(120, 123, 134, 0.75)" if is_dark else "rgba(100, 116, 139, 0.75)"
+
+        # Base xaxes styling (vertical crosshair tracking)
+        fig.update_xaxes(
             rangeslider_visible=False,
+            showspikes=True,
+            spikemode="across",
+            spikesnap="cursor",
+            spikethickness=1,
+            spikedash="dash",
+            spikecolor=spike_color,
             gridcolor=grid_color,
             showline=True,
             linecolor=grid_color,
             zeroline=False
         )
-        if hide_weekends:
-            xaxes_kwargs["rangebreaks"] = [
-                dict(bounds=["sat", "mon"]),  # Hide weekend gaps (Saturday 00:00 to Monday 00:00)
-            ]
 
-        fig.update_xaxes(**xaxes_kwargs)
+        # Apply specific rangebreaks per subplot
+        if daily_rb:
+            fig.update_xaxes(row=1, col=1, rangebreaks=daily_rb)
+        if h1_rb:
+            fig.update_xaxes(row=1, col=2, rangebreaks=h1_rb)
+        if intraday_rb:
+            fig.update_xaxes(row=2, col=1, rangebreaks=intraday_rb)
+
+        # Format Y-axes with horizontal crosshair tracking and symbol precision
         fig.update_yaxes(
+            showspikes=True,
+            spikemode="across",
+            spikesnap="cursor",
+            spikethickness=1,
+            spikedash="dash",
+            spikecolor=spike_color,
+            tickformat=fmt_price,
             gridcolor=grid_color,
             showline=True,
             linecolor=grid_color,
@@ -571,6 +742,7 @@ class HistoryViewer:
         output_path: Optional[str] = None,
         daily_days: int = 76,
         h1_days: int = 10,
+        digits: Optional[int] = None,
         raw_ticks: bool = False,
         theme: str = "dark",
         hide_weekends: bool = True,
@@ -594,8 +766,12 @@ class HistoryViewer:
 
         df_ticks = pd.DataFrame()
         df_m1 = pd.DataFrame()
+        sym_digits = digits
 
         try:
+            if sym_digits is None:
+                sym_digits = self.get_symbol_digits(symbol)
+
             logger.info(f"Fetching Daily rates for {symbol}...")
             df_daily = self.fetch_rates(symbol, mt5.TIMEFRAME_D1, ranges.daily_start, ranges.daily_end)
             logger.info(f"Retrieved {len(df_daily)} daily candles.")
@@ -626,6 +802,7 @@ class HistoryViewer:
             df_ticks=df_ticks,
             df_m1=df_m1,
             ranges=ranges,
+            digits=sym_digits,
             downsample=not raw_ticks,
             theme=theme,
             hide_weekends=hide_weekends,
@@ -665,9 +842,10 @@ def main():
     parser.add_argument("--output", "-o", type=str, default=None, help="Output HTML file path (default: history_viewer/output/history_{symbol}_{date}.html)")
     parser.add_argument("--daily-days", type=int, default=76, help="Total span in days for Daily chart context (default: 76 / ~2.5 months)")
     parser.add_argument("--h1-days", type=int, default=10, help="Total span in days for H1 chart context (default: 10 days)")
+    parser.add_argument("--digits", type=int, default=None, help="Force specific decimal precision for Y-values (default: auto-detected from symbol)")
     parser.add_argument("--raw-ticks", action="store_true", help="Disable adaptive tick downsampling and render all ticks without downsampling")
     parser.add_argument("--theme", type=str, default="dark", choices=["dark", "light"], help="Plotly visual theme (default: dark)")
-    parser.add_argument("--show-weekends", action="store_true", help="Do not slice off weekend gaps on the charts")
+    parser.add_argument("--show-weekends", action="store_true", help="Do not slice off weekend/holiday/session gaps on the charts")
     parser.add_argument("--window-opacity", type=float, default=0.07, help="Opacity for timeframe highlight window rectangles (default: 0.07)")
     parser.add_argument("--terminal-path", type=str, default=None, help="Path to terminal64.exe if non-standard")
     parser.add_argument("--no-open", action="store_true", help="Do not automatically open the report in the browser")
@@ -682,6 +860,7 @@ def main():
             output_path=args.output,
             daily_days=args.daily_days,
             h1_days=args.h1_days,
+            digits=args.digits,
             raw_ticks=args.raw_ticks,
             theme=args.theme,
             hide_weekends=not args.show_weekends,
