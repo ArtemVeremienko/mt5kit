@@ -20,8 +20,21 @@ A standalone CLI tool and interactive multi-timeframe dashboard for analyzing hi
   - **Weekday Full-Day Holidays**: Automatically detects and slices off missing calendar days (e.g. Christmas, Memorial Day, Good Friday).
 - **Trading-Day Aware**: Handles weekend boundaries gracefully (e.g. Monday's prior trading day is Friday; Friday's next trading day is Monday; weekend target dates shift to the nearest active trading day).
 - **UTC Timezone Default**: Guarantees consistent and accurate MT5 data requests and timestamp tracking in UTC.
-- **Adaptive Tick Downsampling**: Retains peak price excursions and spread envelopes while downsampling >50k ticks for smooth 60fps browser pan and zoom.
+- **NumPy Vectorized Downsampling**: Ultra-fast peak-and-trough preserving algorithm processes >300k ticks in ~40ms for 60fps browser rendering.
 - **Minimalist Dark/Light Plotly UI**: Interactive zoom, pan, crosshair tooltips, and standalone HTML export.
+
+---
+
+## Interactive Shortcuts & Navigation
+
+| Action | Shortcut / Gesture | Result |
+| :--- | :--- | :--- |
+| **2D Box Zoom** | `Left-Click + Drag` anywhere on chart | Zooms into both X (Time) and Y (Price) |
+| **Vertical Zoom** | `Hover on Y-Axis + Mouse Scroll` | Compresses / Expands price scale only |
+| **Vertical Scale Drag** | `Left-Click + Drag` near **Top/Bottom of Y-Axis** | Scales price range up / down |
+| **Horizontal Zoom** | `Hover on X-Axis + Mouse Scroll` | Zooms time axis only |
+| **Pan (All Directions)**| `Shift + Left-Click + Drag` | Pans the chart in any direction |
+| **Reset View / Autoscale**| `Double-Click` anywhere on chart | Resets zoom back to full view |
 
 ---
 

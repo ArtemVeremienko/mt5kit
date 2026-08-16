@@ -411,7 +411,7 @@ class HistoryViewer:
         text_color = "#D1D4DC" if is_dark else "#131722"
         up_color = "#089981"  # TradingView Green
         down_color = "#F23645"  # TradingView Red
-        
+
         # Subtle highlight window styling
         highlight_color = f"rgba(41, 98, 255, {window_opacity})"
         border_alpha = min(1.0, max(0.2, window_opacity * 4.0))
@@ -658,6 +658,7 @@ class HistoryViewer:
             paper_bgcolor=bg_color,
             plot_bgcolor=bg_color,
             font=dict(family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color=text_color),
+            dragmode="pan",
             height=1300,
             hovermode="x unified",
             margin=dict(l=60, r=40, t=90, b=40),
@@ -688,8 +689,9 @@ class HistoryViewer:
         # Crosshair styling for both X (vertical) and Y (horizontal) cursor lines
         spike_color = "rgba(120, 123, 134, 0.75)" if is_dark else "rgba(100, 116, 139, 0.75)"
 
-        # Base xaxes styling (vertical crosshair tracking)
+        # Base xaxes styling (vertical crosshair tracking and full interactive zoom)
         fig.update_xaxes(
+            fixedrange=False,
             rangeslider_visible=False,
             showspikes=True,
             spikemode="across",
@@ -711,8 +713,9 @@ class HistoryViewer:
         if intraday_rb:
             fig.update_xaxes(row=2, col=1, rangebreaks=intraday_rb)
 
-        # Format Y-axes with horizontal crosshair tracking and symbol precision
+        # Format Y-axes with horizontal crosshair tracking, unlocked 2D box zoom, and symbol precision
         fig.update_yaxes(
+            fixedrange=False,
             showspikes=True,
             spikemode="across",
             spikesnap="cursor",
@@ -820,7 +823,13 @@ class HistoryViewer:
             if out_dir:
                 os.makedirs(out_dir, exist_ok=True)
 
-        fig.write_html(output_path, include_plotlyjs="cdn")
+        plotly_config = {
+            "scrollZoom": True,
+            "displayModeBar": True,
+            "displaylogo": False,
+            "responsive": True
+        }
+        fig.write_html(output_path, include_plotlyjs="cdn", config=plotly_config)
         logger.info(f"Report saved to: {output_path}")
 
         if open_browser:

@@ -339,3 +339,37 @@ def test_symbol_precision_formatting():
     assert ".2f" in fig.data[0].hovertemplate
 
 
+def test_rangeslider_disabled():
+    target = datetime(2026, 5, 15, 12, 0, tzinfo=timezone.utc)
+    ranges = resolve_timeframe_ranges(target)
+
+    daily_dates = pd.date_range(ranges.daily_start, ranges.daily_end, freq="1D", tz="UTC")
+    df_daily = pd.DataFrame({
+        "time_utc": daily_dates,
+        "open": np.linspace(1.08, 1.10, len(daily_dates)),
+        "high": np.linspace(1.085, 1.105, len(daily_dates)),
+        "low": np.linspace(1.075, 1.095, len(daily_dates)),
+        "close": np.linspace(1.082, 1.098, len(daily_dates)),
+    })
+    df_h1 = df_daily.copy()
+    tick_dates = pd.date_range(ranges.tick_start, ranges.tick_end, freq="1min", tz="UTC")
+    df_ticks = pd.DataFrame({
+        "time_utc": tick_dates,
+        "bid": np.linspace(1.085, 1.090, len(tick_dates)),
+        "ask": np.linspace(1.0852, 1.0902, len(tick_dates)),
+    })
+
+    viewer = HistoryViewer()
+    fig = viewer.build_dashboard(
+        symbol="EURUSD",
+        target_dt=target,
+        df_daily=df_daily,
+        df_h1=df_h1,
+        df_ticks=df_ticks,
+        ranges=ranges
+    )
+    # Check that rangeslider is disabled on all subplots
+    assert getattr(fig.layout.xaxis.rangeslider, "visible", False) is False
+    assert getattr(fig.layout.xaxis2.rangeslider, "visible", False) is False
+    assert getattr(fig.layout.xaxis3.rangeslider, "visible", False) is False
+
