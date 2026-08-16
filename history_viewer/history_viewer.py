@@ -107,24 +107,34 @@ class TimeframeRanges:
 
 def resolve_timeframe_ranges(
     target_dt: datetime,
-    daily_days: int = 76,
-    h1_days: int = 10
+    daily_days: int = 90,
+    h1_days: int = 10,
+    daily_shift_days: int = 20,
+    h1_shift_days: int = 1
 ) -> TimeframeRanges:
     """
     Computes all timeframe query boundaries in UTC.
-    - daily_days: default 76 days (~2.5 months window centered on target).
-    - h1_days: default 10 days centered on target.
-    - tick: 3 trading days (prev, target, next).
+    - Daily: default 90 days (~3 months), with ~65 days before target date
+      and ~25 days after target date for balanced context.
+    - H1: default 10 days, recentered with a 1-day shift towards the prior period
+      (e.g. 6 days before, 4 days after).
+    - Tick: 3 trading days (previous trading day, target day, next trading day).
     """
     target_dt_utc = ensure_utc(target_dt)
-    half_daily = timedelta(days=daily_days // 2)
-    half_h1 = timedelta(days=h1_days // 2)
 
-    daily_start = (target_dt_utc - half_daily).replace(hour=0, minute=0, second=0, microsecond=0)
-    daily_end = (target_dt_utc + half_daily).replace(hour=23, minute=59, second=59, microsecond=999999)
+    # Shift daily window by ~20 days to before (e.g. 65 days before, 25 days after)
+    daily_before = timedelta(days=(daily_days // 2) + daily_shift_days)
+    daily_after = timedelta(days=max(1, (daily_days // 2) - daily_shift_days))
 
-    h1_start = (target_dt_utc - half_h1).replace(hour=0, minute=0, second=0, microsecond=0)
-    h1_end = (target_dt_utc + half_h1).replace(hour=23, minute=59, second=59, microsecond=999999)
+    # Shift H1 window by 1 day to before (e.g. 6 days before, 4 days after)
+    h1_before = timedelta(days=(h1_days // 2) + h1_shift_days)
+    h1_after = timedelta(days=max(1, (h1_days // 2) - h1_shift_days))
+
+    daily_start = (target_dt_utc - daily_before).replace(hour=0, minute=0, second=0, microsecond=0)
+    daily_end = (target_dt_utc + daily_after).replace(hour=23, minute=59, second=59, microsecond=999999)
+
+    h1_start = (target_dt_utc - h1_before).replace(hour=0, minute=0, second=0, microsecond=0)
+    h1_end = (target_dt_utc + h1_after).replace(hour=23, minute=59, second=59, microsecond=999999)
 
     tick_start, tick_end, target_start, target_end = get_trading_day_bounds(target_dt_utc)
 
@@ -743,7 +753,7 @@ class HistoryViewer:
         symbol: str,
         target_date_str: str,
         output_path: Optional[str] = None,
-        daily_days: int = 76,
+        daily_days: int = 90,
         h1_days: int = 10,
         digits: Optional[int] = None,
         raw_ticks: bool = False,
@@ -849,7 +859,7 @@ def main():
     parser.add_argument("--symbol", "-s", required=True, type=str, help="Trading symbol (e.g. EURUSD, XAUUSD, BTCUSD, GOOGL)")
     parser.add_argument("--date", "-d", required=True, type=str, help="Target date in UTC (e.g. '2026-05-15' or '2026-05-15 14:30')")
     parser.add_argument("--output", "-o", type=str, default=None, help="Output HTML file path (default: history_viewer/output/history_{symbol}_{date}.html)")
-    parser.add_argument("--daily-days", type=int, default=76, help="Total span in days for Daily chart context (default: 76 / ~2.5 months)")
+    parser.add_argument("--daily-days", type=int, default=90, help="Total span in days for Daily chart context (default: 90 / ~3 months)")
     parser.add_argument("--h1-days", type=int, default=10, help="Total span in days for H1 chart context (default: 10 days)")
     parser.add_argument("--digits", type=int, default=None, help="Force specific decimal precision for Y-values (default: auto-detected from symbol)")
     parser.add_argument("--raw-ticks", action="store_true", help="Disable adaptive tick downsampling and render all ticks without downsampling")

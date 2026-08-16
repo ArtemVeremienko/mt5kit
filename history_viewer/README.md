@@ -7,8 +7,8 @@ A standalone CLI tool and interactive multi-timeframe dashboard for analyzing hi
 ## 🌟 Key Features
 
 - **3x3 Grid Layout with Independent Zooming**:
-  - **Top-Left (Row 1, Col 1)**: Daily (D1) Candlestick chart (~2.5 months context).
-  - **Top-Right (Row 1, Cols 2-3)**: Hourly (H1) Candlestick chart (10 days context).
+  - **Top-Left (Row 1, Col 1)**: Daily (D1) Candlestick chart (~3 months context: ~65 days before, ~25 days after).
+  - **Top-Right (Row 1, Cols 2-3)**: Hourly (H1) Candlestick chart (10 days context: 6 days before, 4 days after).
   - **Bottom Panel (Rows 2-3, Cols 1-3)**: 3-trading-day **Tick Bid/Ask lines** (prev day, target day, next day), or automatic **M1 Candlestick Fallback** if historical tick data is unavailable from the broker for older dates.
   - Subplots operate on completely independent axes, so zooming or panning on the intraday chart does not distort or reset the higher timeframe reference charts.
 - **TradingView-Style Crosshair Lines**: Real-time bidirectional cursor tracking (both **vertical time line** and **horizontal price line**) with exact coordinate popups on both axes as you move your mouse.

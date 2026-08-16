@@ -92,15 +92,27 @@ def test_get_trading_day_bounds_weekend_shift():
 
 def test_resolve_timeframe_ranges():
     target = datetime(2026, 5, 15, 12, 0, tzinfo=timezone.utc)
-    ranges = resolve_timeframe_ranges(target, daily_days=76, h1_days=10)
+    ranges = resolve_timeframe_ranges(target, daily_days=90, h1_days=10)
 
-    # Check daily span is ~76 days
+    # Check daily span is ~90 days (3 months)
     daily_delta = ranges.daily_end - ranges.daily_start
-    assert 75 <= daily_delta.days <= 77
+    assert 89 <= daily_delta.days <= 91
+
+    # Check daily before vs after: ~65 days before (~2.2 months), ~25 days after (~3.5 weeks)
+    days_before_daily = (ranges.target_dt.date() - ranges.daily_start.date()).days
+    days_after_daily = (ranges.daily_end.date() - ranges.target_dt.date()).days
+    assert days_before_daily == 65
+    assert days_after_daily == 25
 
     # Check h1 span is ~10 days
     h1_delta = ranges.h1_end - ranges.h1_start
     assert 9 <= h1_delta.days <= 11
+
+    # Check h1 before vs after: shifted by 1 day to before (6 days before, 4 days after)
+    days_before_h1 = (ranges.target_dt.date() - ranges.h1_start.date()).days
+    days_after_h1 = (ranges.h1_end.date() - ranges.target_dt.date()).days
+    assert days_before_h1 == 6
+    assert days_after_h1 == 4
 
     # Check tick bounds
     assert ranges.tick_start.tzinfo == timezone.utc
