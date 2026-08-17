@@ -70,7 +70,8 @@ pip install metatrader5 pandas numpy matplotlib plotly pytest scipy statsmodels
 * **Location:** [`history_viewer/`](file:///d:/projects/metatrader5/history_viewer/README.md)
 * **Purpose:** Multi-timeframe context and tick replay dashboard centered on any arbitrary historical date.
 * **Key Features:**
-  - **3x3 Subplot Grid:** Daily (D1) context (~2.5 months) in Row 1 Col 1; Hourly (H1) context (10 days) in Row 1 Cols 2–3; 3-trading-day Tick Bid/Ask lines in Rows 2–3 Cols 1–3 with independent zoom & pan.
+  - **3x3 Subplot Grid:** Daily (D1) context (~3 months) in Row 1 Col 1; Hourly (H1) context (10 days) in Row 1 Cols 2–3; 3-trading-day Tick Bid/Ask lines in Rows 2–3 Cols 1–3 with independent zoom & pan.
+  - **Multi Chart Styles:** Choose between Candlesticks, OHLC Bars, or Line charts via `--chart-type candlesticks|bars|line`.
   - **Automatic M1 Fallback:** Automatically switches to 1-minute (M1) candles if tick data is unarchived by the broker for older historical dates.
   - **TradingView-Style Bidirectional Crosshairs:** Real-time vertical and horizontal cursor tracking with exact coordinate popups on both axes.
   - **Non-Trading Gap Slicing:** Automatically slices off weekend gaps, full-day weekday holidays, and recurring session breaks (e.g. `WTI` 23:00 to 03:00 UTC).
@@ -79,6 +80,7 @@ pip install metatrader5 pandas numpy matplotlib plotly pytest scipy statsmodels
 * **Quick Run:**
   ```powershell
   uv run python history_viewer/history_viewer.py --symbol EURUSD --date 2026-05-15
+  uv run python history_viewer/history_viewer.py --symbol EURUSD --date 2026-05-15 --chart-type bars
   uv run python history_viewer/history_viewer.py --symbol WTI --date 2018-05-30
   ```
 

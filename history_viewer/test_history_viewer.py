@@ -345,10 +345,14 @@ def test_symbol_precision_formatting():
         digits=2
     )
 
-    # Y-axis format should be .2f
+    # Y-axis format should be .2f and positioned on right side
     assert fig.layout.yaxis.tickformat == ".2f"
+    assert fig.layout.yaxis.side == "right"
+    assert fig.layout.yaxis2.side == "right"
+    assert fig.layout.yaxis3.side == "right"
     # Hovertemplate should contain .2f
     assert ".2f" in fig.data[0].hovertemplate
+
 
 
 def test_rangeslider_disabled():
@@ -384,4 +388,80 @@ def test_rangeslider_disabled():
     assert getattr(fig.layout.xaxis.rangeslider, "visible", False) is False
     assert getattr(fig.layout.xaxis2.rangeslider, "visible", False) is False
     assert getattr(fig.layout.xaxis3.rangeslider, "visible", False) is False
+
+
+def test_chart_types():
+    target = datetime(2026, 5, 15, 12, 0, tzinfo=timezone.utc)
+    ranges = resolve_timeframe_ranges(target)
+
+    daily_dates = pd.date_range(ranges.daily_start, ranges.daily_end, freq="1D", tz="UTC")
+    df_daily = pd.DataFrame({
+        "time_utc": daily_dates,
+        "open": np.linspace(1.08, 1.10, len(daily_dates)),
+        "high": np.linspace(1.085, 1.105, len(daily_dates)),
+        "low": np.linspace(1.075, 1.095, len(daily_dates)),
+        "close": np.linspace(1.082, 1.098, len(daily_dates)),
+    })
+    df_h1 = df_daily.copy()
+
+    viewer = HistoryViewer()
+
+    # 1. Candlesticks
+    fig_candlesticks = viewer.build_dashboard(
+        symbol="EURUSD",
+        target_dt=target,
+        df_daily=df_daily,
+        df_h1=df_h1,
+        ranges=ranges,
+        chart_type="candlesticks"
+    )
+    assert fig_candlesticks.data[0].type == "candlestick"
+    assert fig_candlesticks.data[1].type == "candlestick"
+
+    # 2. Bars (OHLC)
+    fig_bars = viewer.build_dashboard(
+        symbol="EURUSD",
+        target_dt=target,
+        df_daily=df_daily,
+        df_h1=df_h1,
+        ranges=ranges,
+        chart_type="bars"
+    )
+    assert fig_bars.data[0].type == "ohlc"
+    assert fig_bars.data[1].type == "ohlc"
+
+    # 3. Line
+    fig_line = viewer.build_dashboard(
+        symbol="EURUSD",
+        target_dt=target,
+        df_daily=df_daily,
+        df_h1=df_h1,
+        ranges=ranges,
+        chart_type="line"
+    )
+    assert fig_line.data[0].type == "scatter"
+    assert fig_line.data[0].mode == "lines"
+    assert fig_line.data[1].type == "scatter"
+    assert fig_line.data[1].mode == "lines"
+
+
+
+def test_get_tradingview_cursor_js():
+    from history_viewer.history_viewer import get_tradingview_cursor_js
+
+    dark_js = get_tradingview_cursor_js(theme="dark", digits=5)
+    assert "margin: 0 !important" in dark_js
+    assert "cursor: crosshair !important" in dark_js
+    assert "timeBadge" in dark_js
+    assert "priceBadge" in dark_js
+    assert "vLine" in dark_js
+    assert "hLine" in dark_js
+    assert "defaultDigits = 5" in dark_js
+
+    light_js = get_tradingview_cursor_js(theme="light", digits=2)
+    assert "margin: 0 !important" in light_js
+    assert "#f0f3fa" in light_js
+    assert "defaultDigits = 2" in light_js
+
+
 

@@ -289,11 +289,266 @@ def detect_rangebreaks(
     return daily_rb, h1_rb, intraday_rb
 
 
+def get_tradingview_cursor_js(theme: str = "dark", digits: Optional[int] = None) -> str:
+    """
+    Generates high-performance TradingView / MT5 crosshair cursor lines,
+    precision crosshair pointer styling, and real-time time/price axis badges
+    for all subplots in the Multi-Timeframe History Viewer dashboard.
+    """
+    is_dark = theme.lower() == "dark"
+    line_color = "rgba(120, 123, 134, 0.75)" if is_dark else "rgba(100, 116, 139, 0.75)"
+    time_bg = "#1e222d" if is_dark else "#f0f3fa"
+    time_color = "#d1d4dc" if is_dark else "#131722"
+    time_border = "1px solid #434651" if is_dark else "1px solid #d1d4dc"
+    price_bg = "#2962FF"
+    price_color = "#ffffff"
+    digits_arg = f"{digits}" if digits is not None else "null"
+
+    return f"""
+(function() {{
+    var gd = document.querySelector('.plotly-graph-div');
+    if (!gd) return;
+
+    var container = gd.parentElement || gd;
+    container.style.position = 'relative';
+
+    // Inject CSS styles for clean full-bleed layout and crosshair cursor
+    var styleId = 'tradingview-cursor-style';
+    if (!document.getElementById(styleId)) {{
+        var style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+            html, body {{
+                margin: 0 !important;
+                padding: 0 !important;
+            }}
+            .plotly-graph-div .draglayer, .plotly-graph-div .nsewdrag, .plotly-graph-div .cursor-crosshair {{
+                cursor: crosshair !important;
+            }}
+        `;
+        document.head.appendChild(style);
+    }}
+
+
+    // Vertical Cursor Line
+    var vLine = document.createElement('div');
+    Object.assign(vLine.style, {{
+        position: 'absolute',
+        display: 'none',
+        width: '0px',
+        borderLeft: '1px dashed {line_color}',
+        pointerEvents: 'none',
+        zIndex: '990'
+    }});
+    container.appendChild(vLine);
+
+    // Horizontal Cursor Line
+    var hLine = document.createElement('div');
+    Object.assign(hLine.style, {{
+        position: 'absolute',
+        display: 'none',
+        height: '0px',
+        borderTop: '1px dashed {line_color}',
+        pointerEvents: 'none',
+        zIndex: '990'
+    }});
+    container.appendChild(hLine);
+
+    // Time Badge (X-Axis)
+    var timeBadge = document.createElement('div');
+    Object.assign(timeBadge.style, {{
+        position: 'absolute',
+        display: 'none',
+        backgroundColor: '{time_bg}',
+        color: '{time_color}',
+        border: '{time_border}',
+        padding: '2px 6px',
+        borderRadius: '3px',
+        fontSize: '11px',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif',
+        pointerEvents: 'none',
+        transform: 'translateX(-50%)',
+        zIndex: '1000',
+        whiteSpace: 'nowrap',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+    }});
+    container.appendChild(timeBadge);
+
+    // Price Badge (Y-Axis)
+    var priceBadge = document.createElement('div');
+    Object.assign(priceBadge.style, {{
+        position: 'absolute',
+        display: 'none',
+        backgroundColor: '{price_bg}',
+        color: '{price_color}',
+        padding: '2px 6px',
+        borderRadius: '3px',
+        fontSize: '11px',
+        fontWeight: '500',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif',
+        pointerEvents: 'none',
+        transform: 'translateY(-50%)',
+        zIndex: '1000',
+        whiteSpace: 'nowrap',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+    }});
+    container.appendChild(priceBadge);
+
+    var defaultDigits = {digits_arg};
+
+    function formatTime(val, isDaily) {{
+        if (!val) return '';
+        var str = String(val).trim();
+        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+        var m = str.match(/^(\\d{{4}})-(\\d{{2}})-(\\d{{2}})(?:[ T](\\d{{2}}):(\\d{{2}})(?::(\\d{{2}})(?:\\.(\\d+))?)?)?/);
+        if (m) {{
+            var year = m[1].slice(-2);
+            var monthIdx = parseInt(m[2], 10) - 1;
+            var day = parseInt(m[3], 10);
+            var monthName = months[monthIdx] || m[2];
+
+            if (isDaily || !m[4]) {{
+                return day + ' ' + monthName + " '" + year;
+            }}
+
+            var hrs = m[4];
+            var mins = m[5];
+            var secs = m[6] || '00';
+            var ms = m[7] ? m[7].slice(0, 3) : '';
+
+            if (ms && ms !== '000') {{
+                return day + ' ' + monthName + " '" + year + '  ' + hrs + ':' + mins + ':' + secs + '.' + ms;
+            }}
+            if (secs && secs !== '00') {{
+                return day + ' ' + monthName + " '" + year + '  ' + hrs + ':' + mins + ':' + secs;
+            }}
+            return day + ' ' + monthName + " '" + year + '  ' + hrs + ':' + mins;
+        }}
+
+        var num = Number(val);
+        if (!isNaN(num)) {{
+            var d = new Date(num);
+            var pad = function(n) {{ return n < 10 ? '0' + n : n; }};
+            var pad3 = function(n) {{ return n < 10 ? '00' + n : (n < 100 ? '0' + n : n); }};
+            var day = d.getUTCDate();
+            var month = months[d.getUTCMonth()];
+            var year = String(d.getUTCFullYear()).slice(-2);
+            var hrs = pad(d.getUTCHours());
+            var mins = pad(d.getUTCMinutes());
+            var secs = pad(d.getUTCSeconds());
+            var ms = pad3(d.getUTCMilliseconds());
+
+            if (isDaily) return day + ' ' + month + " '" + year;
+            if (ms !== '000') return day + ' ' + month + " '" + year + '  ' + hrs + ':' + mins + ':' + secs + '.' + ms;
+            if (secs !== '00') return day + ' ' + month + " '" + year + '  ' + hrs + ':' + mins + ':' + secs;
+            return day + ' ' + month + " '" + year + '  ' + hrs + ':' + mins;
+        }}
+        return str;
+    }}
+
+
+    function formatPrice(val, digits) {{
+        var num = Number(val);
+        if (isNaN(num)) return String(val);
+        var d = (typeof digits === 'number' && digits >= 0) ? digits : defaultDigits;
+        if (typeof d === 'number' && d >= 0) {{
+            return num.toFixed(d);
+        }}
+        return num.toLocaleString('en-US', {{ minimumFractionDigits: 2, maximumFractionDigits: 5 }});
+    }}
+
+    function getSubplotAxisPairs() {{
+        if (!gd._fullLayout) return [];
+        var pairs = [];
+        for (var key in gd._fullLayout) {{
+            if (/^xaxis\\d*$/.test(key)) {{
+                var suffix = key.replace('xaxis', '');
+                var yKey = 'yaxis' + suffix;
+                if (gd._fullLayout[yKey]) {{
+                    pairs.push({{
+                        xa: gd._fullLayout[key],
+                        ya: gd._fullLayout[yKey],
+                        isDaily: key === 'xaxis'
+                    }});
+                }}
+            }}
+        }}
+        return pairs;
+    }}
+
+    gd.addEventListener('mousemove', function(e) {{
+        var pairs = getSubplotAxisPairs();
+        if (!pairs.length) return;
+
+        var rect = gd.getBoundingClientRect();
+        var mouseX = e.clientX - rect.left;
+        var mouseY = e.clientY - rect.top;
+
+        var activePair = null;
+        for (var i = 0; i < pairs.length; i++) {{
+            var p = pairs[i];
+            if (mouseX >= p.xa._offset && mouseX <= p.xa._offset + p.xa._length &&
+                mouseY >= p.ya._offset && mouseY <= p.ya._offset + p.ya._length) {{
+                activePair = p;
+                break;
+            }}
+        }}
+
+        if (activePair) {{
+            var xa = activePair.xa;
+            var ya = activePair.ya;
+
+            var xVal = xa.p2d ? xa.p2d(mouseX - xa._offset) : (xa.p2c ? xa.p2c(mouseX - xa._offset) : null);
+            var yVal = ya.p2d ? ya.p2d(mouseY - ya._offset) : (ya.p2c ? ya.p2c(mouseY - ya._offset) : null);
+
+            // Update Vertical Line bounded to active subplot
+            vLine.style.left = mouseX + 'px';
+            vLine.style.top = ya._offset + 'px';
+            vLine.style.height = ya._length + 'px';
+            vLine.style.display = 'block';
+
+            // Update Horizontal Line bounded to active subplot
+            hLine.style.top = mouseY + 'px';
+            hLine.style.left = xa._offset + 'px';
+            hLine.style.width = xa._length + 'px';
+            hLine.style.display = 'block';
+
+            // Update Time Badge on bottom of active subplot
+            timeBadge.textContent = formatTime(xVal, activePair.isDaily);
+            timeBadge.style.left = mouseX + 'px';
+            timeBadge.style.top = (ya._offset + ya._length + 2) + 'px';
+            timeBadge.style.display = 'block';
+
+            // Update Price Badge on right of active subplot
+            priceBadge.textContent = formatPrice(yVal);
+            priceBadge.style.top = mouseY + 'px';
+            priceBadge.style.left = (xa._offset + xa._length + 2) + 'px';
+            priceBadge.style.display = 'block';
+        }} else {{
+            vLine.style.display = 'none';
+            hLine.style.display = 'none';
+            timeBadge.style.display = 'none';
+            priceBadge.style.display = 'none';
+        }}
+    }});
+
+    gd.addEventListener('mouseleave', function() {{
+        vLine.style.display = 'none';
+        hLine.style.display = 'none';
+        timeBadge.style.display = 'none';
+        priceBadge.style.display = 'none';
+    }});
+}})();
+"""
+
+
 class HistoryViewer:
     """
     Main controller for fetching MetaTrader 5 multi-timeframe data
     and generating the interactive 3-tier Plotly HTML dashboard.
     """
+
 
     def __init__(self, terminal_path: Optional[str] = None):
         self.terminal_path = terminal_path
@@ -390,6 +645,7 @@ class HistoryViewer:
         df_m1: Optional[pd.DataFrame] = None,
         ranges: Optional[TimeframeRanges] = None,
         digits: Optional[int] = None,
+        chart_type: str = "candlesticks",
         downsample: bool = True,
         theme: str = "dark",
         hide_weekends: bool = True,
@@ -397,8 +653,8 @@ class HistoryViewer:
     ) -> go.Figure:
         """
         Constructs the unified 3-panel interactive Plotly figure.
-        Supports tick Bid/Ask lines or M1 Candlestick fallback if tick data is missing,
-        with exact symbol precision on Y-axes and tooltips, plus gap removal.
+        Supports candlesticks, bars, or line chart types, with exact symbol precision
+        on Y-axes, custom hover crosshairs, and gap removal.
         """
         if ranges is None:
             ranges = resolve_timeframe_ranges(target_dt)
@@ -479,43 +735,83 @@ class HistoryViewer:
             )
         )
 
-        daily_hover = (
-            "<b>Date:</b> %{x|%Y-%m-%d}<br>"
-            f"<b>Open:</b> %{{open:{fmt_price}}}<br>"
-            f"<b>High:</b> %{{high:{fmt_price}}}<br>"
-            f"<b>Low:</b> %{{low:{fmt_price}}}<br>"
-            f"<b>Close:</b> %{{close:{fmt_price}}}<extra></extra>"
-        )
-
-        h1_hover = (
-            "<b>Time:</b> %{x|%Y-%m-%d %H:%M}<br>"
-            f"<b>Open:</b> %{{open:{fmt_price}}}<br>"
-            f"<b>High:</b> %{{high:{fmt_price}}}<br>"
-            f"<b>Low:</b> %{{low:{fmt_price}}}<br>"
-            f"<b>Close:</b> %{{close:{fmt_price}}}<extra></extra>"
-        )
+        # Helper to add price traces based on chart_type (candlesticks | bars | line)
+        def _add_price_trace(df_data: pd.DataFrame, trace_name: str, r: int, c: int, is_daily: bool):
+            if df_data.empty:
+                return
+            ctype = str(chart_type).lower().strip()
+            if ctype in ("bars", "bar", "ohlc"):
+                hover = (
+                    f"<b>{'Date' if is_daily else 'Time'}:</b> %{{x|{'%Y-%m-%d' if is_daily else '%Y-%m-%d %H:%M'}}}<br>"
+                    f"<b>Open:</b> %{{open:{fmt_price}}}<br>"
+                    f"<b>High:</b> %{{high:{fmt_price}}}<br>"
+                    f"<b>Low:</b> %{{low:{fmt_price}}}<br>"
+                    f"<b>Close:</b> %{{close:{fmt_price}}}<extra></extra>"
+                )
+                fig.add_trace(
+                    go.Ohlc(
+                        x=df_data["time_utc"],
+                        open=df_data["open"],
+                        high=df_data["high"],
+                        low=df_data["low"],
+                        close=df_data["close"],
+                        name=trace_name,
+                        increasing_line_color=up_color,
+                        decreasing_line_color=down_color,
+                        hovertemplate=hover,
+                        showlegend=False
+                    ),
+                    row=r, col=c
+                )
+            elif ctype in ("line", "lines"):
+                hover = (
+                    f"<b>{'Date' if is_daily else 'Time'}:</b> %{{x|{'%Y-%m-%d' if is_daily else '%Y-%m-%d %H:%M'}}}<br>"
+                    f"<b>Close:</b> %{{y:{fmt_price}}}<extra></extra>"
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_data["time_utc"],
+                        y=df_data["close"],
+                        mode="lines",
+                        line=dict(color="#2962FF", width=1.5),
+                        name=f"{trace_name} (Close)",
+                        hovertemplate=hover,
+                        showlegend=False
+                    ),
+                    row=r, col=c
+                )
+            else:
+                # Default: Candlesticks
+                hover = (
+                    f"<b>{'Date' if is_daily else 'Time'}:</b> %{{x|{'%Y-%m-%d' if is_daily else '%Y-%m-%d %H:%M'}}}<br>"
+                    f"<b>Open:</b> %{{open:{fmt_price}}}<br>"
+                    f"<b>High:</b> %{{high:{fmt_price}}}<br>"
+                    f"<b>Low:</b> %{{low:{fmt_price}}}<br>"
+                    f"<b>Close:</b> %{{close:{fmt_price}}}<extra></extra>"
+                )
+                fig.add_trace(
+                    go.Candlestick(
+                        x=df_data["time_utc"],
+                        open=df_data["open"],
+                        high=df_data["high"],
+                        low=df_data["low"],
+                        close=df_data["close"],
+                        name=trace_name,
+                        increasing_line_color=up_color,
+                        increasing_fillcolor=up_color,
+                        decreasing_line_color=down_color,
+                        decreasing_fillcolor=down_color,
+                        hovertemplate=hover,
+                        showlegend=False
+                    ),
+                    row=r, col=c
+                )
 
         # ----------------------------------------------------
         # 1. DAILY CHART (ROW 1, COL 1)
         # ----------------------------------------------------
         if not df_daily.empty:
-            fig.add_trace(
-                go.Candlestick(
-                    x=df_daily["time_utc"],
-                    open=df_daily["open"],
-                    high=df_daily["high"],
-                    low=df_daily["low"],
-                    close=df_daily["close"],
-                    name="Daily Candle",
-                    increasing_line_color=up_color,
-                    increasing_fillcolor=up_color,
-                    decreasing_line_color=down_color,
-                    decreasing_fillcolor=down_color,
-                    hovertemplate=daily_hover,
-                    showlegend=False
-                ),
-                row=1, col=1
-            )
+            _add_price_trace(df_daily, "Daily Candle", 1, 1, is_daily=True)
 
             # Highlight H1 Window on Daily Chart
             fig.add_vrect(
@@ -537,6 +833,7 @@ class HistoryViewer:
                 annotation_text="Target Date",
                 annotation_position="bottom right",
                 annotation_font=dict(size=10, color="#FF9800"),
+                layer="below",
                 row=1, col=1
             )
 
@@ -544,23 +841,7 @@ class HistoryViewer:
         # 2. H1 CHART (ROW 1, COL 2)
         # ----------------------------------------------------
         if not df_h1.empty:
-            fig.add_trace(
-                go.Candlestick(
-                    x=df_h1["time_utc"],
-                    open=df_h1["open"],
-                    high=df_h1["high"],
-                    low=df_h1["low"],
-                    close=df_h1["close"],
-                    name="H1 Candle",
-                    increasing_line_color=up_color,
-                    increasing_fillcolor=up_color,
-                    decreasing_line_color=down_color,
-                    decreasing_fillcolor=down_color,
-                    hovertemplate=h1_hover,
-                    showlegend=False
-                ),
-                row=1, col=2
-            )
+            _add_price_trace(df_h1, "H1 Candle", 1, 2, is_daily=False)
 
             # Highlight Intraday Window on H1 Chart
             fig.add_vrect(
@@ -582,6 +863,7 @@ class HistoryViewer:
                 annotation_text="Target Date",
                 annotation_position="bottom right",
                 annotation_font=dict(size=10, color="#FF9800"),
+                layer="below",
                 row=1, col=2
             )
 
@@ -623,34 +905,12 @@ class HistoryViewer:
                 annotation_text="Target Date",
                 annotation_position="bottom right",
                 annotation_font=dict(size=10, color="#FF9800"),
+                layer="below",
                 row=2, col=1
             )
         elif has_m1:
-            # Render M1 Candlesticks as fallback
-            m1_hover = (
-                "<b>Time:</b> %{x|%Y-%m-%d %H:%M}<br>"
-                f"<b>Open:</b> %{{open:{fmt_price}}}<br>"
-                f"<b>High:</b> %{{high:{fmt_price}}}<br>"
-                f"<b>Low:</b> %{{low:{fmt_price}}}<br>"
-                f"<b>Close:</b> %{{close:{fmt_price}}}<extra></extra>"
-            )
-            fig.add_trace(
-                go.Candlestick(
-                    x=df_m1["time_utc"],
-                    open=df_m1["open"],
-                    high=df_m1["high"],
-                    low=df_m1["low"],
-                    close=df_m1["close"],
-                    name="M1 Candle (Fallback)",
-                    increasing_line_color=up_color,
-                    increasing_fillcolor=up_color,
-                    decreasing_line_color=down_color,
-                    decreasing_fillcolor=down_color,
-                    hovertemplate=m1_hover,
-                    showlegend=False
-                ),
-                row=2, col=1
-            )
+            # Render M1 price data (candlesticks | bars | line) as fallback
+            _add_price_trace(df_m1, "M1 Candle (Fallback)", 2, 1, is_daily=False)
 
             # Target date marker line
             fig.add_vline(
@@ -659,6 +919,7 @@ class HistoryViewer:
                 annotation_text="Target Date",
                 annotation_position="bottom right",
                 annotation_font=dict(size=10, color="#FF9800"),
+                layer="below",
                 row=2, col=1
             )
 
@@ -670,7 +931,7 @@ class HistoryViewer:
             font=dict(family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", color=text_color),
             dragmode="pan",
             height=1300,
-            hovermode="x unified",
+            hovermode="closest",
             margin=dict(l=60, r=40, t=90, b=40),
             legend=dict(
                 orientation="h",
@@ -723,9 +984,10 @@ class HistoryViewer:
         if intraday_rb:
             fig.update_xaxes(row=2, col=1, rangebreaks=intraday_rb)
 
-        # Format Y-axes with horizontal crosshair tracking, unlocked 2D box zoom, and symbol precision
+        # Format Y-axes with horizontal crosshair tracking, unlocked 2D box zoom, right-side scale, and symbol precision
         fig.update_yaxes(
             fixedrange=False,
+            side="right",
             showspikes=True,
             spikemode="across",
             spikesnap="cursor",
@@ -739,6 +1001,7 @@ class HistoryViewer:
             zeroline=False
         )
 
+
         # Style subplot titles
         for annotation in fig["layout"]["annotations"]:
             ann_text = getattr(annotation, "text", "") or ""
@@ -749,6 +1012,7 @@ class HistoryViewer:
         return fig
 
     def generate_html_report(
+
         self,
         symbol: str,
         target_date_str: str,
@@ -756,6 +1020,7 @@ class HistoryViewer:
         daily_days: int = 90,
         h1_days: int = 10,
         digits: Optional[int] = None,
+        chart_type: str = "candlesticks",
         raw_ticks: bool = False,
         theme: str = "dark",
         hide_weekends: bool = True,
@@ -816,6 +1081,7 @@ class HistoryViewer:
             df_m1=df_m1,
             ranges=ranges,
             digits=sym_digits,
+            chart_type=chart_type,
             downsample=not raw_ticks,
             theme=theme,
             hide_weekends=hide_weekends,
@@ -839,7 +1105,8 @@ class HistoryViewer:
             "displaylogo": False,
             "responsive": True
         }
-        fig.write_html(output_path, include_plotlyjs="cdn", config=plotly_config)
+        cursor_js = get_tradingview_cursor_js(theme=theme, digits=sym_digits)
+        fig.write_html(output_path, include_plotlyjs="cdn", config=plotly_config, post_script=cursor_js)
         logger.info(f"Report saved to: {output_path}")
 
         if open_browser:
@@ -851,6 +1118,7 @@ class HistoryViewer:
         return os.path.abspath(output_path)
 
 
+
 def main():
     """CLI entrypoint for History Viewer."""
     parser = argparse.ArgumentParser(
@@ -859,6 +1127,7 @@ def main():
     parser.add_argument("--symbol", "-s", required=True, type=str, help="Trading symbol (e.g. EURUSD, XAUUSD, BTCUSD, GOOGL)")
     parser.add_argument("--date", "-d", required=True, type=str, help="Target date in UTC (e.g. '2026-05-15' or '2026-05-15 14:30')")
     parser.add_argument("--output", "-o", type=str, default=None, help="Output HTML file path (default: history_viewer/output/history_{symbol}_{date}.html)")
+    parser.add_argument("--chart-type", "-c", type=str, default="candlesticks", choices=["candlesticks", "bars", "line"], help="Price chart rendering style (choices: candlesticks, bars, line. default: candlesticks)")
     parser.add_argument("--daily-days", type=int, default=90, help="Total span in days for Daily chart context (default: 90 / ~3 months)")
     parser.add_argument("--h1-days", type=int, default=10, help="Total span in days for H1 chart context (default: 10 days)")
     parser.add_argument("--digits", type=int, default=None, help="Force specific decimal precision for Y-values (default: auto-detected from symbol)")
@@ -880,6 +1149,7 @@ def main():
             daily_days=args.daily_days,
             h1_days=args.h1_days,
             digits=args.digits,
+            chart_type=args.chart_type,
             raw_ticks=args.raw_ticks,
             theme=args.theme,
             hide_weekends=not args.show_weekends,

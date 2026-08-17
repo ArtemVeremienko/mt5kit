@@ -74,8 +74,14 @@ pip install metatrader5 pandas numpy plotly pytest
 ### Basic Commands
 
 ```bash
-# View EURUSD around May 15, 2026 (Live Ticks, 5 Decimals)
+# View EURUSD with default Candlesticks
 uv run python history_viewer/history_viewer.py --symbol EURUSD --date 2026-05-15
+
+# View EURUSD with OHLC Bars
+uv run python history_viewer/history_viewer.py --symbol EURUSD --date 2026-05-15 --chart-type bars
+
+# View EURUSD with Line Chart
+uv run python history_viewer/history_viewer.py --symbol EURUSD --date 2026-05-15 --chart-type line
 
 # View WTI around May 30, 2018 (M1 Fallback, 2 Decimals, 23-03 Gap Sliced)
 uv run python history_viewer/history_viewer.py --symbol WTI --date 2018-05-30
@@ -88,7 +94,8 @@ uv run python history_viewer/history_viewer.py --symbol WTI --date 2018-05-30
 | `--symbol` | `-s` | *Required* | Instrument symbol (e.g. `EURUSD`, `WTI`, `XAUUSD`, `BTCUSD`) |
 | `--date` | `-d` | *Required* | Target date in UTC format (`YYYY-MM-DD` or `YYYY-MM-DD HH:MM`) |
 | `--output` | `-o` | `output/history_{symbol}_{date}.html` | Destination path for the HTML report |
-| `--daily-days` | | `76` | Total span in days for the Daily chart context (~2.5 months) |
+| `--chart-type` | `-c` | `candlesticks` | Price chart rendering type (`candlesticks`, `bars`, `line`) |
+| `--daily-days` | | `90` | Total span in days for the Daily chart context (~3 months) |
 | `--h1-days` | | `10` | Total span in days for the H1 chart context |
 | `--digits` | | `None` | Force specific decimal precision for Y-values (default: auto from MT5) |
 | `--raw-ticks` | | `False` | Disable tick downsampling and render all ticks without downsampling |
