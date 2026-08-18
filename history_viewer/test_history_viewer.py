@@ -450,18 +450,33 @@ def test_get_tradingview_cursor_js():
     from history_viewer.history_viewer import get_tradingview_cursor_js
 
     dark_js = get_tradingview_cursor_js(theme="dark", digits=5)
+    assert "initTradingViewCursor" in dark_js
     assert "margin: 0 !important" in dark_js
     assert "cursor: crosshair !important" in dark_js
     assert "timeBadge" in dark_js
     assert "priceBadge" in dark_js
     assert "vLine" in dark_js
     assert "hLine" in dark_js
-    assert "defaultDigits = 5" in dark_js
+    assert '"digits": 5' in dark_js
+    assert '"theme": "dark"' in dark_js
 
     light_js = get_tradingview_cursor_js(theme="light", digits=2)
+    assert "initTradingViewCursor" in light_js
     assert "margin: 0 !important" in light_js
     assert "#f0f3fa" in light_js
-    assert "defaultDigits = 2" in light_js
+    assert '"digits": 2' in light_js
+    assert '"theme": "light"' in light_js
+
+    custom_js = get_tradingview_cursor_js(
+        theme="dark",
+        digits=3,
+        line_color="rgba(255, 0, 0, 0.8)",
+        price_bg="#00E676"
+    )
+    assert '"line_color": "rgba(255, 0, 0, 0.8)"' in custom_js
+    assert '"price_bg": "#00E676"' in custom_js
+    assert '"digits": 3' in custom_js
+
 
 
 

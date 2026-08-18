@@ -10,6 +10,7 @@ Fetches and visualizes multi-timeframe price action centered on a target date:
 import argparse
 from dataclasses import dataclass
 from datetime import datetime, date, time, timedelta, timezone
+import json
 import logging
 import os
 import sys
@@ -289,257 +290,46 @@ def detect_rangebreaks(
     return daily_rb, h1_rb, intraday_rb
 
 
-def get_tradingview_cursor_js(theme: str = "dark", digits: Optional[int] = None) -> str:
+def get_tradingview_cursor_js(
+    theme: str = "dark",
+    digits: Optional[int] = None,
+    line_color: Optional[str] = None,
+    time_bg: Optional[str] = None,
+    time_color: Optional[str] = None,
+    time_border: Optional[str] = None,
+    price_bg: Optional[str] = None,
+    price_color: Optional[str] = None
+) -> str:
     """
-    Generates high-performance TradingView / MT5 crosshair cursor lines,
-    precision crosshair pointer styling, and real-time time/price axis badges
-    for all subplots in the Multi-Timeframe History Viewer dashboard.
+    Loads tradingview_cursor.js and returns the inlined initialization script
+    configured with the specified theme, decimal precision, and optional color overrides.
     """
-    is_dark = theme.lower() == "dark"
-    line_color = "rgba(120, 123, 134, 0.75)" if is_dark else "rgba(100, 116, 139, 0.75)"
-    time_bg = "#1e222d" if is_dark else "#f0f3fa"
-    time_color = "#d1d4dc" if is_dark else "#131722"
-    time_border = "1px solid #434651" if is_dark else "1px solid #d1d4dc"
-    price_bg = "#2962FF"
-    price_color = "#ffffff"
-    digits_arg = f"{digits}" if digits is not None else "null"
+    js_path = os.path.join(os.path.dirname(__file__), "tradingview_cursor.js")
+    with open(js_path, "r", encoding="utf-8") as f:
+        js_code = f.read()
+
+    opts: Dict[str, Any] = {
+        "theme": theme,
+        "digits": digits
+    }
+    if line_color:
+        opts["line_color"] = line_color
+    if time_bg:
+        opts["time_bg"] = time_bg
+    if time_color:
+        opts["time_color"] = time_color
+    if time_border:
+        opts["time_border"] = time_border
+    if price_bg:
+        opts["price_bg"] = price_bg
+    if price_color:
+        opts["price_color"] = price_color
+
+    opts_json = json.dumps(opts, indent=4)
 
     return f"""
-(function() {{
-    var gd = document.querySelector('.plotly-graph-div');
-    if (!gd) return;
-
-    var container = gd.parentElement || gd;
-    container.style.position = 'relative';
-
-    // Inject CSS styles for clean full-bleed layout and crosshair cursor
-    var styleId = 'tradingview-cursor-style';
-    if (!document.getElementById(styleId)) {{
-        var style = document.createElement('style');
-        style.id = styleId;
-        style.textContent = `
-            html, body {{
-                margin: 0 !important;
-                padding: 0 !important;
-            }}
-            .plotly-graph-div .draglayer, .plotly-graph-div .nsewdrag, .plotly-graph-div .cursor-crosshair {{
-                cursor: crosshair !important;
-            }}
-        `;
-        document.head.appendChild(style);
-    }}
-
-
-    // Vertical Cursor Line
-    var vLine = document.createElement('div');
-    Object.assign(vLine.style, {{
-        position: 'absolute',
-        display: 'none',
-        width: '0px',
-        borderLeft: '1px dashed {line_color}',
-        pointerEvents: 'none',
-        zIndex: '990'
-    }});
-    container.appendChild(vLine);
-
-    // Horizontal Cursor Line
-    var hLine = document.createElement('div');
-    Object.assign(hLine.style, {{
-        position: 'absolute',
-        display: 'none',
-        height: '0px',
-        borderTop: '1px dashed {line_color}',
-        pointerEvents: 'none',
-        zIndex: '990'
-    }});
-    container.appendChild(hLine);
-
-    // Time Badge (X-Axis)
-    var timeBadge = document.createElement('div');
-    Object.assign(timeBadge.style, {{
-        position: 'absolute',
-        display: 'none',
-        backgroundColor: '{time_bg}',
-        color: '{time_color}',
-        border: '{time_border}',
-        padding: '2px 6px',
-        borderRadius: '3px',
-        fontSize: '11px',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif',
-        pointerEvents: 'none',
-        transform: 'translateX(-50%)',
-        zIndex: '1000',
-        whiteSpace: 'nowrap',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
-    }});
-    container.appendChild(timeBadge);
-
-    // Price Badge (Y-Axis)
-    var priceBadge = document.createElement('div');
-    Object.assign(priceBadge.style, {{
-        position: 'absolute',
-        display: 'none',
-        backgroundColor: '{price_bg}',
-        color: '{price_color}',
-        padding: '2px 6px',
-        borderRadius: '3px',
-        fontSize: '11px',
-        fontWeight: '500',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif',
-        pointerEvents: 'none',
-        transform: 'translateY(-50%)',
-        zIndex: '1000',
-        whiteSpace: 'nowrap',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
-    }});
-    container.appendChild(priceBadge);
-
-    var defaultDigits = {digits_arg};
-
-    function formatTime(val, isDaily) {{
-        if (!val) return '';
-        var str = String(val).trim();
-        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-        var m = str.match(/^(\\d{{4}})-(\\d{{2}})-(\\d{{2}})(?:[ T](\\d{{2}}):(\\d{{2}})(?::(\\d{{2}})(?:\\.(\\d+))?)?)?/);
-        if (m) {{
-            var year = m[1].slice(-2);
-            var monthIdx = parseInt(m[2], 10) - 1;
-            var day = parseInt(m[3], 10);
-            var monthName = months[monthIdx] || m[2];
-
-            if (isDaily || !m[4]) {{
-                return day + ' ' + monthName + " '" + year;
-            }}
-
-            var hrs = m[4];
-            var mins = m[5];
-            var secs = m[6] || '00';
-            var ms = m[7] ? m[7].slice(0, 3) : '';
-
-            if (ms && ms !== '000') {{
-                return day + ' ' + monthName + " '" + year + '  ' + hrs + ':' + mins + ':' + secs + '.' + ms;
-            }}
-            if (secs && secs !== '00') {{
-                return day + ' ' + monthName + " '" + year + '  ' + hrs + ':' + mins + ':' + secs;
-            }}
-            return day + ' ' + monthName + " '" + year + '  ' + hrs + ':' + mins;
-        }}
-
-        var num = Number(val);
-        if (!isNaN(num)) {{
-            var d = new Date(num);
-            var pad = function(n) {{ return n < 10 ? '0' + n : n; }};
-            var pad3 = function(n) {{ return n < 10 ? '00' + n : (n < 100 ? '0' + n : n); }};
-            var day = d.getUTCDate();
-            var month = months[d.getUTCMonth()];
-            var year = String(d.getUTCFullYear()).slice(-2);
-            var hrs = pad(d.getUTCHours());
-            var mins = pad(d.getUTCMinutes());
-            var secs = pad(d.getUTCSeconds());
-            var ms = pad3(d.getUTCMilliseconds());
-
-            if (isDaily) return day + ' ' + month + " '" + year;
-            if (ms !== '000') return day + ' ' + month + " '" + year + '  ' + hrs + ':' + mins + ':' + secs + '.' + ms;
-            if (secs !== '00') return day + ' ' + month + " '" + year + '  ' + hrs + ':' + mins + ':' + secs;
-            return day + ' ' + month + " '" + year + '  ' + hrs + ':' + mins;
-        }}
-        return str;
-    }}
-
-
-    function formatPrice(val, digits) {{
-        var num = Number(val);
-        if (isNaN(num)) return String(val);
-        var d = (typeof digits === 'number' && digits >= 0) ? digits : defaultDigits;
-        if (typeof d === 'number' && d >= 0) {{
-            return num.toFixed(d);
-        }}
-        return num.toLocaleString('en-US', {{ minimumFractionDigits: 2, maximumFractionDigits: 5 }});
-    }}
-
-    function getSubplotAxisPairs() {{
-        if (!gd._fullLayout) return [];
-        var pairs = [];
-        for (var key in gd._fullLayout) {{
-            if (/^xaxis\\d*$/.test(key)) {{
-                var suffix = key.replace('xaxis', '');
-                var yKey = 'yaxis' + suffix;
-                if (gd._fullLayout[yKey]) {{
-                    pairs.push({{
-                        xa: gd._fullLayout[key],
-                        ya: gd._fullLayout[yKey],
-                        isDaily: key === 'xaxis'
-                    }});
-                }}
-            }}
-        }}
-        return pairs;
-    }}
-
-    gd.addEventListener('mousemove', function(e) {{
-        var pairs = getSubplotAxisPairs();
-        if (!pairs.length) return;
-
-        var rect = gd.getBoundingClientRect();
-        var mouseX = e.clientX - rect.left;
-        var mouseY = e.clientY - rect.top;
-
-        var activePair = null;
-        for (var i = 0; i < pairs.length; i++) {{
-            var p = pairs[i];
-            if (mouseX >= p.xa._offset && mouseX <= p.xa._offset + p.xa._length &&
-                mouseY >= p.ya._offset && mouseY <= p.ya._offset + p.ya._length) {{
-                activePair = p;
-                break;
-            }}
-        }}
-
-        if (activePair) {{
-            var xa = activePair.xa;
-            var ya = activePair.ya;
-
-            var xVal = xa.p2d ? xa.p2d(mouseX - xa._offset) : (xa.p2c ? xa.p2c(mouseX - xa._offset) : null);
-            var yVal = ya.p2d ? ya.p2d(mouseY - ya._offset) : (ya.p2c ? ya.p2c(mouseY - ya._offset) : null);
-
-            // Update Vertical Line bounded to active subplot
-            vLine.style.left = mouseX + 'px';
-            vLine.style.top = ya._offset + 'px';
-            vLine.style.height = ya._length + 'px';
-            vLine.style.display = 'block';
-
-            // Update Horizontal Line bounded to active subplot
-            hLine.style.top = mouseY + 'px';
-            hLine.style.left = xa._offset + 'px';
-            hLine.style.width = xa._length + 'px';
-            hLine.style.display = 'block';
-
-            // Update Time Badge on bottom of active subplot
-            timeBadge.textContent = formatTime(xVal, activePair.isDaily);
-            timeBadge.style.left = mouseX + 'px';
-            timeBadge.style.top = (ya._offset + ya._length + 2) + 'px';
-            timeBadge.style.display = 'block';
-
-            // Update Price Badge on right of active subplot
-            priceBadge.textContent = formatPrice(yVal);
-            priceBadge.style.top = mouseY + 'px';
-            priceBadge.style.left = (xa._offset + xa._length + 2) + 'px';
-            priceBadge.style.display = 'block';
-        }} else {{
-            vLine.style.display = 'none';
-            hLine.style.display = 'none';
-            timeBadge.style.display = 'none';
-            priceBadge.style.display = 'none';
-        }}
-    }});
-
-    gd.addEventListener('mouseleave', function() {{
-        vLine.style.display = 'none';
-        hLine.style.display = 'none';
-        timeBadge.style.display = 'none';
-        priceBadge.style.display = 'none';
-    }});
-}})();
+{js_code}
+initTradingViewCursor({opts_json});
 """
 
 
