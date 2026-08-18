@@ -697,15 +697,15 @@ class HistoryViewer:
                 df_ticks_plot = downsample_ticks(df_ticks, max_points=50000)
             else:
                 df_ticks_plot = df_ticks
-            intraday_title = f"<b>Tick Chart (Independent Zoom)</b> &mdash; 3 Trading Days ({ranges.tick_start.strftime('%Y-%m-%d')} to {ranges.tick_end.strftime('%Y-%m-%d')} UTC) | {len(df_ticks_plot):,} plotted ticks"
+            intraday_title = f"<b>Tick Chart (Independent Zoom)</b> — 3 Trading Days ({ranges.tick_start.strftime('%Y-%m-%d')} to {ranges.tick_end.strftime('%Y-%m-%d')} UTC) | {len(df_ticks_plot):,} plotted ticks"
             h1_window_label = "3-Day Tick Window"
         elif has_m1:
             df_ticks_plot = pd.DataFrame()
-            intraday_title = f"<b>1-Minute Chart (M1 - Fallback)</b> &mdash; 3 Trading Days ({ranges.tick_start.strftime('%Y-%m-%d')} to {ranges.tick_end.strftime('%Y-%m-%d')} UTC) | {len(df_m1):,} candles"
+            intraday_title = f"<b>1-Minute Chart (M1 - Fallback)</b> — 3 Trading Days ({ranges.tick_start.strftime('%Y-%m-%d')} to {ranges.tick_end.strftime('%Y-%m-%d')} UTC) | {len(df_m1):,} candles"
             h1_window_label = "3-Day M1 Window"
         else:
             df_ticks_plot = pd.DataFrame()
-            intraday_title = f"<b>Intraday Chart</b> &mdash; 3 Trading Days ({ranges.tick_start.strftime('%Y-%m-%d')} to {ranges.tick_end.strftime('%Y-%m-%d')} UTC) | No Tick or M1 data available"
+            intraday_title = f"<b>Intraday Chart</b> — 3 Trading Days ({ranges.tick_start.strftime('%Y-%m-%d')} to {ranges.tick_end.strftime('%Y-%m-%d')} UTC) | No Tick or M1 data available"
             h1_window_label = "3-Day Window"
 
         # Create 3x3 grid subplots:
@@ -729,8 +729,8 @@ class HistoryViewer:
             row_heights=[0.36, 0.32, 0.32],
             column_widths=[0.33, 0.33, 0.34],
             subplot_titles=(
-                f"<b>Daily Chart (D1)</b> &mdash; Context ({ranges.daily_start.strftime('%Y-%m-%d')} to {ranges.daily_end.strftime('%Y-%m-%d')} UTC)",
-                f"<b>Hourly Chart (H1)</b> &mdash; 10-Day Window ({ranges.h1_start.strftime('%Y-%m-%d')} to {ranges.h1_end.strftime('%Y-%m-%d')} UTC)",
+                f"<b>Daily Chart (D1)</b> — Context ({ranges.daily_start.strftime('%Y-%m-%d')} to {ranges.daily_end.strftime('%Y-%m-%d')} UTC)",
+                f"<b>Hourly Chart (H1)</b> — 10-Day Window ({ranges.h1_start.strftime('%Y-%m-%d')} to {ranges.h1_end.strftime('%Y-%m-%d')} UTC)",
                 intraday_title
             )
         )
@@ -942,7 +942,7 @@ class HistoryViewer:
                 font=dict(size=11)
             ),
             title=dict(
-                text=f"<b>MetaTrader 5 History Viewer</b> &mdash; {symbol.upper()} | Target: {ranges.target_dt.strftime('%Y-%m-%d %H:%M')} UTC",
+                text=f"<b>MetaTrader 5 History Viewer</b> — {symbol.upper()} | Target: {ranges.target_dt.strftime('%Y-%m-%d %H:%M')} UTC",
                 font=dict(size=18, color=text_color),
                 x=0.02,
                 y=0.98
