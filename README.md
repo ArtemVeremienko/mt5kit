@@ -8,9 +8,10 @@ A comprehensive suite of production-grade Python analytics engines, interactive 
 
 - [Overview & Requirements](#-overview--requirements)
 - [Standalone Modules](#-standalone-modules)
-  - [1. Best Working Hours & Volatility Analyzer](#1-best-working-hours--volatility-analyzer-best_working_hours_analyzer)
-  - [2. Data Feed Quality Analyzer](#2-data-feed-quality-analyzer-feed_quality_analyzer)
-  - [3. Multi-Timeframe History Viewer](#3-multi-timeframe-history-viewer-history_viewer)
+  - [1. Session Candles Dashboard](#1-session-candles-dashboard-session_candles)
+  - [2. Best Working Hours & Volatility Analyzer](#2-best-working-hours--volatility-analyzer-best_working_hours_analyzer)
+  - [3. Data Feed Quality Analyzer](#3-data-feed-quality-analyzer-feed_quality_analyzer)
+  - [4. Multi-Timeframe History Viewer](#4-multi-timeframe-history-viewer-history_viewer)
 - [Jupyter Notebooks](#-jupyter-notebooks)
   - [Market Microstructure & Spreads](#market-microstructure--spreads)
   - [Interactive Price & Tick Charting](#interactive-price--tick-charting)
@@ -40,7 +41,26 @@ pip install metatrader5 pandas numpy matplotlib plotly pytest scipy statsmodels
 
 ## 📦 Standalone Modules
 
-### 1. Best Working Hours & Volatility Analyzer (`best_working_hours_analyzer/`)
+### 1. Session Candles Dashboard (`session_candles/`)
+* **Location:** [`session_candles/`](file:///d:/projects/metatrader5/session_candles/README.md)
+* **Purpose:** Resamples intraday MetaTrader 5 data into **3 Session Candles per day** (MT5 Broker Server Time), styled with distinct session colors, hollow bull candles, solid filled bear candles, and live 1-minute market data streaming.
+* **Key Features:**
+  - **3 Distinct Trading Sessions**:
+    - 🌏 **Asia (00:00 – 09:00)**: **Orange** (`#FF9800`)
+    - 🏛️ **Europe (09:00 – 15:00)**: **Green** (`#00E676`)
+    - 🗽 **America (15:00 – 24:00)**: **Blue** (`#2979FF`)
+  - **Candle Fill Aesthetics**:
+    - **Bullish (Close ≥ Open)**: **Hollow** body (transparent fill with colored border & wick).
+    - **Bearish (Close < Open)**: **Filled** body (solid session color).
+  - **High-Performance TradingView Lightweight Charts**: Smooth interactive panning, zooming, crosshair inspection, and responsive canvas rendering.
+  - **Live WebSocket Streaming**: 1-minute live updating for the active in-progress session candle from live MT5 market ticks.
+  - **Full UI Controls**: Searchable symbol selector, quick favorites (`EURUSD`, `GBPUSD`, `USDJPY`, `XAUUSD`, `BTCUSD`), lookback range presets (30d to 1y), session countdown timer, and locked crosshair inspector.
+* **Quick Run:**
+  ```powershell
+  uv run python session_candles/run.py
+  ```
+
+### 2. Best Working Hours & Volatility Analyzer (`best_working_hours_analyzer/`)
 * **Location:** [`best_working_hours_analyzer/`](file:///d:/projects/metatrader5/best_working_hours_analyzer/README.md)
 * **Purpose:** Identifies the highest-probability trading hours and peak volatility windows for any instrument, converted and normalized into your **Local Machine Timezone** (or UTC/custom IANA timezones).
 * **Key Features:**
@@ -53,7 +73,7 @@ pip install metatrader5 pandas numpy matplotlib plotly pytest scipy statsmodels
   python best_working_hours_analyzer/main.py --symbols "EURUSD,GBPUSD,XAUUSD,WTI,.USTECHCash" --days 30 --tz local
   ```
 
-### 2. Data Feed Quality Analyzer (`feed_quality_analyzer/`)
+### 3. Data Feed Quality Analyzer (`feed_quality_analyzer/`)
 * **Location:** [`feed_quality_analyzer/`](file:///d:/projects/metatrader5/feed_quality_analyzer/README.md)
 * **Purpose:** Analyzes broker feed integrity and data continuity across macro M1 bars and micro tick streams to detect quote dropouts, server disconnects, freeze periods, and spread spikes.
 * **Key Features:**
@@ -66,7 +86,7 @@ pip install metatrader5 pandas numpy matplotlib plotly pytest scipy statsmodels
   python feed_quality_analyzer/feed_quality_analyzer.py --symbols EURUSD XAUUSD .USTECHCash WTI --days 2 --work-hours auto
   ```
 
-### 3. Multi-Timeframe History Viewer (`history_viewer/`)
+### 4. Multi-Timeframe History Viewer (`history_viewer/`)
 * **Location:** [`history_viewer/`](file:///d:/projects/metatrader5/history_viewer/README.md)
 * **Purpose:** Multi-timeframe context and tick replay dashboard centered on any arbitrary historical date.
 * **Key Features:**
