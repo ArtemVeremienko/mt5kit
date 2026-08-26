@@ -54,3 +54,15 @@ def test_index_html_route():
     assert response.status_code == 200
     assert "MT5 Session Candles" in response.text
     assert "TradingView" in response.text or "LightweightCharts" in response.text
+
+def test_poc_merged_intraday_sweeps():
+    response = client.get("/api/poc/merged-intraday-sweeps?symbol=EURUSD&days=3")
+    assert response.status_code == 200
+    data = response.json()
+    assert "bars" in data
+    assert "boxes" in data
+    assert "sweepLevels" in data
+    assert "markers" in data
+
+
+

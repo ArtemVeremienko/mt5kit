@@ -79,7 +79,32 @@ This automatically:
 | `GET /api/symbols` | JSON | List of all available symbols in the MT5 terminal |
 | `GET /api/session-candles?symbol=EURUSD&days=60` | JSON | Historical 3-session candles + active session candle |
 | `GET /api/active-candle?symbol=EURUSD` | JSON | Real-time state of the currently active session candle |
+| `GET /api/poc/merged-intraday-sweeps?symbol=EURUSD&days=5` | JSON | **Merged Mode**: M5 intraday candles + session tags + Asia/London/NY H/L rays & sweep markers |
 | `WS /ws/live?symbol=EURUSD` | WebSocket | Live streaming channel pushing candle updates every 60 seconds |
+
+---
+
+## 🎨 Interactive Display Modes (Switchable in UI Toolbar)
+
+1. **🔥 Merged (Primary): M5 Session Ranges + Liquidity Sweeps**
+   - Renders **M5 intraday candlesticks** styled by session (Asia Orange, Europe Green, America Blue) with Hollow Bull and Solid Bear fills.
+   - Plots **Asia High/Low/50% EQ**, **London High/Low/50% EQ**, and **NY High/Low/50% EQ** horizontal dashed rays across subsequent sessions.
+   - Automatically marks the exact M5 breakout candles with **real-time Liquidity Sweep tags**:
+     - 🔴 `⚡ Asia Swept NY High` / 🟢 `⚡ Asia Swept NY Low`
+     - 🔴 `⚡ London Swept Asia High` / 🟢 `⚡ London Swept Asia Low`
+     - 🔴 `⚡ NY Swept London High` / 🟢 `⚡ NY Swept London Low`
+   - Displays session start markers with pip ranges (`🌏 Asia (24.1p)`, `🏛️ London (48.2p)`, `🗽 NY (38.5p)`).
+2. **🕯️ 3 Session Candles (Classic)**
+   - Displays 3 clean session candles per day (`Asia 00-09 Orange`, `Europe 09-15 Green`, `America 15-24 Blue`) with Hollow Bull (`Close >= Open`) and Solid Bear (`Close < Open`) styling.
+
+---
+
+## 📊 Chart Type Selector
+
+Switch instantly between series types from the toolbar:
+- **🕯️ Candlesticks (Default)**: Bull hollow / bear solid with session-colored borders & wicks.
+- **📊 Bars (OHLC)**: Traditional American bar charts with open/close ticks colored by session.
+- **📈 Line**: Continuous close price series with dynamic tooltips and active liquidity levels.
 
 ---
 

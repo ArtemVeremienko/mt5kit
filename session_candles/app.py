@@ -20,6 +20,7 @@ from session_candles.resampler import (
     get_session_info,
     fetch_session_candles,
     get_active_session_live_candle,
+    fetch_intraday_boxes_with_sweeps,
 )
 
 from contextlib import asynccontextmanager
@@ -158,6 +159,27 @@ def get_active_candle(symbol: str = Query("EURUSD")):
         "symbol": symbol,
         "active_candle": candle,
         "session_seconds_remaining": seconds_remaining
+    }
+
+
+@app.get("/api/poc/merged-intraday-sweeps")
+def get_merged_intraday_sweeps(
+    symbol: str = Query("EURUSD", description="Symbol to fetch"),
+    days: int = Query(5, ge=1, le=30, description="Lookback days for M5 intraday")
+):
+    """Merged Mode: M5 Intraday with Macro Session Ranges, Liquidity Sweeps and Equilibrium."""
+    ensure_mt5_initialized()
+    broker_offset = get_broker_utc_offset_seconds(symbol)
+    data = fetch_intraday_boxes_with_sweeps(symbol=symbol, days=days, broker_offset_sec=broker_offset)
+    sym_info = mt5.symbol_info(symbol)
+    digits = sym_info.digits if sym_info else 5
+    return {
+        "symbol": symbol,
+        "digits": digits,
+        "bars": data["bars"],
+        "boxes": data["boxes"],
+        "sweepLevels": data["sweepLevels"],
+        "markers": data["markers"]
     }
 
 

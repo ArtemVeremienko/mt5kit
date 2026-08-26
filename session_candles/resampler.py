@@ -281,3 +281,345 @@ def get_active_session_live_candle(
         point_size=pip_scale,
         digits=digits
     )
+
+
+
+
+
+def fetch_intraday_boxes_with_sweeps(
+    symbol: str,
+    days: int = 5,
+    broker_offset_sec: Optional[int] = None
+) -> Dict[str, Any]:
+    """
+    Merged Option 1 + 3:
+    M5 Intraday Price Action inside Macro Session Ranges (Asia, Europe, America)
+    combined with Key Session Levels (Asia H/L/EQ, London H/L/EQ) and real-time Liquidity Sweep Markers.
+    """
+    if broker_offset_sec is None:
+        broker_offset_sec = get_broker_utc_offset_seconds(symbol)
+
+    sym_info = mt5.symbol_info(symbol)
+    digits = sym_info.digits if sym_info else 5
+    point = sym_info.point if (sym_info and sym_info.point > 0) else 0.0001
+    pip_scale = (10.0 * point) if digits in (3, 5) else point
+
+    total_bars = max(days * 288, 500)
+    rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M5, 0, total_bars)
+    if rates is None or len(rates) == 0:
+        return {"bars": [], "boxes": [], "sweepLevels": [], "markers": []}
+
+    df = pd.DataFrame(rates)
+    df["utc_time"] = df["time"] - broker_offset_sec
+    df["utc_dt"] = pd.to_datetime(df["utc_time"], unit="s", utc=True)
+    hours = df["utc_dt"].dt.hour
+
+    session_conditions = [
+        (hours >= 0) & (hours < 9),
+        (hours >= 9) & (hours < 15),
+        (hours >= 15) & (hours < 24)
+    ]
+    df["session"] = np.select(session_conditions, ["Asia", "Europe", "America"], default="Other")
+
+    start_hour_map = {"Asia": 0, "Europe": 9, "America": 15}
+    df["session_start_hour"] = df["session"].map(start_hour_map).fillna(0).astype(int)
+    df["day_date"] = df["utc_dt"].dt.strftime("%Y-%m-%d")
+    day_start_ts = (df["utc_time"] // 86400) * 86400
+    df["session_ts"] = day_start_ts + (df["session_start_hour"] * 3600)
+
+    # 1. Format M5 intraday candles
+    bars = []
+    for _, row in df.iterrows():
+        is_bull = row["close"] >= row["open"]
+        session_name = row["session"]
+        color = SESSION_CONFIG.get(session_name, {}).get("color", "#64748b")
+        bars.append({
+            "time": int(row["utc_time"]),
+            "open": round(float(row["open"]), digits),
+            "high": round(float(row["high"]), digits),
+            "low": round(float(row["low"]), digits),
+            "close": round(float(row["close"]), digits),
+            "color": "rgba(0,0,0,0)" if is_bull else color,
+            "borderColor": color,
+            "wickColor": color,
+            "session": session_name,
+            "isBull": is_bull,
+            "utcDate": row["utc_dt"].strftime("%Y-%m-%d %H:%M UTC")
+        })
+
+    # 2. Compute macro session boxes per day
+    boxes = []
+    sweep_levels = []
+    markers = []
+    prev_america_h: Optional[float] = None
+    prev_america_l: Optional[float] = None
+
+    # Group by Day
+    for day_str, day_df in df[df["session"].isin(["Asia", "Europe", "America"])].groupby("day_date"):
+        asia_df = day_df[day_df["session"] == "Asia"]
+        europe_df = day_df[day_df["session"] == "Europe"]
+        america_df = day_df[day_df["session"] == "America"]
+
+        # Asia Box
+        asia_h = None
+        asia_l = None
+        if len(asia_df) > 0:
+            a_open = float(asia_df["open"].iloc[0])
+            asia_h = float(asia_df["high"].max())
+            asia_l = float(asia_df["low"].min())
+            a_close = float(asia_df["close"].iloc[-1])
+            a_start = int(asia_df["utc_time"].iloc[0])
+            a_end = int(asia_df["utc_time"].iloc[-1]) + 300
+            a_bull = a_close >= a_open
+            a_range = round((asia_h - asia_l) / pip_scale, 1)
+            asia_eq = round((asia_h + asia_l) / 2.0, digits)
+
+            boxes.append({
+                "session": "Asia",
+                "color": "#FF9800",
+                "startTime": a_start,
+                "endTime": a_end,
+                "open": round(a_open, digits),
+                "high": round(asia_h, digits),
+                "low": round(asia_l, digits),
+                "close": round(a_close, digits),
+                "isBull": a_bull,
+                "rangePips": a_range,
+                "badge": f"🌏 Asia ({a_range}p)"
+            })
+
+            # Asia Open Marker
+            markers.append({
+                "time": a_start,
+                "position": "aboveBar",
+                "color": "#FF9800",
+                "shape": "circle",
+                "text": f"🌏 Asia ({a_range}p)"
+            })
+
+            # Check if Asia M5 bars swept previous day's NY High / Low
+            if prev_america_h is not None and prev_america_l is not None:
+                swept_prev_h = asia_df[asia_df["high"] > prev_america_h]
+                if len(swept_prev_h) > 0:
+                    first_sweep = swept_prev_h.iloc[0]
+                    markers.append({
+                        "time": int(first_sweep["utc_time"]),
+                        "position": "aboveBar",
+                        "color": "#FF5252",
+                        "shape": "arrowDown",
+                        "text": "⚡ Asia Swept NY High"
+                    })
+
+                swept_prev_l = asia_df[asia_df["low"] < prev_america_l]
+                if len(swept_prev_l) > 0:
+                    first_sweep = swept_prev_l.iloc[0]
+                    markers.append({
+                        "time": int(first_sweep["utc_time"]),
+                        "position": "belowBar",
+                        "color": "#00E676",
+                        "shape": "arrowUp",
+                        "text": "⚡ Asia Swept NY Low"
+                    })
+
+            # Projections for Asia H / L / EQ
+            sweep_levels.append({
+                "name": f"{day_str} Asia H",
+                "price": round(asia_h, digits),
+                "color": "#FF9800",
+                "lineStyle": 2,
+                "title": "Asia High"
+            })
+            sweep_levels.append({
+                "name": f"{day_str} Asia L",
+                "price": round(asia_l, digits),
+                "color": "#FF9800",
+                "lineStyle": 2,
+                "title": "Asia Low"
+            })
+            sweep_levels.append({
+                "name": f"{day_str} Asia 50%",
+                "price": asia_eq,
+                "color": "rgba(255, 152, 0, 0.45)",
+                "lineStyle": 3,
+                "title": "Asia EQ 50%"
+            })
+
+        # Europe Box & Asia Sweeps
+        europe_h = None
+        europe_l = None
+        if len(europe_df) > 0:
+            e_open = float(europe_df["open"].iloc[0])
+            europe_h = float(europe_df["high"].max())
+            europe_l = float(europe_df["low"].min())
+            e_close = float(europe_df["close"].iloc[-1])
+            e_start = int(europe_df["utc_time"].iloc[0])
+            e_end = int(europe_df["utc_time"].iloc[-1]) + 300
+            e_bull = e_close >= e_open
+            e_range = round((europe_h - europe_l) / pip_scale, 1)
+            europe_eq = round((europe_h + europe_l) / 2.0, digits)
+
+            boxes.append({
+                "session": "Europe",
+                "color": "#00E676",
+                "startTime": e_start,
+                "endTime": e_end,
+                "open": round(e_open, digits),
+                "high": round(europe_h, digits),
+                "low": round(europe_l, digits),
+                "close": round(e_close, digits),
+                "isBull": e_bull,
+                "rangePips": e_range,
+                "badge": f"🏛️ Europe ({e_range}p)"
+            })
+
+            # Europe Open Marker
+            markers.append({
+                "time": e_start,
+                "position": "aboveBar",
+                "color": "#00E676",
+                "shape": "circle",
+                "text": f"🏛️ London ({e_range}p)"
+            })
+
+            # Detect first M5 bar where Europe swept Asia High or Low
+            if asia_h is not None and asia_l is not None:
+                swept_high_bar = europe_df[europe_df["high"] > asia_h]
+                if len(swept_high_bar) > 0:
+                    first_sweep = swept_high_bar.iloc[0]
+                    markers.append({
+                        "time": int(first_sweep["utc_time"]),
+                        "position": "aboveBar",
+                        "color": "#FF5252",
+                        "shape": "arrowDown",
+                        "text": "⚡ London Swept Asia High"
+                    })
+
+                swept_low_bar = europe_df[europe_df["low"] < asia_l]
+                if len(swept_low_bar) > 0:
+                    first_sweep = swept_low_bar.iloc[0]
+                    markers.append({
+                        "time": int(first_sweep["utc_time"]),
+                        "position": "belowBar",
+                        "color": "#00E676",
+                        "shape": "arrowUp",
+                        "text": "⚡ London Swept Asia Low"
+                    })
+
+            # Projections for Europe H / L / EQ
+            sweep_levels.append({
+                "name": f"{day_str} Europe H",
+                "price": round(europe_h, digits),
+                "color": "#00E676",
+                "lineStyle": 2,
+                "title": "London High"
+            })
+            sweep_levels.append({
+                "name": f"{day_str} Europe L",
+                "price": round(europe_l, digits),
+                "color": "#00E676",
+                "lineStyle": 2,
+                "title": "London Low"
+            })
+            sweep_levels.append({
+                "name": f"{day_str} Europe 50%",
+                "price": europe_eq,
+                "color": "rgba(0, 230, 118, 0.45)",
+                "lineStyle": 3,
+                "title": "London EQ 50%"
+            })
+
+        # America Box & London Sweeps
+        if len(america_df) > 0:
+            us_open = float(america_df["open"].iloc[0])
+            us_h = float(america_df["high"].max())
+            us_l = float(america_df["low"].min())
+            us_close = float(america_df["close"].iloc[-1])
+            us_start = int(america_df["utc_time"].iloc[0])
+            us_end = int(america_df["utc_time"].iloc[-1]) + 300
+            us_bull = us_close >= us_open
+            us_range = round((us_h - us_l) / pip_scale, 1)
+
+            boxes.append({
+                "session": "America",
+                "color": "#2979FF",
+                "startTime": us_start,
+                "endTime": us_end,
+                "open": round(us_open, digits),
+                "high": round(us_h, digits),
+                "low": round(us_l, digits),
+                "close": round(us_close, digits),
+                "isBull": us_bull,
+                "rangePips": us_range,
+                "badge": f"🗽 America ({us_range}p)"
+            })
+
+            # America Open Marker
+            markers.append({
+                "time": us_start,
+                "position": "aboveBar",
+                "color": "#2979FF",
+                "shape": "circle",
+                "text": f"🗽 NY ({us_range}p)"
+            })
+
+            # Detect first M5 bar where NY swept London High or Low
+            if europe_h is not None and europe_l is not None:
+                swept_h = america_df[america_df["high"] > europe_h]
+                if len(swept_h) > 0:
+                    first_sweep = swept_h.iloc[0]
+                    markers.append({
+                        "time": int(first_sweep["utc_time"]),
+                        "position": "aboveBar",
+                        "color": "#FF5252",
+                        "shape": "arrowDown",
+                        "text": "⚡ NY Swept London High"
+                    })
+
+                swept_l = america_df[america_df["low"] < europe_l]
+                if len(swept_l) > 0:
+                    first_sweep = swept_l.iloc[0]
+                    markers.append({
+                        "time": int(first_sweep["utc_time"]),
+                        "position": "belowBar",
+                        "color": "#00E676",
+                        "shape": "arrowUp",
+                        "text": "⚡ NY Swept London Low"
+                    })
+
+            # Projections for NY H / L / EQ into subsequent session
+            sweep_levels.append({
+                "name": f"{day_str} NY H",
+                "price": round(us_h, digits),
+                "color": "#2979FF",
+                "lineStyle": 2,
+                "title": "NY High"
+            })
+            sweep_levels.append({
+                "name": f"{day_str} NY L",
+                "price": round(us_l, digits),
+                "color": "#2979FF",
+                "lineStyle": 2,
+                "title": "NY Low"
+            })
+            sweep_levels.append({
+                "name": f"{day_str} NY 50%",
+                "price": round((us_h + us_l) / 2.0, digits),
+                "color": "rgba(41, 121, 255, 0.45)",
+                "lineStyle": 3,
+                "title": "NY EQ 50%"
+            })
+
+            prev_america_h = us_h
+            prev_america_l = us_l
+
+    # Ensure all markers are strictly sorted ascending by timestamp for TradingView Lightweight Charts
+    markers.sort(key=lambda m: m["time"])
+
+    return {
+        "bars": bars,
+        "boxes": boxes,
+        "sweepLevels": sweep_levels,
+        "markers": markers
+    }
+
+
