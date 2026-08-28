@@ -71,6 +71,35 @@ class Timeframe:
             return self.value * 86400
         return None
 
+    @property
+    def mt5_timeframe_constant(self) -> Optional[int]:
+        """
+        Map standard MT5 timeframes (e.g. 1m, 5m, 15m, 1h, 1d) to MetaTrader 5 timeframe constants.
+        """
+        import MetaTrader5 as mt5
+        mapping = {
+            (1, TimeframeUnit.MINUTE): mt5.TIMEFRAME_M1,
+            (2, TimeframeUnit.MINUTE): mt5.TIMEFRAME_M2,
+            (3, TimeframeUnit.MINUTE): mt5.TIMEFRAME_M3,
+            (4, TimeframeUnit.MINUTE): mt5.TIMEFRAME_M4,
+            (5, TimeframeUnit.MINUTE): mt5.TIMEFRAME_M5,
+            (6, TimeframeUnit.MINUTE): mt5.TIMEFRAME_M6,
+            (10, TimeframeUnit.MINUTE): mt5.TIMEFRAME_M10,
+            (12, TimeframeUnit.MINUTE): mt5.TIMEFRAME_M12,
+            (15, TimeframeUnit.MINUTE): mt5.TIMEFRAME_M15,
+            (20, TimeframeUnit.MINUTE): mt5.TIMEFRAME_M20,
+            (30, TimeframeUnit.MINUTE): mt5.TIMEFRAME_M30,
+            (1, TimeframeUnit.HOUR): mt5.TIMEFRAME_H1,
+            (2, TimeframeUnit.HOUR): mt5.TIMEFRAME_H2,
+            (3, TimeframeUnit.HOUR): mt5.TIMEFRAME_H3,
+            (4, TimeframeUnit.HOUR): mt5.TIMEFRAME_H4,
+            (6, TimeframeUnit.HOUR): mt5.TIMEFRAME_H6,
+            (8, TimeframeUnit.HOUR): mt5.TIMEFRAME_H8,
+            (12, TimeframeUnit.HOUR): mt5.TIMEFRAME_H12,
+            (1, TimeframeUnit.DAY): mt5.TIMEFRAME_D1,
+        }
+        return mapping.get((self.value, self.unit))
+
     @classmethod
     def parse(cls, input_str: Union[str, "Timeframe"]) -> "Timeframe":
         if isinstance(input_str, Timeframe):

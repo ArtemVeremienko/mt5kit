@@ -148,11 +148,57 @@ class MT5Feed:
         sym_info = self.get_symbol_info(symbol)
         digits = sym_info["digits"] if sym_info else 5
 
-        # Fetch ticks
+        mt5_tf_const = tf.mt5_timeframe_constant
+
+        # If it's a standard MT5 timeframe, fetch direct high-depth rates for seamless charts
+        if mt5_tf_const is not None:
+            if not self.ensure_connected():
+                return {"symbol": symbol, "candles": [], "indicators": {"ema": {}, "sma": [], "vwap": []}}
+
+            mt5.symbol_select(symbol, True)
+            if date_from is not None and date_to is not None:
+                rates = mt5.copy_rates_range(symbol, mt5_tf_const, date_from, date_to)
+            else:
+                rates = mt5.copy_rates_from_pos(symbol, mt5_tf_const, 0, 500)
+
+            if rates is not None and len(rates) > 0:
+                rates_df = pd.DataFrame(rates)
+                candles = []
+                for _, r in rates_df.iterrows():
+                    candles.append({
+                        "time": int(r["time"]),
+                        "open": round(float(r["open"]), digits),
+                        "high": round(float(r["high"]), digits),
+                        "low": round(float(r["low"]), digits),
+                        "close": round(float(r["close"]), digits),
+                        "volume": float(r["real_volume"]) if r.get("real_volume", 0) > 0 else float(r["tick_volume"]),
+                        "tick_count": int(r["tick_volume"]),
+                        "spread": float(r["spread"]) * (sym_info["point"] if sym_info else 0.0001)
+                    })
+
+                indicators = calculate_indicators(candles) if calc_indicators else {"ema": {}, "sma": [], "vwap": []}
+                latest_bid = sym_info["bid"] if sym_info else candles[-1]["close"]
+                latest_ask = sym_info["ask"] if sym_info else candles[-1]["close"]
+                last_time_msc = int(candles[-1]["time"] * 1000)
+
+                return {
+                    "symbol": symbol,
+                    "symbol_info": sym_info,
+                    "timeframe": tf.to_dict(),
+                    "price_type": pt.value,
+                    "candles": candles,
+                    "indicators": indicators,
+                    "last_time_msc": last_time_msc,
+                    "latest_bid": latest_bid,
+                    "latest_ask": latest_ask,
+                    "spread_points": round((latest_ask - latest_bid) / (sym_info["point"] if sym_info else 0.0001), 1),
+                    "total_ticks": len(candles)
+                }
+
+        # For custom sub-minute second timeframes (e.g. 1s, 5s) or tick timeframes (e.g. 10t, 50t)
         if date_from is not None and date_to is not None:
             ticks_df = self.fetch_ticks_range(symbol, date_from, date_to)
         else:
-            # Scale tick lookback according to timeframe if not specified
             fetch_ticks_n = tick_count
             if tf.is_tick:
                 fetch_ticks_n = max(tick_count, tf.value * 500)
