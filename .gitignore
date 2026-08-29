@@ -16,6 +16,8 @@ htmlcov/
 
 # Generated Reports & Analyzer Outputs
 *.html
+!**/static/**
+!**/templates/**
 **/output/
 **/reports/
 *.log

@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MT5 Session Candles (Asia / Europe / America)</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- TradingView Lightweight Charts -->
+  <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+
+  <style>
+    :root {
+      --bg-primary: #12141a;
+      --bg-surface: #181b24;
+      --bg-surface-elevated: #222634;
+      --border-color: #2b3144;
+      --text-main: #e2e8f0;
+      --text-muted: #8892b0;
+      --asia-color: #FF9800;
+      --europe-color: #00E676;
+      --america-color: #2979FF;
+      --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      font-family: var(--font-ui);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Header Bar */
+    header {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      z-index: 20;
+      flex-shrink: 0;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 0.5px;
+      color: #fff;
+    }
+
+    .logo-icon {
+      width: 24px;
+      height: 24px;
+      background: linear-gradient(135deg, var(--asia-color), var(--europe-color), var(--america-color));
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 900;
+      color: #000;
+    }
+
+    .session-badges-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .session-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-color);
+      transition: all 0.2s ease;
+    }
+
+    .session-pill.asia {
+      border-color: rgba(255, 152, 0, 0.4);
+      color: var(--asia-color);
+    }
+    .session-pill.europe {
+      border-color: rgba(0, 230, 118, 0.4);
+      color: var(--europe-color);
+    }
+    .session-pill.america {
+      border-color: rgba(41, 121, 255, 0.4);
+      color: var(--america-color);
+    }
+
+    .session-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Controls Section */
+    .controls-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .symbol-select-wrap {
+      position: relative;
+    }
+
+    select, input, button {
+      background: var(--bg-surface-elevated);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    select:focus, input:focus, button:hover {
+      border-color: #4a5568;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    button.primary {
+      background: #2563eb;
+      border-color: #3b82f6;
+      color: #fff;
+    }
+
+    button.primary:hover {
+      background: #1d4ed8;
+    }
+
+    .quick-favorites {
+      display: flex;
+      gap: 5px;
+    }
+
+    .fav-btn {
+      padding: 4px 8px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      border-radius: 4px;
+    }
+
+    .fav-btn.active {
+      background: #2563eb;
+      border-color: #3b82f6;
+      color: #fff;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 16px;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #4ade80;
+      font-weight: 500;
+    }
+
+    .pulse-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #4ade80;
+      box-shadow: 0 0 8px #4ade80;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+
+    /* Main Chart Container */
+    #chart-wrapper {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      background: var(--bg-primary);
+    }
+
+    #tv-chart {
+      width: 100%;
+      height: 100%;
+    }
+
+    #box-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2;
+      display: none;
+    }
+
+    /* Floating Legend Overlay */
+    .chart-legend {
+      position: absolute;
+      top: 14px;
+      left: 18px;
+      z-index: 10;
+      background: rgba(24, 27, 36, 0.90);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      pointer-events: none;
+      min-width: 280px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .legend-row-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+
+    .legend-symbol {
+      font-weight: 700;
+      font-size: 15px;
+      color: #fff;
+    }
+
+    .legend-session-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    .legend-ohlc {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .ohlc-item span:first-child {
+      color: var(--text-muted);
+      margin-right: 2px;
+    }
+
+    .legend-metrics {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .legend-metrics b {
+      color: var(--text-main);
+    }
+
+    /* Style Guide / Legend Card */
+    .style-hint {
+      position: absolute;
+      bottom: 24px;
+      left: 18px;
+      z-index: 10;
+      background: rgba(24, 27, 36, 0.90);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .hint-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .candle-icon-hollow {
+      width: 10px;
+      height: 14px;
+      border: 2px solid #00E676;
+      background: transparent;
+      border-radius: 1px;
+    }
+
+    .candle-icon-filled {
+      width: 10px;
+      height: 14px;
+      background: #FF9800;
+      border: 2px solid #FF9800;
+      border-radius: 1px;
+    }
+
+    /* Live Session Banner */
+    .live-session-banner {
+      position: absolute;
+      top: 14px;
+      right: 18px;
+      z-index: 10;
+      background: rgba(24, 27, 36, 0.90);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .timer-text {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      color: #38bdf8;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation / Controls -->
+  <header>
+    <div class="brand-section">
+      <div class="logo">
+        <div class="logo-icon">S</div>
+        <span>MT5 Session Candles</span>
+      </div>
+
+      <div class="session-badges-bar">
+        <div class="session-pill asia">
+          <div class="session-dot"></div>
+          <span>Asia 00:00–09:00</span>
+        </div>
+        <div class="session-pill europe">
+          <div class="session-dot"></div>
+          <span>Europe 09:00–15:00</span>
+        </div>
+        <div class="session-pill america">
+          <div class="session-dot"></div>
+          <span>America 15:00–24:00</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls-section">
+      <div class="quick-favorites">
+        <button class="fav-btn active" onclick="selectSymbol('EURUSD')">EURUSD</button>
+        <button class="fav-btn" onclick="selectSymbol('GBPUSD')">GBPUSD</button>
+        <button class="fav-btn" onclick="selectSymbol('USDJPY')">USDJPY</button>
+        <button class="fav-btn" onclick="selectSymbol('XAUUSD')">XAUUSD</button>
+        <button class="fav-btn" onclick="selectSymbol('BTCUSD')">BTCUSD</button>
+      </div>
+
+      <div class="symbol-select-wrap">
+        <select id="symbol-select" onchange="selectSymbol(this.value)">
+          <option value="EURUSD">EURUSD</option>
+        </select>
+      </div>
+
+      <select id="lookback-select" onchange="changeLookback(this.value)">
+        <option value="30">30 Days</option>
+        <option value="60" selected>60 Days</option>
+        <option value="90">90 Days</option>
+        <option value="180">180 Days</option>
+        <option value="365">1 Year</option>
+      </select>
+
+      <select id="poc-view-select" onchange="changePocView(this.value)" title="Choose Display Mode">
+        <option value="merged" selected>🔥 M5 Session Ranges + Liquidity Sweeps</option>
+        <option value="classic">🕯️ 3 Session Candles (Classic)</option>
+      </select>
+
+      <select id="chart-type-select" onchange="changeChartType(this.value)" title="Choose Chart Type">
+        <option value="candlestick" selected>🕯️ Candlesticks</option>
+        <option value="candlestick_box">📦 Candlestick Box (Quantower)</option>
+        <option value="bar">📊 Bars</option>
+        <option value="line">📈 Line</option>
+      </select>
+
+      <button onclick="chart.timeScale().fitContent()" title="Reset Zoom / Fit Content (F)">Fit Content</button>
+
+      <div class="status-badge" id="conn-status">
+        <div class="pulse-dot"></div>
+        <span id="conn-text">MT5 Live</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Chart Container -->
+  <div id="chart-wrapper">
+    <div id="tv-chart"></div>
+    <canvas id="box-canvas"></canvas>
+
+    <!-- Dynamic Legend -->
+    <div class="chart-legend" id="legend">
+      <div class="legend-row-top">
+        <div class="legend-symbol" id="leg-symbol">EURUSD</div>
+        <div class="legend-session-badge" id="leg-session" style="background: rgba(255,152,0,0.2); color: #FF9800;">ASIA</div>
+      </div>
+      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 4px;" id="leg-time">--</div>
+      <div class="legend-ohlc">
+        <div class="ohlc-item"><span>O</span><b id="leg-open">--</b></div>
+        <div class="ohlc-item"><span>H</span><b id="leg-high">--</b></div>
+        <div class="ohlc-item"><span>L</span><b id="leg-low">--</b></div>
+        <div class="ohlc-item"><span>C</span><b id="leg-close">--</b></div>
+      </div>
+      <div class="legend-metrics">
+        <div>Range: <b id="leg-range">--</b></div>
+        <div>Change: <b id="leg-change">--</b></div>
+        <div>Vol: <b id="leg-vol">--</b></div>
+      </div>
+    </div>
+
+    <!-- Active Session Countdown Banner -->
+    <div class="live-session-banner">
+      <span id="active-session-label">Current: <b>Asia Session</b></span>
+      <span>• Closes in: <span class="timer-text" id="countdown-timer">--:--:--</span></span>
+    </div>
+
+    <!-- Candle Style Legend -->
+    <div class="style-hint" id="style-hint-card">
+      <div class="hint-item">
+        <div class="candle-icon-hollow"></div>
+        <span><b>Bull Candle</b> (Close ≥ Open): <b>Hollow</b></span>
+      </div>
+      <div class="hint-item">
+        <div class="candle-icon-filled"></div>
+        <span><b>Bear Candle</b> (Close &lt; Open): <b>Solid Filled</b></span>
+      </div>
+      <div class="hint-item">
+        <span>⚡ <b>Sweeps:</b> Real-time Asia/London H/L Breakout Markers & 50% EQ</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let chart;
+    let candleSeries;
+    let currentSymbol = 'EURUSD';
+    let currentLookback = 60;
+    let currentPocView = 'merged';
+    let currentChartType = 'candlestick';
+    let candleMap = new Map(); // time -> candleData
+    let ws = null;
+    let countdownInterval = null;
+    let secondsRemaining = 0;
+    let symbolDigits = 5;
+    let activePriceLines = [];
+
+    const SESSION_COLORS = {
+      'Asia': '#FF9800',
+      'Europe': '#00E676',
+      'America': '#2979FF'
+    };
+
+    let isHovering = false;
+    let hoveredTime = null;
+
+    function clearPriceLines() {
+      if (candleSeries && activePriceLines.length > 0) {
+        activePriceLines.forEach(line => {
+          try { candleSeries.removePriceLine(line); } catch (e) {}
+        });
+      }
+      activePriceLines = [];
+      if (candleSeries && typeof candleSeries.setMarkers === 'function') {
+        candleSeries.setMarkers([]);
+      }
+    }
+
+    function createMainSeries() {
+      clearPriceLines();
+      if (candleSeries) {
+        chart.removeSeries(candleSeries);
+        candleSeries = null;
+      }
+
+      const boxCanvas = document.getElementById('box-canvas');
+      if (boxCanvas) {
+        boxCanvas.style.display = currentChartType === 'candlestick_box' ? 'block' : 'none';
+      }
+
+      if (currentChartType === 'candlestick_box') {
+        // Invisible candlestick series to keep coordinate mapping, price scale, and markers active
+        candleSeries = chart.addCandlestickSeries({
+          upColor: 'rgba(0, 0, 0, 0)',
+          downColor: 'rgba(0, 0, 0, 0)',
+          borderUpColor: 'rgba(0, 0, 0, 0)',
+          borderDownColor: 'rgba(0, 0, 0, 0)',
+          wickUpColor: 'rgba(0, 0, 0, 0)',
+          wickDownColor: 'rgba(0, 0, 0, 0)',
+          priceFormat: {
+            type: 'price',
+            precision: symbolDigits,
+            minMove: 1 / (10 ** symbolDigits)
+          }
+        });
+      } else if (currentChartType === 'bar') {
+        candleSeries = chart.addBarSeries({
+          thinBars: false,
+          upColor: '#00E676',
+          downColor: '#FF9800',
+          priceFormat: {
+            type: 'price',
+            precision: symbolDigits,
+            minMove: 1 / (10 ** symbolDigits)
+          }
+        });
+      } else if (currentChartType === 'line') {
+        candleSeries = chart.addLineSeries({
+          color: '#38bdf8',
+          lineWidth: 2,
+          crosshairMarkerVisible: true,
+          priceFormat: {
+            type: 'price',
+            precision: symbolDigits,
+            minMove: 1 / (10 ** symbolDigits)
+          }
+        });
+      } else {
+        // Default: Candlesticks
+        candleSeries = chart.addCandlestickSeries({
+          upColor: 'rgba(0, 0, 0, 0)',
+          downColor: '#FF9800',
+          borderUpColor: '#FF9800',
+          borderDownColor: '#FF9800',
+          wickUpColor: '#FF9800',
+          wickDownColor: '#FF9800',
+          priceFormat: {
+            type: 'price',
+            precision: symbolDigits,
+            minMove: 1 / (10 ** symbolDigits)
+          }
+        });
+      }
+    }
+
+    function renderCandlestickBoxes() {
+      const canvas = document.getElementById('box-canvas');
+      if (!canvas || currentChartType !== 'candlestick_box' || !candleSeries || !chart) return;
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const container = document.getElementById('chart-wrapper');
+      const width = container.clientWidth;
+      const height = container.clientHeight;
+
+      if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+        canvas.width = Math.round(width * dpr);
+        canvas.height = Math.round(height * dpr);
+      }
+
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+
+      const timeScale = chart.timeScale();
+      const barSpacing = timeScale.options().barSpacing || 10;
+      const barWidth = Math.max(3, Math.floor(barSpacing * 0.76));
+
+      candleMap.forEach((bar) => {
+        const x = timeScale.timeToCoordinate(bar.time);
+        if (x === null || x < -barWidth || x > width + barWidth) return;
+
+        const yHigh = candleSeries.priceToCoordinate(bar.high);
+        const yLow = candleSeries.priceToCoordinate(bar.low);
+        const yOpen = candleSeries.priceToCoordinate(bar.open);
+        const yClose = candleSeries.priceToCoordinate(bar.close);
+
+        if (yHigh === null || yLow === null || yOpen === null || yClose === null) return;
+
+        const yTop = Math.min(yOpen, yClose);
+        const yBottom = Math.max(yOpen, yClose);
+        const bodyHeight = Math.max(2, yBottom - yTop);
+        const shadowHeight = Math.max(2, yLow - yHigh);
+        const isBull = bar.close >= bar.open;
+        const sessionName = bar.session || getSessionFromTime(bar.time);
+
+        let shadowColor, bodyColor, borderColor;
+        if (sessionName === 'Asia') {
+          shadowColor = 'rgba(255, 152, 0, 0.28)';
+          bodyColor = isBull ? '#FFA726' : '#E65100';
+          borderColor = '#FF9800';
+        } else if (sessionName === 'Europe') {
+          shadowColor = 'rgba(0, 230, 118, 0.28)';
+          bodyColor = isBull ? '#00E676' : '#00A844';
+          borderColor = '#00E676';
+        } else if (sessionName === 'America') {
+          shadowColor = 'rgba(41, 121, 255, 0.28)';
+          bodyColor = isBull ? '#448AFF' : '#1565C0';
+          borderColor = '#2979FF';
+        } else {
+          shadowColor = isBull ? 'rgba(0, 230, 118, 0.28)' : 'rgba(255, 82, 82, 0.28)';
+          bodyColor = isBull ? '#00E676' : '#FF5252';
+          borderColor = bodyColor;
+        }
+
+        const leftX = Math.round(x - barWidth / 2);
+
+        // 1. Draw Wide Shadow Box (High to Low)
+        ctx.fillStyle = shadowColor;
+        ctx.fillRect(leftX, Math.round(yHigh), barWidth, Math.round(shadowHeight));
+
+        // 2. Draw Real Body Box (Open to Close)
+        ctx.fillStyle = bodyColor;
+        ctx.fillRect(leftX, Math.round(yTop), barWidth, Math.round(bodyHeight));
+
+        // 3. Crisp border around real body
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(leftX + 0.5, Math.round(yTop) + 0.5, Math.max(1, barWidth - 1), Math.max(1, bodyHeight - 1));
+      });
+
+      ctx.restore();
+    }
+
+    function initChart() {
+      const container = document.getElementById('tv-chart');
+      chart = LightweightCharts.createChart(container, {
+        layout: {
+          background: { type: 'solid', color: '#12141a' },
+          textColor: '#94a3b8',
+          fontSize: 12,
+          fontFamily: "'JetBrains Mono', monospace"
+        },
+        grid: {
+          vertLines: { color: '#1e222d' },
+          horzLines: { color: '#1e222d' }
+        },
+        crosshair: {
+          mode: LightweightCharts.CrosshairMode.Normal,
+          vertLine: {
+            color: '#64748b',
+            width: 1,
+            style: LightweightCharts.LineStyle.Dashed,
+            labelBackgroundColor: '#334155'
+          },
+          horzLine: {
+            color: '#64748b',
+            width: 1,
+            style: LightweightCharts.LineStyle.Dashed,
+            labelBackgroundColor: '#334155'
+          }
+        },
+        timeScale: {
+          borderColor: '#2b3144',
+          timeVisible: true,
+          secondsVisible: false,
+          barSpacing: 14,
+          minBarSpacing: 3
+        },
+        rightPriceScale: {
+          borderColor: '#2b3144',
+          autoScale: true,
+          scaleMargins: {
+            top: 0.1,
+            bottom: 0.15
+          }
+        }
+      });
+
+      createMainSeries();
+
+      // Subscribe to Crosshair Moves for dynamic tooltip
+      chart.subscribeCrosshairMove(param => {
+        if (!param || !param.point || !param.time || !param.seriesData.get(candleSeries)) {
+          isHovering = false;
+          hoveredTime = null;
+          updateLegendWithLatest();
+          return;
+        }
+
+        isHovering = true;
+        hoveredTime = param.time;
+        const bar = param.seriesData.get(candleSeries);
+        const candleData = candleMap.get(param.time);
+        updateLegend(bar, candleData);
+      });
+
+      // Synchronize Quantower Candlestick Boxes on scroll / zoom
+      chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+        if (currentChartType === 'candlestick_box') renderCandlestickBoxes();
+      });
+      chart.timeScale().subscribeVisibleTimeRangeChange(() => {
+        if (currentChartType === 'candlestick_box') renderCandlestickBoxes();
+      });
+
+      // Container mouseleave handler
+      container.addEventListener('mouseleave', () => {
+        isHovering = false;
+        hoveredTime = null;
+        updateLegendWithLatest();
+      });
+
+      // Window resize handler
+      window.addEventListener('resize', () => {
+        chart.applyOptions({
+          width: container.clientWidth,
+          height: container.clientHeight
+        });
+        if (currentChartType === 'candlestick_box') renderCandlestickBoxes();
+      });
+
+      // Keyboard shortcuts
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'f' || e.key === 'F') {
+          chart.timeScale().fitContent();
+        }
+      });
+    }
+
+    function updateLegend(bar, meta) {
+      if (!bar) return;
+      document.getElementById('leg-symbol').textContent = currentSymbol;
+      
+      const sessionName = meta ? meta.session : getSessionFromTime(bar.time);
+      const color = SESSION_COLORS[sessionName] || '#FF9800';
+      const badge = document.getElementById('leg-session');
+      badge.textContent = (sessionName || 'BAR').toUpperCase();
+      badge.style.color = color;
+      badge.style.background = color + '22';
+
+      const o = bar.open !== undefined ? bar.open : (meta ? meta.open : bar.value);
+      const h = bar.high !== undefined ? bar.high : (meta ? meta.high : bar.value);
+      const l = bar.low !== undefined ? bar.low : (meta ? meta.low : bar.value);
+      const c = bar.close !== undefined ? bar.close : (bar.value !== undefined ? bar.value : (meta ? meta.close : 0));
+
+      document.getElementById('leg-open').textContent = o.toFixed(symbolDigits);
+      document.getElementById('leg-high').textContent = h.toFixed(symbolDigits);
+      document.getElementById('leg-low').textContent = l.toFixed(symbolDigits);
+      document.getElementById('leg-close').textContent = c.toFixed(symbolDigits);
+
+      if (meta && meta.rangePips !== undefined) {
+        document.getElementById('leg-time').textContent = meta.utcDate || new Date(bar.time * 1000).toUTCString().replace('GMT', 'UTC');
+        document.getElementById('leg-range').textContent = meta.rangePips + ' pips';
+        const changeSign = meta.changePips >= 0 ? '+' : '';
+        const changeElem = document.getElementById('leg-change');
+        changeElem.textContent = `${changeSign}${meta.changePips} pips (${changeSign}${meta.changePct}%)`;
+        changeElem.style.color = meta.isBull ? '#4ade80' : '#f87171';
+        document.getElementById('leg-vol').textContent = meta.volume ? meta.volume.toLocaleString() : '--';
+      } else {
+        const d = new Date(bar.time * 1000);
+        document.getElementById('leg-time').textContent = d.toUTCString().replace('GMT', 'UTC');
+        const diff = (c - o);
+        const pips = (h - l) * (symbolDigits === 3 || symbolDigits === 5 ? 10000 : 1);
+        document.getElementById('leg-range').textContent = pips.toFixed(1) + ' pts';
+        document.getElementById('leg-change').textContent = (diff >= 0 ? '+' : '') + diff.toFixed(symbolDigits);
+        document.getElementById('leg-vol').textContent = '--';
+      }
+    }
+
+    function updateLegendWithLatest() {
+      const keys = Array.from(candleMap.keys());
+      if (keys.length === 0) return;
+      const lastKey = keys[keys.length - 1];
+      const lastCandle = candleMap.get(lastKey);
+      updateLegend(lastCandle, lastCandle);
+    }
+
+    function getSessionFromTime(ts) {
+      const d = new Date(ts * 1000);
+      const h = d.getUTCHours();
+      if (h < 9) return 'Asia';
+      if (h < 15) return 'Europe';
+      return 'America';
+    }
+
+    async function loadSymbols() {
+      try {
+        const res = await fetch('/api/symbols');
+        const data = await res.json();
+        const select = document.getElementById('symbol-select');
+        select.innerHTML = '';
+        data.symbols.forEach(sym => {
+          const opt = document.createElement('option');
+          opt.value = sym;
+          opt.textContent = sym;
+          if (sym === currentSymbol) opt.selected = true;
+          select.appendChild(opt);
+        });
+      } catch (err) {
+        console.error('Failed to load symbols:', err);
+      }
+    }
+
+    function formatBarItem(b) {
+      if (currentChartType === 'line') {
+        return {
+          time: b.time,
+          value: b.close
+        };
+      }
+      if (currentChartType === 'bar') {
+        const barColor = b.borderColor || b.wickColor || SESSION_COLORS[b.session] || '#64748b';
+        return {
+          time: b.time,
+          open: b.open,
+          high: b.high,
+          low: b.low,
+          close: b.close,
+          color: barColor
+        };
+      }
+      return {
+        time: b.time,
+        open: b.open,
+        high: b.high,
+        low: b.low,
+        close: b.close,
+        color: b.color,
+        borderColor: b.borderColor,
+        wickColor: b.wickColor
+      };
+    }
+
+    async function loadCandles() {
+      try {
+        document.getElementById('conn-text').textContent = 'Loading...';
+        clearPriceLines();
+        candleMap.clear();
+
+        if (currentPocView === 'merged') {
+          // --- Merged Mode: M5 Intraday Session Ranges + Real-time Liquidity Sweeps & Levels ---
+          const res = await fetch(`/api/poc/merged-intraday-sweeps?symbol=${encodeURIComponent(currentSymbol)}&days=5`);
+          const data = await res.json();
+          symbolDigits = data.digits || 5;
+
+          candleSeries.applyOptions({
+            priceFormat: { type: 'price', precision: symbolDigits, minMove: 1 / (10 ** symbolDigits) }
+          });
+
+          const formattedData = [];
+          data.bars.forEach(b => {
+            candleMap.set(b.time, b);
+            formattedData.push(formatBarItem(b));
+          });
+          candleSeries.setData(formattedData);
+
+          // Add Asia / London / NY High, Low, EQ price lines for recent sessions
+          if (data.sweepLevels && data.sweepLevels.length > 0) {
+            data.sweepLevels.slice(-9).forEach(lvl => {
+              activePriceLines.push(candleSeries.createPriceLine({
+                price: lvl.price,
+                color: lvl.color,
+                lineWidth: 1,
+                lineStyle: lvl.lineStyle === 3 ? LightweightCharts.LineStyle.Dotted : LightweightCharts.LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: lvl.title
+              }));
+            });
+          }
+
+          // Attach all session open & liquidity sweep breakout markers
+          if (data.markers && data.markers.length > 0 && typeof candleSeries.setMarkers === 'function') {
+            const sortedMarkers = [...data.markers].sort((a, b) => a.time - b.time);
+            candleSeries.setMarkers(sortedMarkers);
+          }
+
+        } else {
+          // --- Classic 3 Session Candles Mode ---
+          const res = await fetch(`/api/session-candles?symbol=${encodeURIComponent(currentSymbol)}&days=${currentLookback}`);
+          const data = await res.json();
+          symbolDigits = data.digits || 5;
+
+          candleSeries.applyOptions({
+            priceFormat: { type: 'price', precision: symbolDigits, minMove: 1 / (10 ** symbolDigits) }
+          });
+
+          const formattedData = [];
+
+          data.candles.forEach(c => {
+            candleMap.set(c.time, c);
+            formattedData.push(formatBarItem(c));
+          });
+
+          if (data.active_candle) {
+            const ac = data.active_candle;
+            candleMap.set(ac.time, ac);
+            const existingIdx = formattedData.findIndex(item => item.time === ac.time);
+            const activeItem = formatBarItem(ac);
+            if (existingIdx >= 0) formattedData[existingIdx] = activeItem;
+            else formattedData.push(activeItem);
+          }
+
+          candleSeries.setData(formattedData);
+          if (typeof candleSeries.setMarkers === 'function') {
+            candleSeries.setMarkers([]);
+          }
+
+          updateActiveSessionBanner(data.active_session, data.session_seconds_remaining);
+        }
+
+        chart.timeScale().fitContent();
+        if (currentChartType === 'candlestick_box') renderCandlestickBoxes();
+        updateLegendWithLatest();
+        document.getElementById('conn-text').textContent = 'MT5 Live';
+        startWebSocket();
+      } catch (err) {
+        console.error('Failed to load candles:', err);
+        document.getElementById('conn-text').textContent = 'Error';
+      }
+    }
+
+    function updateActiveSessionBanner(sessionName, secsRemaining) {
+      secondsRemaining = secsRemaining;
+      const color = SESSION_COLORS[sessionName] || '#FF9800';
+      const label = document.getElementById('active-session-label');
+      label.innerHTML = `Active Session: <b style="color:${color}">${sessionName}</b>`;
+
+      if (countdownInterval) clearInterval(countdownInterval);
+      countdownInterval = setInterval(() => {
+        if (secondsRemaining > 0) {
+          secondsRemaining--;
+          const hrs = Math.floor(secondsRemaining / 3600).toString().padStart(2, '0');
+          const mins = Math.floor((secondsRemaining % 3600) / 60).toString().padStart(2, '0');
+          const secs = (secondsRemaining % 60).toString().padStart(2, '0');
+          document.getElementById('countdown-timer').textContent = `${hrs}:${mins}:${secs}`;
+        } else {
+          document.getElementById('countdown-timer').textContent = '00:00:00 (Rolling)';
+          loadCandles();
+        }
+      }, 1000);
+    }
+
+    function startWebSocket() {
+      if (ws) ws.close();
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws/live?symbol=${encodeURIComponent(currentSymbol)}`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.active_candle) {
+            const ac = msg.active_candle;
+            candleMap.set(ac.time, ac);
+            
+            candleSeries.update(formatBarItem(ac));
+            if (currentChartType === 'candlestick_box') renderCandlestickBoxes();
+
+            if (!isHovering) {
+              updateLegendWithLatest();
+            } else if (hoveredTime === ac.time) {
+              updateLegend(ac, ac);
+            }
+          }
+        } catch (err) {
+          console.error('WebSocket parse error:', err);
+        }
+      };
+
+      ws.onclose = () => {
+        setTimeout(startWebSocket, 3000);
+      };
+    }
+
+    function selectSymbol(sym) {
+      if (currentSymbol === sym) return;
+      currentSymbol = sym;
+      document.getElementById('symbol-select').value = sym;
+      document.querySelectorAll('.fav-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent === sym);
+      });
+      loadCandles();
+    }
+
+    function changeLookback(days) {
+      currentLookback = parseInt(days, 10);
+      loadCandles();
+    }
+
+    function changePocView(view) {
+      currentPocView = view;
+      loadCandles();
+    }
+
+    function changeChartType(type) {
+      if (currentChartType === type) return;
+      currentChartType = type;
+      createMainSeries();
+      loadCandles();
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      initChart();
+      await loadSymbols();
+      await loadCandles();
+    });
+  </script>
+</body>
+</html>

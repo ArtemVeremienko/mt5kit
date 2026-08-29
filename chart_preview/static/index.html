@@ -1,0 +1,1730 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradingView Chart with Region Selection Preview</title>
+    <!-- Lightweight Charts v4.1.1 -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <!-- ECMAScript Temporal API Polyfill -->
+    <script src="https://cdn.jsdelivr.net/npm/@js-temporal/polyfill@0.4.4/dist/index.umd.js"></script>
+    <!-- Alpine.js (v3) for declarative UI reactivity -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+    <script>
+        if (typeof Temporal === 'undefined' && typeof temporal !== 'undefined') {
+            window.Temporal = temporal.Temporal;
+        }
+    </script>
+    <style>
+        :root {
+            --bg-primary: #131722;
+            --bg-secondary: #1e222d;
+            --bg-card: rgba(30, 34, 45, 0.92);
+            --bg-hover: #2a2e39;
+            --bg-active: #2962ff;
+            --border-color: #2b2f3a;
+            --border-highlight: #3b4458;
+            --text-primary: #d1d4dc;
+            --text-secondary: #787b86;
+            --text-muted: #5d606b;
+            --accent-blue: #2962ff;
+            --accent-blue-glow: rgba(41, 98, 255, 0.35);
+            --accent-green: #089981;
+            --accent-red: #f23645;
+            --accent-yellow: #f1c40f;
+            --selection-bg: rgba(41, 98, 255, 0.22);
+            --selection-border: rgba(41, 98, 255, 0.95);
+            --glass-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            user-select: none;
+        }
+
+        [x-cloak] { display: none !important; }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Top Header / Navigation Bar */
+        .header {
+            height: 50px;
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 14px;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            color: #ffffff;
+            margin-right: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .brand svg {
+            color: var(--accent-blue);
+        }
+
+        .divider {
+            width: 1px;
+            height: 24px;
+            background-color: var(--border-color);
+            margin: 0 4px;
+        }
+
+        /* Symbol Picker */
+        .symbol-picker-container {
+            position: relative;
+        }
+
+        .symbol-btn {
+            background-color: var(--bg-hover);
+            border: 1px solid var(--border-color);
+            color: #fff;
+            font-weight: 600;
+            font-size: 13px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .symbol-btn:hover {
+            border-color: var(--accent-blue);
+            background-color: #333846;
+        }
+
+        .symbol-dropdown {
+            position: absolute;
+            top: 42px;
+            left: 0;
+            width: 280px;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-highlight);
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .symbol-search-input {
+            background-color: var(--bg-primary);
+            border: none;
+            border-bottom: 1px solid var(--border-color);
+            padding: 10px 12px;
+            color: #fff;
+            font-size: 13px;
+            outline: none;
+        }
+
+        .symbol-list {
+            max-height: 260px;
+            overflow-y: auto;
+        }
+
+        .symbol-item {
+            padding: 8px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            transition: background 0.1s;
+        }
+
+        .symbol-item:hover {
+            background-color: var(--bg-hover);
+        }
+
+        .symbol-item.active {
+            background-color: var(--accent-blue);
+            color: #ffffff;
+        }
+
+        .symbol-item .desc {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+
+        /* Buttons Group */
+        .btn-group {
+            display: flex;
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 2px;
+            gap: 2px;
+        }
+
+        .btn-item {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-item:hover {
+            color: var(--text-primary);
+            background-color: var(--bg-hover);
+        }
+
+        .btn-item.active {
+            color: #fff;
+            background-color: var(--accent-blue);
+            font-weight: 600;
+        }
+
+        /* Tool Toggle Button (Region Select) */
+        .tool-btn {
+            background-color: var(--bg-hover);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tool-btn:hover {
+            background-color: #363c4a;
+            border-color: var(--text-secondary);
+        }
+
+        .tool-btn.active {
+            background-color: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: #ffffff;
+            box-shadow: 0 0 14px var(--accent-blue-glow);
+        }
+
+        .tool-btn .kbd {
+            font-size: 10px;
+            padding: 1px 4px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 3px;
+            opacity: 0.8;
+        }
+
+        /* Select Dropdowns */
+        .select-input {
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            font-size: 12px;
+            padding: 5px 8px;
+            border-radius: 6px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .select-input:hover {
+            border-color: var(--text-secondary);
+        }
+
+        .status-badge {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        .pulse-dot.disconnected {
+            background-color: var(--accent-red);
+            box-shadow: 0 0 8px var(--accent-red);
+        }
+
+        /* Main Chart Area */
+        .main-container {
+            position: relative;
+            flex: 1;
+            width: 100%;
+            height: calc(100vh - 50px);
+            overflow: hidden;
+        }
+
+        #main-chart {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Floating Legend / Stats on Main Chart */
+        .chart-legend {
+            position: absolute;
+            top: 14px;
+            left: 16px;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            font-size: 12px;
+        }
+
+        .legend-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-ohlc {
+            display: flex;
+            gap: 10px;
+            color: var(--text-secondary);
+            font-family: 'SF Mono', Consolas, Monaco, monospace;
+            font-size: 11px;
+        }
+
+        .legend-ohlc span b {
+            color: var(--text-primary);
+        }
+
+        .up-color { color: var(--accent-green) !important; }
+        .down-color { color: var(--accent-red) !important; }
+
+        /* Region Selection Overlay */
+        .selection-overlay-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 30;
+        }
+
+        .selection-overlay-layer.active {
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+
+        .selection-box {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            background: var(--selection-bg);
+            border-left: 2px solid var(--selection-border);
+            border-right: 2px solid var(--selection-border);
+            pointer-events: none;
+            display: none;
+            box-sizing: border-box;
+            backdrop-filter: blur(1px);
+        }
+
+        .selection-info-badge {
+            position: absolute;
+            top: 18px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(19, 23, 34, 0.95);
+            border: 1px solid var(--accent-blue);
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            white-space: nowrap;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+            pointer-events: none;
+        }
+
+        /* Persistent Highlight Region on Main Chart */
+        .persistent-region-marker {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            background: rgba(241, 196, 15, 0.12);
+            border-left: 2px dashed rgba(241, 196, 15, 0.75);
+            border-right: 2px dashed rgba(241, 196, 15, 0.75);
+            pointer-events: none;
+            display: none;
+            z-index: 15;
+        }
+
+        .persistent-region-label {
+            position: absolute;
+            top: 45px;
+            left: 6px;
+            background: rgba(30, 34, 45, 0.85);
+            border: 1px solid rgba(241, 196, 15, 0.5);
+            color: var(--accent-yellow);
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        /* Floating Draggable Sub-Chart Popup Window */
+        .preview-popup-window {
+            position: absolute;
+            top: 60px;
+            right: 40px;
+            width: 640px;
+            height: 440px;
+            min-width: 400px;
+            min-height: 280px;
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-highlight);
+            border-radius: 10px;
+            box-shadow: var(--glass-shadow);
+            z-index: 500;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .preview-popup-window.active {
+            display: flex;
+        }
+
+        .preview-popup-window.minimized {
+            height: 44px !important;
+            min-height: 44px !important;
+            resize: none;
+        }
+
+        .popup-header {
+            height: 44px;
+            background: rgba(22, 26, 37, 0.95);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            cursor: move;
+            user-select: none;
+        }
+
+        .popup-title-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .popup-tag {
+            background: var(--accent-blue);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+        }
+
+        .popup-time-info {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-family: 'SF Mono', Consolas, Monaco, monospace;
+        }
+
+        .popup-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .popup-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            width: 26px;
+            height: 26px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .popup-btn:hover {
+            background-color: var(--bg-hover);
+            color: #ffffff;
+        }
+
+        .popup-btn.close:hover {
+            background-color: var(--accent-red);
+            color: #ffffff;
+        }
+
+        /* Popup Sub-Toolbar */
+        .popup-toolbar {
+            height: 38px;
+            background: rgba(19, 23, 34, 0.85);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            gap: 8px;
+            font-size: 11px;
+        }
+
+        .sub-tf-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 7px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .sub-tf-btn:hover {
+            color: var(--text-primary);
+            border-color: var(--text-secondary);
+        }
+
+        .sub-tf-btn.active {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: #ffffff;
+        }
+
+        .popup-stats-bar {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 11px;
+            font-family: 'SF Mono', Consolas, Monaco, monospace;
+            color: var(--text-secondary);
+        }
+
+        .popup-chart-body {
+            position: relative;
+            flex: 1;
+            width: 100%;
+            min-height: 180px;
+            background: var(--bg-primary);
+        }
+
+        #popup-chart {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Popup Footer Stats */
+        .popup-footer {
+            height: 30px;
+            background: rgba(22, 26, 37, 0.95);
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-family: 'SF Mono', Consolas, Monaco, monospace;
+            justify-content: space-between;
+        }
+
+        /* Resize Handle */
+        .resize-handle {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 14px;
+            height: 14px;
+            cursor: se-resize;
+            z-index: 50;
+        }
+
+        .resize-handle::after {
+            content: '';
+            position: absolute;
+            bottom: 3px;
+            right: 3px;
+            width: 5px;
+            height: 5px;
+            border-right: 2px solid var(--text-secondary);
+            border-bottom: 2px solid var(--text-secondary);
+        }
+
+        /* Toast Notification */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: rgba(30, 34, 45, 0.95);
+            border: 1px solid var(--accent-blue);
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 8px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            font-size: 12px;
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body x-data="chartApp()" @keydown.window="handleKeyDown($event)">
+
+    <!-- Header / Toolbar -->
+    <header class="header">
+        <div class="brand">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+            <span>MT5 PREVIEW</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Symbol Selector -->
+        <div class="symbol-picker-container" @click.outside="symbolDropdownOpen = false">
+            <button class="symbol-btn" @click="toggleSymbolDropdown()">
+                <span x-text="symbol">EURUSD</span>
+                <span style="font-size: 9px; opacity: 0.7;">▼</span>
+            </button>
+            <div class="symbol-dropdown" x-show="symbolDropdownOpen" x-cloak>
+                <input type="text" class="symbol-search-input" x-ref="symbolInput" x-model="symbolSearchQuery" @input="filterSymbols()" placeholder="Search symbol (e.g. BTC, EUR, XAU)..." autocomplete="off" />
+                <div class="symbol-list">
+                    <template x-for="s in filteredSymbols" :key="s.name">
+                        <div class="symbol-item" @click="selectSymbol(s.name)">
+                            <div>
+                                <div style="font-weight: 600; color: #fff;" x-text="s.name"></div>
+                                <div class="desc" x-text="s.description || s.path || ''"></div>
+                            </div>
+                            <div style="font-size: 11px; color: var(--accent-blue); font-family: monospace;" x-text="formatSymbolBid(s)"></div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Timeframe Selector -->
+        <div class="btn-group">
+            <template x-for="tf in timeframes" :key="tf.id">
+                <button class="btn-item" :class="{ active: mainTimeframe === tf.id }" @click="setTimeframe(tf.id)" x-text="tf.label"></button>
+            </template>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Date Range Selector -->
+        <div class="range-picker-container" style="position: relative;" @click.outside="dateRangeDropdownOpen = false">
+            <button class="symbol-btn" @click="dateRangeDropdownOpen = !dateRangeDropdownOpen" style="display: flex; align-items: center; gap: 6px; font-weight: 500; font-size: 12px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+                <span x-text="dateRangeLabel">Range: All</span>
+                <span style="font-size: 9px; opacity: 0.7;">▼</span>
+            </button>
+            <div class="symbol-dropdown" x-show="dateRangeDropdownOpen" x-cloak style="width: 250px; padding: 8px;">
+                <div style="font-size: 10px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; padding: 4px 8px; letter-spacing: 0.5px;">Presets</div>
+                <template x-for="preset in datePresets" :key="preset.id">
+                    <div class="symbol-item" :class="{ active: dateRangePreset === preset.id }" @click="selectPreset(preset.id)">
+                        <span x-text="preset.label"></span>
+                    </div>
+                </template>
+
+                <div style="width: 100%; height: 1px; background: var(--border-color); margin: 6px 0;"></div>
+
+                <div style="font-size: 10px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; padding: 4px 8px; letter-spacing: 0.5px;">Custom Date Range</div>
+                <div style="padding: 4px 8px; display: flex; flex-direction: column; gap: 6px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-secondary);">
+                        <span>From:</span>
+                        <input type="date" x-model="customDateFrom" class="select-input" style="padding: 3px 6px; font-size: 11px;" />
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--text-secondary);">
+                        <span>To:</span>
+                        <input type="date" x-model="customDateTo" class="select-input" style="padding: 3px 6px; font-size: 11px;" />
+                    </div>
+                    <div x-show="customDateFrom || customDateTo" style="font-size: 10px; color: var(--accent-blue); text-align: center; font-family: monospace;" x-text="(customDateFrom || '...') + ' → ' + (customDateTo || '...')"></div>
+                    <button class="tool-btn" @click="applyCustomDateRange()" style="justify-content: center; padding: 5px 8px; margin-top: 4px; font-size: 11px; background: var(--accent-blue); border-color: var(--accent-blue); color: #fff;">Apply Custom Range</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Chart Type Selector -->
+        <select x-model="mainChartType" @change="changeMainChartType()" class="select-input">
+            <option value="candles">Candlesticks</option>
+            <option value="heikin_ashi">Heikin-Ashi</option>
+            <option value="line">Line</option>
+            <option value="area">Area</option>
+            <option value="bars">Bars</option>
+        </select>
+
+        <div class="divider"></div>
+
+        <!-- Region Selection Mode Toggle -->
+        <button class="tool-btn" :class="{ active: selectionMode }" @click="toggleSelectionMode()" title="Toggle Selection Tool [S] to highlight range and preview sub-chart">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="4 2"></rect>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span>Select Region</span>
+            <span class="kbd">S</span>
+        </button>
+
+        <div class="divider"></div>
+
+        <!-- Default Sub-Chart Timeframe Picker -->
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary);">
+            <span>Sub-TF:</span>
+            <select x-model="defaultSubTf" class="select-input">
+                <option value="M1">M1 (1 Min)</option>
+                <option value="M5">M5 (5 Min)</option>
+                <option value="M15">M15 (15 Min)</option>
+                <option value="TICK">Ticks (Raw)</option>
+                <option value="S15">S15 (15 Sec)</option>
+                <option value="S30">S30 (30 Sec)</option>
+            </select>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Indicator Toggles -->
+        <div class="btn-group">
+            <button class="btn-item" :class="{ active: showSma }" @click="toggleIndicator('sma')" title="SMA 200">SMA 200</button>
+            <button class="btn-item" :class="{ active: showEma }" @click="toggleIndicator('ema')" title="EMA 50">EMA 50</button>
+            <button class="btn-item" :class="{ active: showVolume }" @click="toggleIndicator('volume')" title="Volume">Vol</button>
+        </div>
+
+        <!-- Live Status Badge -->
+        <div class="status-badge">
+            <div class="pulse-dot" :class="{ disconnected: !isWsConnected }"></div>
+            <span x-text="isWsConnected ? 'Live MT5' : 'Reconnecting...'">Live MT5</span>
+        </div>
+    </header>
+
+    <!-- Main Chart Container -->
+    <div class="main-container" id="main-container">
+        <!-- Legend Overlay -->
+        <div class="chart-legend">
+            <div class="legend-title">
+                <span x-text="symbol">EURUSD</span>
+                <span style="font-size: 12px; color: var(--accent-blue);" x-text="mainTimeframe">H1</span>
+                <span style="font-weight: 700; font-family: monospace;" :class="legend.deltaClass" x-text="legend.price">--</span>
+            </div>
+            <div class="legend-ohlc">
+                <span>O: <b x-text="legend.open">--</b></span>
+                <span>H: <b x-text="legend.high">--</b></span>
+                <span>L: <b x-text="legend.low">--</b></span>
+                <span>C: <b x-text="legend.close">--</b></span>
+                <span>V: <b x-text="legend.volume">--</b></span>
+                <span>Δ: <b :class="legend.deltaClass" x-text="legend.delta">--</b></span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); font-family: monospace;" x-text="legend.time">--</div>
+        </div>
+
+        <!-- Chart DOM Canvas -->
+        <div id="main-chart"></div>
+
+        <!-- Drag Selection Overlay Layer -->
+        <div class="selection-overlay-layer" :class="{ active: selectionMode }" id="selection-layer">
+            <div id="selection-box" class="selection-box">
+                <div class="selection-info-badge">
+                    <span id="badge-duration">--</span>
+                    <span style="opacity: 0.5;">|</span>
+                    <span id="badge-bars">-- bars</span>
+                </div>
+            </div>
+            <!-- Persistent region marker for currently open preview -->
+            <div id="persistent-marker" class="persistent-region-marker">
+                <div class="persistent-region-label" x-text="`Active Preview (${activePreview.subTf})`">Active Preview (M1)</div>
+            </div>
+        </div>
+
+        <!-- Floating Draggable & Resizable Sub-Chart Preview Popup -->
+        <div id="preview-popup" class="preview-popup-window" :class="{ active: activePreview.isOpen, minimized: activePreview.isMinimized }">
+            <!-- Draggable Header -->
+            <div class="popup-header" id="popup-header">
+                <div class="popup-title-group">
+                    <span class="popup-tag" x-text="`${activePreview.subTf} PREVIEW`">M1 PREVIEW</span>
+                    <span x-text="symbol">EURUSD</span>
+                    <span class="popup-time-info" x-text="activePreview.timeRange">--</span>
+                </div>
+                <div class="popup-actions">
+                    <button class="popup-btn" @click="activePreview.isMinimized = !activePreview.isMinimized" title="Minimize / Expand">_</button>
+                    <button class="popup-btn" @click="fitPopupChart()" title="Reset Zoom">⛶</button>
+                    <button class="popup-btn close" @click="closePreviewPopup()" title="Close Preview (Esc)">✕</button>
+                </div>
+            </div>
+
+            <!-- Popup Toolbar -->
+            <div class="popup-toolbar">
+                <div class="btn-group">
+                    <template x-for="stf in ['TICK', 'S15', 'S30', 'M1', 'M5', 'M15']" :key="stf">
+                        <button class="sub-tf-btn" :class="{ active: activePreview.subTf === stf }" @click="switchSubTf(stf)" x-text="stf"></button>
+                    </template>
+                </div>
+
+                <select x-model="activePreview.chartType" @change="changePopupChartType()" class="select-input" style="padding: 2px 6px; font-size: 11px;">
+                    <option value="candles">Candles</option>
+                    <option value="line">Line</option>
+                    <option value="area">Area</option>
+                    <option value="bars">Bars</option>
+                </select>
+
+                <div class="popup-stats-bar" x-show="activePreview.stats">
+                    <span>Δ: <b :class="activePreview.stats?.delta >= 0 ? 'up-color' : 'down-color'" x-text="activePreview.statsDelta">--</b></span>
+                    <span>Range: <b style="color: #fff;" x-text="activePreview.statsRange">--</b></span>
+                </div>
+            </div>
+
+            <!-- Popup Chart Canvas -->
+            <div class="popup-chart-body">
+                <div id="popup-chart"></div>
+            </div>
+
+            <!-- Popup Footer Stats -->
+            <div class="popup-footer">
+                <div x-text="activePreview.footerLeft">High: -- | Low: -- | Vol: --</div>
+                <div style="color: var(--accent-yellow);">Calculated via Temporal API</div>
+            </div>
+
+            <!-- Corner Resize Handle -->
+            <div class="resize-handle" id="popup-resize-handle"></div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" x-show="toast.show" x-transition x-cloak>
+        <span x-text="toast.message">Ready</span>
+    </div>
+
+    <script>
+        /**
+         * Plain Chart Engine: Pure Lightweight Charts instances decoupled from Alpine Proxies
+         */
+        const TIMEFRAME_SECONDS = {
+            "M1": 60, "M2": 120, "M3": 180, "M4": 240, "M5": 300, "M6": 360, "M10": 600,
+            "M12": 720, "M15": 900, "M20": 1200, "M30": 1800, "H1": 3600, "H2": 7200,
+            "H3": 10800, "H4": 14400, "H6": 21600, "H8": 28800, "H12": 43200, "D1": 86400,
+            "W1": 604800, "MN1": 2592000
+        };
+
+        const ChartEngine = {
+            mainChart: null,
+            mainCandleSeries: null,
+            mainLineSeries: null,
+            mainAreaSeries: null,
+            mainBarSeries: null,
+            mainVolumeSeries: null,
+            mainSmaSeries: null,
+            mainEmaSeries: null,
+
+            popupChart: null,
+            popupCandleSeries: null,
+            popupLineSeries: null,
+            popupAreaSeries: null,
+            popupBarSeries: null,
+            popupVolumeSeries: null,
+
+            candles: [],
+            activePreview: { fromTime: null, toTime: null, endCandleTime: null, isOpen: false, subTf: "M1" },
+
+            init() {
+                const chartTheme = {
+                    layout: { background: { color: '#131722' }, textColor: '#d1d4dc', fontSize: 12 },
+                    grid: { vertLines: { color: '#1e222d' }, horzLines: { color: '#1e222d' } },
+                    crosshair: {
+                        mode: LightweightCharts.CrosshairMode.Normal,
+                        vertLine: { color: '#758696', width: 1, style: 3, labelBackgroundColor: '#2962ff' },
+                        horzLine: { color: '#758696', width: 1, style: 3, labelBackgroundColor: '#2962ff' },
+                    },
+                    timeScale: { borderColor: '#2b2f3a', timeVisible: true, secondsVisible: false },
+                    rightPriceScale: { borderColor: '#2b2f3a', scaleMargins: { top: 0.05, bottom: 0.12 } },
+                    handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: true },
+                    handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true }
+                };
+
+                const mainEl = document.getElementById("main-chart");
+                if (this.mainChart) return;
+                mainEl.innerHTML = "";
+                const mainContainer = document.getElementById("main-container");
+                this.mainChart = LightweightCharts.createChart(mainEl, {
+                    ...chartTheme,
+                    width: mainContainer ? mainContainer.clientWidth : window.innerWidth,
+                    height: mainContainer ? mainContainer.clientHeight : (window.innerHeight - 50),
+                    autoSize: true
+                });
+
+                this.mainCandleSeries = this.mainChart.addCandlestickSeries({
+                    upColor: '#089981', downColor: '#f23645', borderVisible: false,
+                    wickUpColor: '#089981', wickDownColor: '#f23645',
+                    priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
+                });
+
+                this.mainVolumeSeries = this.mainChart.addHistogramSeries({
+                    color: '#26a69a', priceFormat: { type: 'volume' }, priceScaleId: 'volume'
+                });
+                this.mainChart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.90, bottom: 0.0 } });
+
+                this.mainSmaSeries = this.mainChart.addLineSeries({
+                    color: '#2962ff', lineWidth: 2, title: 'SMA 200', crosshairMarkerVisible: false,
+                    priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
+                });
+
+                this.mainEmaSeries = this.mainChart.addLineSeries({
+                    color: '#ff9800', lineWidth: 2, title: 'EMA 50', crosshairMarkerVisible: false,
+                    priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
+                });
+
+                // Popup Sub-Chart
+                const popupEl = document.getElementById("popup-chart");
+                popupEl.innerHTML = "";
+                this.popupChart = LightweightCharts.createChart(popupEl, {
+                    ...chartTheme,
+                    width: 638,
+                    height: 326,
+                    layout: { background: { color: '#131722' }, textColor: '#d1d4dc', fontSize: 11 },
+                    rightPriceScale: { borderColor: '#2b2f3a', scaleMargins: { top: 0.05, bottom: 0.12 } }
+                });
+
+                this.popupCandleSeries = this.popupChart.addCandlestickSeries({
+                    upColor: '#089981', downColor: '#f23645', borderVisible: false,
+                    wickUpColor: '#089981', wickDownColor: '#f23645',
+                    priceFormat: { type: 'price', precision: 5, minMove: 0.00001 }
+                });
+
+                this.popupVolumeSeries = this.popupChart.addHistogramSeries({
+                    color: 'rgba(41, 98, 255, 0.45)', priceFormat: { type: 'volume' }, priceScaleId: 'volume'
+                });
+                this.popupChart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.90, bottom: 0.0 } });
+
+                // Crosshair Movement Handler
+                this.mainChart.subscribeCrosshairMove((param) => {
+                    if (!window.app) return;
+                    if (!param || !param.time || !param.point || !param.seriesData) {
+                        window.app.resetLegendToLatest();
+                        return;
+                    }
+                    const series = this.mainCandleSeries || this.mainLineSeries || this.mainAreaSeries || this.mainBarSeries;
+                    const data = param.seriesData.get(series);
+                    if (!data) {
+                        window.app.resetLegendToLatest();
+                        return;
+                    }
+
+                    const vol = this.mainVolumeSeries ? param.seriesData.get(this.mainVolumeSeries) : null;
+                    window.app.updateLegend(data, vol, param.time);
+                });
+
+                // Sync persistent marker on zoom/pan
+                this.mainChart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+                    this.updatePersistentMarker();
+                });
+
+                window.addEventListener("resize", () => {
+                    this.updatePersistentMarker();
+                });
+            },
+
+            updatePrecision(digits) {
+                const minMove = Math.pow(10, -digits);
+                const priceFormat = { type: 'price', precision: digits, minMove: minMove };
+                this.mainCandleSeries.applyOptions({ priceFormat });
+                if (this.mainLineSeries) this.mainLineSeries.applyOptions({ priceFormat });
+                if (this.mainAreaSeries) this.mainAreaSeries.applyOptions({ priceFormat });
+                if (this.mainBarSeries) this.mainBarSeries.applyOptions({ priceFormat });
+                this.mainSmaSeries.applyOptions({ priceFormat });
+                this.mainEmaSeries.applyOptions({ priceFormat });
+
+                this.popupCandleSeries.applyOptions({ priceFormat });
+                if (this.popupLineSeries) this.popupLineSeries.applyOptions({ priceFormat });
+                if (this.popupAreaSeries) this.popupAreaSeries.applyOptions({ priceFormat });
+                if (this.popupBarSeries) this.popupBarSeries.applyOptions({ priceFormat });
+            },
+
+            renderMainChart(candles, chartType, digits, showVolume, showSma, showEma, smaData, emaData) {
+                this.candles = candles;
+                if (this.mainLineSeries) { this.mainChart.removeSeries(this.mainLineSeries); this.mainLineSeries = null; }
+                if (this.mainAreaSeries) { this.mainChart.removeSeries(this.mainAreaSeries); this.mainAreaSeries = null; }
+                if (this.mainBarSeries) { this.mainChart.removeSeries(this.mainBarSeries); this.mainBarSeries = null; }
+
+                const priceFormat = { type: 'price', precision: digits, minMove: Math.pow(10, -digits) };
+
+                if (chartType === "candles") {
+                    this.mainCandleSeries.applyOptions({ visible: true });
+                    this.mainCandleSeries.setData(candles);
+                } else if (chartType === "heikin_ashi") {
+                    this.mainCandleSeries.applyOptions({ visible: true });
+                    const ha = [];
+                    let prevO = candles[0].open, prevC = candles[0].close;
+                    candles.forEach((c, idx) => {
+                        const haC = (c.open + c.high + c.low + c.close) / 4.0;
+                        const haO = idx === 0 ? (c.open + c.close) / 2.0 : (prevO + prevC) / 2.0;
+                        ha.push({ time: c.time, open: haO, high: Math.max(c.high, haO, haC), low: Math.min(c.low, haO, haC), close: haC });
+                        prevO = haO; prevC = haC;
+                    });
+                    this.mainCandleSeries.setData(ha);
+                } else if (chartType === "line") {
+                    this.mainCandleSeries.applyOptions({ visible: false });
+                    this.mainLineSeries = this.mainChart.addLineSeries({ color: '#2962ff', lineWidth: 2, priceFormat });
+                    this.mainLineSeries.setData(candles.map(c => ({ time: c.time, value: c.close })));
+                } else if (chartType === "area") {
+                    this.mainCandleSeries.applyOptions({ visible: false });
+                    this.mainAreaSeries = this.mainChart.addAreaSeries({ topColor: 'rgba(41, 98, 255, 0.4)', bottomColor: 'rgba(41, 98, 255, 0.0)', lineColor: '#2962ff', lineWidth: 2, priceFormat });
+                    this.mainAreaSeries.setData(candles.map(c => ({ time: c.time, value: c.close })));
+                } else if (chartType === "bars") {
+                    this.mainCandleSeries.applyOptions({ visible: false });
+                    this.mainBarSeries = this.mainChart.addBarSeries({ upColor: '#089981', downColor: '#f23645', priceFormat });
+                    this.mainBarSeries.setData(candles);
+                }
+
+                if (showVolume) {
+                    this.mainVolumeSeries.setData(candles.map(c => ({
+                        time: c.time, value: c.volume || 0,
+                        color: c.close >= c.open ? 'rgba(8, 153, 129, 0.45)' : 'rgba(242, 54, 69, 0.45)'
+                    })));
+                } else {
+                    this.mainVolumeSeries.setData([]);
+                }
+
+                this.mainSmaSeries.setData(showSma ? smaData : []);
+                this.mainEmaSeries.setData(showEma ? emaData : []);
+                this.mainChart.timeScale().fitContent();
+                this.updatePersistentMarker();
+            },
+
+            renderPopupChart(data, chartType, digits) {
+                if (this.popupLineSeries) { this.popupChart.removeSeries(this.popupLineSeries); this.popupLineSeries = null; }
+                if (this.popupAreaSeries) { this.popupChart.removeSeries(this.popupAreaSeries); this.popupAreaSeries = null; }
+                if (this.popupBarSeries) { this.popupChart.removeSeries(this.popupBarSeries); this.popupBarSeries = null; }
+
+                const priceFormat = { type: 'price', precision: digits, minMove: Math.pow(10, -digits) };
+
+                if (data.is_tick) {
+                    this.popupCandleSeries.applyOptions({ visible: false });
+                    this.popupVolumeSeries.setData([]);
+                    this.popupLineSeries = this.popupChart.addLineSeries({ color: '#2962ff', lineWidth: 2, priceLineVisible: true, priceFormat });
+                    this.popupLineSeries.setData(data.ticks);
+                } else {
+                    const candles = data.candles || [];
+                    if (chartType === "candles") {
+                        this.popupCandleSeries.applyOptions({ visible: true, priceFormat });
+                        this.popupCandleSeries.setData(candles);
+                    } else if (chartType === "line") {
+                        this.popupCandleSeries.applyOptions({ visible: false });
+                        this.popupLineSeries = this.popupChart.addLineSeries({ color: '#00bcd4', lineWidth: 2, priceFormat });
+                        this.popupLineSeries.setData(candles.map(c => ({ time: c.time, value: c.close })));
+                    } else if (chartType === "area") {
+                        this.popupCandleSeries.applyOptions({ visible: false });
+                        this.popupAreaSeries = this.popupChart.addAreaSeries({ topColor: 'rgba(0, 188, 212, 0.4)', bottomColor: 'rgba(0, 188, 212, 0.0)', lineColor: '#00bcd4', lineWidth: 2, priceFormat });
+                        this.popupAreaSeries.setData(candles.map(c => ({ time: c.time, value: c.close })));
+                    } else if (chartType === "bars") {
+                        this.popupCandleSeries.applyOptions({ visible: false });
+                        this.popupBarSeries = this.popupChart.addBarSeries({ upColor: '#089981', downColor: '#f23645', priceFormat });
+                        this.popupBarSeries.setData(candles);
+                    }
+                    this.popupVolumeSeries.setData(candles.map(c => ({
+                        time: c.time, value: c.volume || 0,
+                        color: c.close >= c.open ? 'rgba(8, 153, 129, 0.40)' : 'rgba(242, 54, 69, 0.40)'
+                    })));
+                }
+                this.popupChart.timeScale().fitContent();
+            },
+
+            updatePersistentMarker() {
+                const marker = document.getElementById("persistent-marker");
+                if (!marker || !this.activePreview.isOpen || !this.activePreview.fromTime || !this.mainChart) {
+                    if (marker) marker.style.display = "none";
+                    return;
+                }
+
+                const timeScale = this.mainChart.timeScale();
+                const fromT = this.activePreview.fromTime;
+                const endT = this.activePreview.endCandleTime || this.activePreview.fromTime;
+
+                const fromCoord = timeScale.timeToCoordinate(fromT);
+                const endCoord = timeScale.timeToCoordinate(endT);
+
+                if (fromCoord === null && endCoord === null) {
+                    marker.style.display = "none";
+                    return;
+                }
+
+                let barWidth = 6;
+                if (this.candles.length >= 2) {
+                    const c0 = timeScale.timeToCoordinate(this.candles[0].time);
+                    const c1 = timeScale.timeToCoordinate(this.candles[1].time);
+                    if (c0 !== null && c1 !== null) barWidth = Math.max(2, Math.abs(c1 - c0));
+                }
+
+                const containerW = document.getElementById("main-container").clientWidth;
+                const x1 = fromCoord !== null ? fromCoord : (endCoord > containerW / 2 ? -100 : containerW + 100);
+                const x2 = endCoord !== null ? endCoord : (fromCoord > containerW / 2 ? -100 : containerW + 100);
+
+                const minX = Math.min(x1, x2);
+                const maxX = Math.max(x1, x2);
+
+                const left = minX - (barWidth / 2);
+                const width = (maxX - minX) + barWidth;
+
+                marker.style.left = `${left}px`;
+                marker.style.width = `${Math.max(barWidth, width)}px`;
+                marker.style.display = "block";
+            }
+        };
+
+        /**
+         * Alpine.js Reactive UI Component
+         */
+        function chartApp() {
+            return {
+                symbol: "EURUSD",
+                digits: 5,
+                point: 0.0001,
+                mainTimeframe: "H1",
+                mainChartType: "candles",
+                defaultSubTf: "M1",
+                showSma: true,
+                showEma: true,
+                showVolume: true,
+                isWsConnected: false,
+                selectionMode: false,
+                isDraggingSelection: false,
+                selectionStartX: 0,
+                selectionStartIdx: null,
+                selectionEndIdx: null,
+
+                symbolDropdownOpen: false,
+                symbolSearchQuery: "",
+                allSymbols: [],
+                filteredSymbols: [],
+
+                dateRangeDropdownOpen: false,
+                dateRangePreset: "all",
+                dateRangeLabel: "Range: All",
+                dateRange: null,
+                customDateFrom: "",
+                customDateTo: "",
+                timeframes: [
+                    { id: "M1", label: "1m" }, { id: "M5", label: "5m" },
+                    { id: "M15", label: "15m" }, { id: "M30", label: "30m" },
+                    { id: "H1", label: "1h" }, { id: "H4", label: "4h" },
+                    { id: "D1", label: "1D" }, { id: "W1", label: "1W" }
+                ],
+                datePresets: [
+                    { id: "all", label: "Default (Last 600 bars)" },
+                    { id: "today", label: "Today" },
+                    { id: "yesterday", label: "Yesterday" },
+                    { id: "this_week", label: "This Week" },
+                    { id: "last_week", label: "Last Week" },
+                    { id: "this_month", label: "This Month" },
+                    { id: "last_30d", label: "Last 30 Days" },
+                    { id: "last_90d", label: "Last 90 Days" }
+                ],
+
+                legend: {
+                    price: "--", open: "--", high: "--", low: "--",
+                    close: "--", volume: "--", delta: "--", deltaClass: "", time: "--"
+                },
+
+                activePreview: {
+                    isOpen: false,
+                    isMinimized: false,
+                    subTf: "M1",
+                    chartType: "candles",
+                    fromTime: null,
+                    toTime: null,
+                    endCandleTime: null,
+                    timeRange: "--",
+                    stats: null,
+                    statsDelta: "--",
+                    statsRange: "--",
+                    footerLeft: "High: -- | Low: -- | Vol: --"
+                },
+
+                toast: { show: false, message: "" },
+                ws: null,
+
+                init() {
+                    window.app = this;
+                    this.$nextTick(() => {
+                        ChartEngine.init();
+                        this.loadSymbols();
+                        this.loadMainHistory();
+                        this.initWebSocket();
+                        this.setupSelectionAndPopupEvents();
+                    });
+                },
+
+                formatSymbolBid(s) {
+                    if (s.bid === undefined || s.bid === null || s.bid === 0) return "";
+                    const digits = s.digits !== undefined ? s.digits : 5;
+                    return Number(s.bid).toFixed(digits);
+                },
+
+                showToast(msg) {
+                    this.toast.message = msg;
+                    this.toast.show = true;
+                    setTimeout(() => { this.toast.show = false; }, 2500);
+                },
+
+                formatTimestamp(epochSeconds, includeSeconds = false) {
+                    try {
+                        if (typeof Temporal !== 'undefined' && Temporal.Instant) {
+                            const instant = Temporal.Instant.fromEpochSeconds(epochSeconds);
+                            const zdt = instant.toZonedDateTimeISO('UTC');
+                            const y = zdt.year, m = String(zdt.month).padStart(2, '0'), d = String(zdt.day).padStart(2, '0');
+                            const h = String(zdt.hour).padStart(2, '0'), min = String(zdt.minute).padStart(2, '0');
+                            if (includeSeconds) {
+                                const s = String(zdt.second).padStart(2, '0');
+                                return `${y}-${m}-${d} ${h}:${min}:${s} UTC`;
+                            }
+                            return `${y}-${m}-${d} ${h}:${min} UTC`;
+                        }
+                    } catch (e) {}
+                    const d = new Date(epochSeconds * 1000);
+                    return d.toISOString().replace('T', ' ').substring(0, includeSeconds ? 19 : 16) + ' UTC';
+                },
+
+                formatDuration(startSec, endSec) {
+                    const diffSec = Math.abs(endSec - startSec);
+                    const days = Math.floor(diffSec / 86400);
+                    const hours = Math.floor((diffSec % 86400) / 3600);
+                    const mins = Math.floor((diffSec % 3600) / 60);
+                    const secs = diffSec % 60;
+
+                    let parts = [];
+                    if (days > 0) parts.push(`${days}d`);
+                    if (hours > 0) parts.push(`${hours}h`);
+                    if (mins > 0) parts.push(`${mins}m`);
+                    if (secs > 0 && days === 0 && hours === 0) parts.push(`${secs}s`);
+                    return parts.join(' ') || '0s';
+                },
+
+                updateLegend(data, vol, time) {
+                    if (!data) return;
+                    this.legend.time = this.formatTimestamp(time, this.mainTimeframe === 'M1');
+                    if (data.open !== undefined) {
+                        this.legend.open = data.open.toFixed(this.digits);
+                        this.legend.high = data.high.toFixed(this.digits);
+                        this.legend.low = data.low.toFixed(this.digits);
+                        this.legend.close = data.close.toFixed(this.digits);
+                        const delta = data.close - data.open;
+                        this.legend.delta = (delta >= 0 ? "+" : "") + delta.toFixed(this.digits);
+                        this.legend.deltaClass = delta >= 0 ? "up-color" : "down-color";
+                        this.legend.price = data.close.toFixed(this.digits);
+                    } else if (data.value !== undefined) {
+                        this.legend.price = data.value.toFixed(this.digits);
+                        this.legend.open = "--";
+                        this.legend.high = "--";
+                        this.legend.low = "--";
+                        this.legend.close = data.value.toFixed(this.digits);
+                        this.legend.delta = "--";
+                        this.legend.deltaClass = "";
+                    }
+                    if (vol !== undefined && vol !== null) {
+                        const v = typeof vol === 'object' ? vol.value : vol;
+                        this.legend.volume = Math.round(v).toLocaleString();
+                    } else {
+                        this.legend.volume = "--";
+                    }
+                },
+
+                resetLegendToLatest() {
+                    if (!ChartEngine.candles || !ChartEngine.candles.length) return;
+                    const last = ChartEngine.candles[ChartEngine.candles.length - 1];
+                    this.updateLegend(last, last.volume, last.time);
+                },
+
+                calculateDateRange(preset) {
+                    if (preset === "all") return null;
+                    try {
+                        if (typeof Temporal !== 'undefined' && Temporal.Now) {
+                            const now = Temporal.Now.zonedDateTimeISO('UTC');
+                            const nowSec = Math.floor(now.epochMilliseconds / 1000);
+                            const startOfToday = Math.floor(now.startOfDay().epochMilliseconds / 1000);
+                            if (preset === "today") return { from: startOfToday, to: nowSec + 3600, label: "Today" };
+                            if (preset === "yesterday") {
+                                const start = Math.floor(now.subtract({ days: 1 }).startOfDay().epochMilliseconds / 1000);
+                                return { from: start, to: start + 86399, label: "Yesterday" };
+                            }
+                            if (preset === "this_week") {
+                                const start = Math.floor(now.subtract({ days: now.dayOfWeek - 1 }).startOfDay().epochMilliseconds / 1000);
+                                return { from: start, to: nowSec + 3600, label: "This Week" };
+                            }
+                            if (preset === "last_week") {
+                                const start = Math.floor(now.subtract({ days: now.dayOfWeek - 1 + 7 }).startOfDay().epochMilliseconds / 1000);
+                                return { from: start, to: start + (7 * 86400) - 1, label: "Last Week" };
+                            }
+                            if (preset === "this_month") {
+                                const start = Math.floor(now.with({ day: 1 }).startOfDay().epochMilliseconds / 1000);
+                                return { from: start, to: nowSec + 3600, label: "This Month" };
+                            }
+                            if (preset === "last_30d") {
+                                const start = Math.floor(now.subtract({ days: 30 }).startOfDay().epochMilliseconds / 1000);
+                                return { from: start, to: nowSec + 3600, label: "Last 30 Days" };
+                            }
+                            if (preset === "last_90d") {
+                                const start = Math.floor(now.subtract({ days: 90 }).startOfDay().epochMilliseconds / 1000);
+                                return { from: start, to: nowSec + 3600, label: "Last 90 Days" };
+                            }
+                        }
+                    } catch (e) {}
+                    const nowSec = Math.floor(Date.now() / 1000);
+                    if (preset === "today") return { from: nowSec - 86400, to: nowSec + 3600, label: "Today" };
+                    return null;
+                },
+
+                async loadSymbols(query = "") {
+                    try {
+                        const res = await fetch(`/api/symbols${query ? '?q=' + encodeURIComponent(query) : ''}`);
+                        const data = await res.json();
+                        this.allSymbols = data.symbols || [];
+                        this.filteredSymbols = this.allSymbols;
+                    } catch (e) {}
+                },
+
+                toggleSymbolDropdown() {
+                    this.symbolDropdownOpen = !this.symbolDropdownOpen;
+                    if (this.symbolDropdownOpen) {
+                        this.symbolSearchQuery = "";
+                        this.filteredSymbols = this.allSymbols;
+                        this.$nextTick(() => { if (this.$refs.symbolInput) this.$refs.symbolInput.focus(); });
+                    }
+                },
+
+                filterSymbols() {
+                    const q = this.symbolSearchQuery.trim().toLowerCase();
+                    if (!q) { this.filteredSymbols = this.allSymbols; return; }
+                    this.filteredSymbols = this.allSymbols.filter(s => 
+                        s.name.toLowerCase().includes(q) || (s.description && s.description.toLowerCase().includes(q))
+                    );
+                },
+
+                selectSymbol(sym) {
+                    this.symbol = sym;
+                    this.symbolDropdownOpen = false;
+                    this.closePreviewPopup();
+                    this.loadMainHistory();
+                },
+
+                setTimeframe(tf) {
+                    this.mainTimeframe = tf;
+                    this.loadMainHistory();
+                },
+
+                selectPreset(presetId) {
+                    this.dateRangePreset = presetId;
+                    if (presetId === "all") {
+                        this.dateRange = null;
+                        this.dateRangeLabel = "Range: All";
+                    } else {
+                        const range = this.calculateDateRange(presetId);
+                        this.dateRange = range;
+                        this.dateRangeLabel = `Range: ${range ? range.label : presetId}`;
+                    }
+                    this.dateRangeDropdownOpen = false;
+                    this.closePreviewPopup();
+                    this.loadMainHistory();
+                },
+
+                applyCustomDateRange() {
+                    if (!this.customDateFrom && !this.customDateTo) {
+                        this.showToast("Please select a date.");
+                        return;
+                    }
+                    try {
+                        const dFrom = this.customDateFrom || this.customDateTo;
+                        const dTo = this.customDateTo || this.customDateFrom;
+
+                        let sec1, sec2;
+                        if (typeof Temporal !== 'undefined' && Temporal.PlainDate) {
+                            sec1 = Math.floor(Temporal.PlainDate.from(dFrom).toZonedDateTime('UTC').epochMilliseconds / 1000);
+                            sec2 = Math.floor(Temporal.PlainDate.from(dTo).toZonedDateTime('UTC').epochMilliseconds / 1000) + 86399;
+                        } else {
+                            sec1 = Math.floor(new Date(dFrom + "T00:00:00Z").getTime() / 1000);
+                            sec2 = Math.floor(new Date(dTo + "T23:59:59Z").getTime() / 1000);
+                        }
+
+                        const fromSec = Math.min(sec1, sec2);
+                        const toSec = Math.max(sec1, sec2);
+                        const labelFrom = sec1 <= sec2 ? dFrom : dTo;
+                        const labelTo = sec1 <= sec2 ? dTo : dFrom;
+
+                        this.dateRangePreset = "custom";
+                        this.dateRange = { from: fromSec, to: toSec, label: `${labelFrom} → ${labelTo}` };
+                        this.dateRangeLabel = `Range: ${labelFrom} → ${labelTo}`;
+                        this.dateRangeDropdownOpen = false;
+                        this.closePreviewPopup();
+                        this.loadMainHistory();
+                    } catch (e) {
+                        this.showToast("Invalid date format: " + (e.message || e));
+                    }
+                },
+
+                toggleIndicator(type) {
+                    if (type === 'sma') this.showSma = !this.showSma;
+                    if (type === 'ema') this.showEma = !this.showEma;
+                    if (type === 'volume') this.showVolume = !this.showVolume;
+                    this.loadMainHistory();
+                },
+
+                changeMainChartType() {
+                    if (ChartEngine.candles.length > 0) {
+                        ChartEngine.renderMainChart(
+                            ChartEngine.candles, this.mainChartType, this.digits,
+                            this.showVolume, this.showSma, this.showEma,
+                            this._lastSmaData || [], this._lastEmaData || []
+                        );
+                    }
+                },
+
+                async loadMainHistory() {
+                    try {
+                        let url = `/api/history?symbol=${this.symbol}&timeframe=${this.mainTimeframe}`;
+                        if (this.dateRange && this.dateRange.from && this.dateRange.to) {
+                            url += `&from_time=${this.dateRange.from}&to_time=${this.dateRange.to}`;
+                        } else {
+                            url += `&count=600`;
+                        }
+
+                        const res = await fetch(url);
+                        const data = await res.json();
+                        if (!data.candles || data.candles.length === 0) {
+                            this.showToast(`No history returned for ${this.symbol} (${this.mainTimeframe})`);
+                            return;
+                        }
+
+                        this.digits = data.digits !== undefined ? data.digits : 5;
+                        this.point = data.point || Math.pow(10, -this.digits);
+                        this._lastSmaData = data.sma200 || data.sma20 || [];
+                        this._lastEmaData = data.ema50 || [];
+
+                        ChartEngine.updatePrecision(this.digits);
+                        ChartEngine.renderMainChart(
+                            data.candles, this.mainChartType, this.digits,
+                            this.showVolume, this.showSma, this.showEma,
+                            this._lastSmaData, this._lastEmaData
+                        );
+
+                        this.resetLegendToLatest();
+                        this.sendWsSubscription();
+                    } catch (e) {
+                        this.showToast("Failed to load chart data.");
+                    }
+                },
+
+                toggleSelectionMode(forceState) {
+                    this.selectionMode = forceState !== undefined ? forceState : !this.selectionMode;
+                    ChartEngine.mainChart.applyOptions({
+                        handleScroll: { mouseWheel: true, pressedMouseMove: !this.selectionMode, horzTouchDrag: !this.selectionMode, vertTouchDrag: !this.selectionMode },
+                        handleScale: { axisPressedMouseMove: !this.selectionMode, mouseWheel: true, pinch: !this.selectionMode }
+                    });
+                    if (this.selectionMode) {
+                        this.showToast("Selection Mode ON: Drag across chart to inspect region");
+                    }
+                },
+
+                handleKeyDown(e) {
+                    if (e.target.tagName === "INPUT") return;
+                    if (e.key === "s" || e.key === "S") {
+                        this.toggleSelectionMode();
+                    } else if (e.key === "Escape") {
+                        if (this.selectionMode) this.toggleSelectionMode(false);
+                        if (this.activePreview.isOpen) this.closePreviewPopup();
+                    }
+                },
+
+                async openPreviewPopup(fromTime, toTime, subTf = "M1", startIdx = null, endIdx = null) {
+                    this.activePreview.fromTime = fromTime;
+                    this.activePreview.toTime = toTime;
+                    this.activePreview.endCandleTime = (endIdx !== null && ChartEngine.candles[endIdx]) ? ChartEngine.candles[endIdx].time : fromTime;
+                    this.activePreview.subTf = subTf;
+                    this.activePreview.isOpen = true;
+                    this.activePreview.isMinimized = false;
+
+                    ChartEngine.activePreview.fromTime = fromTime;
+                    ChartEngine.activePreview.toTime = toTime;
+                    ChartEngine.activePreview.endCandleTime = this.activePreview.endCandleTime;
+                    ChartEngine.activePreview.isOpen = true;
+                    ChartEngine.activePreview.subTf = subTf;
+
+                    const startStr = this.formatTimestamp(fromTime, false);
+                    const endStr = this.formatTimestamp(toTime, false);
+                    const durationStr = this.formatDuration(fromTime, toTime);
+                    this.activePreview.timeRange = `${startStr} → ${endStr} (${durationStr})`;
+
+                    ChartEngine.updatePersistentMarker();
+                    await this.loadPreviewData();
+                },
+
+                async loadPreviewData() {
+                    const { fromTime, toTime, subTf } = this.activePreview;
+                    if (!fromTime || !toTime) return;
+
+                    try {
+                        const res = await fetch(`/api/preview?symbol=${this.symbol}&from_time=${fromTime}&to_time=${toTime}&sub_timeframe=${subTf}`);
+                        const data = await res.json();
+                        ChartEngine.renderPopupChart(data, this.activePreview.chartType, this.digits);
+
+                        if (data.stats) {
+                            const s = data.stats;
+                            this.activePreview.stats = s;
+                            this.activePreview.statsDelta = `${s.delta >= 0 ? '+' : ''}${s.delta} (${s.pips_delta} pips / ${s.pct_change}%)`;
+                            this.activePreview.statsRange = `${s.range} (${s.pips_range} pips)`;
+                            this.activePreview.footerLeft = `Open: ${s.open} | High: ${s.high} | Low: ${s.low} | Close: ${s.close} | ${s.total_volume ? 'Vol: ' + s.total_volume.toLocaleString() : 'Ticks: ' + (s.tick_count || (data.candles ? data.candles.length : 0))}`;
+                        }
+                    } catch (e) {
+                        this.showToast("Failed to load sub-chart preview.");
+                    }
+                },
+
+                switchSubTf(stf) {
+                    this.activePreview.subTf = stf;
+                    ChartEngine.activePreview.subTf = stf;
+                    this.loadPreviewData();
+                },
+
+                changePopupChartType() {
+                    this.loadPreviewData();
+                },
+
+                fitPopupChart() {
+                    ChartEngine.popupChart.timeScale().fitContent();
+                },
+
+                closePreviewPopup() {
+                    this.activePreview.isOpen = false;
+                    ChartEngine.activePreview.isOpen = false;
+                    ChartEngine.updatePersistentMarker();
+                },
+
+                initWebSocket() {
+                    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+                    this.ws = new WebSocket(`${protocol}//${window.location.host}/ws/live`);
+
+                    this.ws.onopen = () => {
+                        this.isWsConnected = true;
+                        this.sendWsSubscription();
+                    };
+
+                    this.ws.onmessage = (e) => {
+                        try {
+                            const msg = JSON.parse(e.data);
+                            if (msg.type === "tick" && msg.symbol === this.symbol) {
+                                this.handleLiveTick(msg.tick);
+                            }
+                        } catch (err) {}
+                    };
+
+                    this.ws.onclose = () => {
+                        this.isWsConnected = false;
+                        setTimeout(() => { this.initWebSocket(); }, 3000);
+                    };
+                },
+
+                sendWsSubscription() {
+                    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                        this.ws.send(JSON.stringify({ action: "subscribe", symbol: this.symbol, timeframe: this.mainTimeframe }));
+                    }
+                },
+
+                handleLiveTick(tick) {
+                    if (!tick || !ChartEngine.candles.length) return;
+                    const lastCandle = ChartEngine.candles[ChartEngine.candles.length - 1];
+                    const price = tick.last > 0 ? tick.last : tick.bid;
+                    this.legend.price = price.toFixed(this.digits);
+                    this.legend.deltaClass = price >= lastCandle.open ? "up-color" : "down-color";
+
+                    if (this.activePreview.isOpen && this.activePreview.toTime >= lastCandle.time) {
+                        if (ChartEngine.popupLineSeries) {
+                            ChartEngine.popupLineSeries.update({ time: tick.time, value: price, bid: tick.bid, ask: tick.ask });
+                        }
+                    }
+                },
+
+                setupSelectionAndPopupEvents() {
+                    // Drag Selection on Selection Layer
+                    const selectionLayer = document.getElementById("selection-layer");
+                    const selectionBox = document.getElementById("selection-box");
+                    const mainContainer = document.getElementById("main-container");
+
+                    selectionLayer.addEventListener("mousedown", (e) => {
+                        if (!this.selectionMode || !ChartEngine.candles.length) return;
+                        e.stopPropagation(); e.preventDefault();
+
+                        const rect = mainContainer.getBoundingClientRect();
+                        const clickX = e.clientX - rect.left;
+                        const logical = ChartEngine.mainChart.timeScale().coordinateToLogical(clickX);
+                        if (logical === null) return;
+
+                        const idx = Math.max(0, Math.min(ChartEngine.candles.length - 1, Math.round(logical)));
+                        this.isDraggingSelection = true;
+                        this.selectionStartX = clickX;
+                        this.selectionStartIdx = idx;
+                        this.selectionEndIdx = idx;
+
+                        selectionBox.style.left = `${clickX}px`;
+                        selectionBox.style.width = `0px`;
+                        selectionBox.style.display = "block";
+                        updateSelectionBadge(idx, idx);
+                    });
+
+                    window.addEventListener("mousemove", (e) => {
+                        if (!this.isDraggingSelection || !ChartEngine.candles.length) return;
+                        const rect = mainContainer.getBoundingClientRect();
+                        const currentX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+                        const logical = ChartEngine.mainChart.timeScale().coordinateToLogical(currentX);
+
+                        if (logical !== null) {
+                            this.selectionEndIdx = Math.max(0, Math.min(ChartEngine.candles.length - 1, Math.round(logical)));
+                        }
+                        const left = Math.min(this.selectionStartX, currentX);
+                        const width = Math.abs(currentX - this.selectionStartX);
+                        selectionBox.style.left = `${left}px`;
+                        selectionBox.style.width = `${width}px`;
+                        updateSelectionBadge(this.selectionStartIdx, this.selectionEndIdx);
+                    });
+
+                    window.addEventListener("mouseup", () => {
+                        if (!this.isDraggingSelection) return;
+                        this.isDraggingSelection = false;
+                        if (this.selectionStartIdx === null || this.selectionEndIdx === null) return;
+
+                        const startIdx = Math.min(this.selectionStartIdx, this.selectionEndIdx);
+                        const endIdx = Math.max(this.selectionStartIdx, this.selectionEndIdx);
+                        const tfSec = TIMEFRAME_SECONDS[this.mainTimeframe] || 3600;
+                        const fromTime = ChartEngine.candles[startIdx].time;
+                        const toTime = ChartEngine.candles[endIdx].time + tfSec;
+
+                        this.openPreviewPopup(fromTime, toTime, this.defaultSubTf, startIdx, endIdx);
+                        selectionBox.style.display = "none";
+                        this.toggleSelectionMode(false);
+                    });
+
+                    const updateSelectionBadge = (idx1, idx2) => {
+                        const startIdx = Math.min(idx1, idx2);
+                        const endIdx = Math.max(idx1, idx2);
+                        const count = endIdx - startIdx + 1;
+                        const tfSec = TIMEFRAME_SECONDS[this.mainTimeframe] || 3600;
+                        const fromTime = ChartEngine.candles[startIdx].time;
+                        const toTime = ChartEngine.candles[endIdx].time + tfSec;
+
+                        document.getElementById("badge-duration").innerText = `⏱ ${this.formatDuration(fromTime, toTime)}`;
+                        document.getElementById("badge-bars").innerText = `${count} bar${count > 1 ? 's' : ''}`;
+                    };
+
+                    // Draggable Popup Window Header
+                    const previewPopup = document.getElementById("preview-popup");
+                    const popupHeader = document.getElementById("popup-header");
+                    let isDraggingPopup = false, dragOffset = { x: 0, y: 0 };
+
+                    popupHeader.addEventListener("mousedown", (e) => {
+                        if (e.target.closest(".popup-actions")) return;
+                        isDraggingPopup = true;
+                        dragOffset.x = e.clientX - previewPopup.offsetLeft;
+                        dragOffset.y = e.clientY - previewPopup.offsetTop;
+                    });
+
+                    window.addEventListener("mousemove", (e) => {
+                        if (!isDraggingPopup) return;
+                        const l = Math.max(10, Math.min(window.innerWidth - previewPopup.offsetWidth - 10, e.clientX - dragOffset.x));
+                        const t = Math.max(55, Math.min(window.innerHeight - previewPopup.offsetHeight - 10, e.clientY - dragOffset.y));
+                        previewPopup.style.left = `${l}px`;
+                        previewPopup.style.top = `${t}px`;
+                        previewPopup.style.right = "auto";
+                    });
+
+                    window.addEventListener("mouseup", () => { isDraggingPopup = false; });
+
+                    // Resizable Popup Window
+                    const popupResizeHandle = document.getElementById("popup-resize-handle");
+                    let isResizingPopup = false, resizeStart = { x: 0, y: 0, w: 0, h: 0 };
+
+                    popupResizeHandle.addEventListener("mousedown", (e) => {
+                        e.stopPropagation();
+                        isResizingPopup = true;
+                        resizeStart = { x: e.clientX, y: e.clientY, w: previewPopup.offsetWidth, h: previewPopup.offsetHeight };
+                    });
+
+                    window.addEventListener("mousemove", (e) => {
+                        if (!isResizingPopup) return;
+                        const newW = Math.max(380, resizeStart.w + (e.clientX - resizeStart.x));
+                        const newH = Math.max(260, resizeStart.h + (e.clientY - resizeStart.y));
+                        previewPopup.style.width = `${newW}px`;
+                        previewPopup.style.height = `${newH}px`;
+                        ChartEngine.popupChart.resize(newW, newH - 112);
+                    });
+
+                    window.addEventListener("mouseup", () => {
+                        if (isResizingPopup) {
+                            isResizingPopup = false;
+                            ChartEngine.popupChart.timeScale().fitContent();
+                        }
+                    });
+                }
+            };
+        }
+    </script>
+</body>
+</html>

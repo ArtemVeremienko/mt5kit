@@ -103,6 +103,7 @@ This automatically:
 
 Switch instantly between series types from the toolbar:
 - **🕯️ Candlesticks (Default)**: Bull hollow / bear solid with session-colored borders & wicks.
+- **📦 Candlestick Box (Quantower)**: Dual-rectangle wide shadow candles (translucent wide box for `[Low, High]` shadow + solid bright box for `[Open, Close]` body).
 - **📊 Bars (OHLC)**: Traditional American bar charts with open/close ticks colored by session.
 - **📈 Line**: Continuous close price series with dynamic tooltips and active liquidity levels.
 

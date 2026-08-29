@@ -85,14 +85,15 @@ class MT5Feed:
         if info is None:
             return None
 
+        digits = int(info.digits)
         return {
             "name": info.name,
-            "digits": int(info.digits),
+            "digits": digits,
             "point": float(info.point),
             "spread": int(info.spread),
-            "ask": float(info.ask),
-            "bid": float(info.bid),
-            "last": float(info.last),
+            "ask": round(float(info.ask), digits) if digits else float(info.ask),
+            "bid": round(float(info.bid), digits) if digits else float(info.bid),
+            "last": round(float(info.last), digits) if digits else float(info.last),
             "description": str(info.description),
             "currency_base": str(info.currency_base),
             "currency_profit": str(info.currency_profit),
@@ -113,13 +114,14 @@ class MT5Feed:
         for s in symbols:
             if q and (q not in s.name.lower() and q not in s.description.lower()):
                 continue
+            digits = int(s.digits)
             result.append({
                 "name": s.name,
                 "path": s.path,
                 "description": s.description,
-                "digits": int(s.digits),
-                "bid": float(s.bid),
-                "ask": float(s.ask),
+                "digits": digits,
+                "bid": round(float(s.bid), digits) if digits else float(s.bid),
+                "ask": round(float(s.ask), digits) if digits else float(s.ask),
                 "visible": bool(s.visible)
             })
             if len(result) >= 100:  # Cap results for quick search dropdown

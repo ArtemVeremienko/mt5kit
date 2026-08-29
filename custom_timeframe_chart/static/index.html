@@ -1,0 +1,1656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TradingView Custom Timeframe Chart (Second & Tick)</title>
+    <!-- Lightweight Charts library from CDN -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <!-- ECMAScript Temporal API Polyfill -->
+    <script src="https://cdn.jsdelivr.net/npm/@js-temporal/polyfill@0.4.4/dist/index.umd.js"></script>
+    <script>
+        // Ensure global Temporal is available
+        if (typeof Temporal === 'undefined' && typeof temporal !== 'undefined') {
+            window.Temporal = temporal.Temporal;
+        }
+    </script>
+    <style>
+        :root {
+            --bg-primary: #131722;
+            --bg-secondary: #1e222d;
+            --bg-hover: #2a2e39;
+            --border-color: #2b2f3a;
+            --text-primary: #d1d4dc;
+            --text-secondary: #787b86;
+            --accent-blue: #2962ff;
+            --accent-green: #089981;
+            --accent-red: #f23645;
+            --accent-orange: #ff9800;
+            --accent-purple: #ab47bc;
+            --accent-cyan: #00bcd4;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Top Header / Toolbar */
+        .toolbar {
+            height: 52px;
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 14px;
+            gap: 8px;
+            z-index: 1000;
+            user-select: none;
+            position: relative;
+        }
+
+        .tool-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .divider {
+            width: 1px;
+            height: 22px;
+            background-color: var(--border-color);
+            margin: 0 3px;
+        }
+
+        /* Symbol Input / Search */
+        .symbol-box {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .symbol-input {
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: #fff;
+            font-weight: 700;
+            font-size: 13px;
+            padding: 5px 8px;
+            width: 100px;
+            text-transform: uppercase;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .symbol-input:focus {
+            border-color: var(--accent-blue);
+        }
+
+        /* Preset Buttons */
+        .tf-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 7px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .tf-btn:hover {
+            color: var(--text-primary);
+            background-color: var(--bg-hover);
+        }
+        .tf-btn.active {
+            color: #fff;
+            background-color: var(--accent-blue);
+        }
+        .tf-btn.tick-preset {
+            color: #e0b0ff;
+        }
+        .tf-btn.tick-preset.active {
+            background-color: #8a2be2;
+            color: #fff;
+        }
+
+        /* Custom Timeframe input */
+        .custom-tf-box {
+            display: flex;
+            align-items: center;
+            gap: 3px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 2px 4px;
+        }
+        .custom-tf-input {
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            width: 44px;
+            text-align: center;
+            outline: none;
+        }
+        .apply-btn {
+            background: var(--accent-blue);
+            border: none;
+            color: white;
+            padding: 3px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .apply-btn:hover {
+            opacity: 0.9;
+        }
+
+        /* Select styling */
+        select.ui-select {
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 12px;
+            padding: 4px 7px;
+            outline: none;
+            cursor: pointer;
+        }
+        select.ui-select:hover {
+            background-color: var(--bg-hover);
+        }
+
+        /* Dropdowns Menu (Indicators & Date Range) */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+        .dropdown-btn {
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 5px 9px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: background 0.15s;
+        }
+        .dropdown-btn:hover {
+            background-color: var(--bg-hover);
+        }
+        .dropdown-btn.active {
+            background-color: var(--accent-blue);
+            color: #fff;
+            border-color: var(--accent-blue);
+        }
+
+        .dropdown-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 6px;
+            background-color: var(--bg-secondary);
+            min-width: 220px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+            padding: 10px;
+            z-index: 999999;
+        }
+        .dropdown-menu.show {
+            display: block;
+        }
+        .dropdown-menu label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-primary);
+            padding: 6px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .dropdown-menu label:hover {
+            background-color: var(--bg-hover);
+        }
+
+        /* Date Range Picker Modal/Menu */
+        .date-range-menu {
+            min-width: 310px;
+            padding: 14px;
+        }
+        .date-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 10px;
+        }
+        .date-input-group label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            padding: 0;
+        }
+        .date-input-field {
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: #fff;
+            font-size: 12px;
+            padding: 6px 8px;
+            outline: none;
+            width: 100%;
+        }
+        .date-input-field:focus {
+            border-color: var(--accent-blue);
+        }
+
+        /* Quick 24h Preset Chips */
+        .range-chip {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .range-chip:hover {
+            color: var(--text-primary);
+            background-color: var(--bg-hover);
+            border-color: var(--accent-blue);
+        }
+        .range-chip.active {
+            background-color: var(--accent-blue);
+            color: #fff;
+            border-color: var(--accent-blue);
+        }
+
+        .range-btn-row {
+            display: flex;
+            gap: 6px;
+            margin-top: 10px;
+        }
+        .range-action-btn {
+            flex: 1;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 4px;
+            cursor: pointer;
+            border: none;
+        }
+        .range-load-btn {
+            background: var(--accent-blue);
+            color: #fff;
+        }
+        .range-reset-btn {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        /* Mode Pill (Live vs Historical) */
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(8, 153, 129, 0.15);
+            border: 1px solid rgba(8, 153, 129, 0.3);
+            border-radius: 12px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--accent-green);
+        }
+        .status-pill.historical {
+            background: rgba(255, 152, 0, 0.15);
+            border-color: rgba(255, 152, 0, 0.4);
+            color: var(--accent-orange);
+        }
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background-color: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+        .status-dot.pulse {
+            animation: pulse 1.5s infinite;
+        }
+        .status-dot.historical {
+            background-color: var(--accent-orange);
+            box-shadow: 0 0 8px var(--accent-orange);
+            animation: none;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        .spread-badge {
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        .spread-badge span {
+            color: #fff;
+            font-weight: 700;
+        }
+
+        /* Top Header / Toolbar */
+        .toolbar {
+            height: 52px;
+            flex-shrink: 0;
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            padding: 0 14px;
+            gap: 8px;
+            z-index: 1000;
+            user-select: none;
+            position: relative;
+        }
+
+        .tool-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .divider {
+            width: 1px;
+            height: 22px;
+            background-color: var(--border-color);
+            margin: 0 3px;
+        }
+
+        /* Historical banner */
+        .historical-banner {
+            display: none;
+            flex-shrink: 0;
+            background: #2a1f00;
+            border-bottom: 1px solid #ff9800;
+            color: #ffb74d;
+            font-size: 12px;
+            padding: 5px 14px;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 99;
+        }
+        .historical-banner.show {
+            display: flex;
+        }
+        .historical-banner-btn {
+            background: #ff9800;
+            color: #000;
+            font-weight: 700;
+            border: none;
+            padding: 3px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        /* Chart container */
+        .chart-wrapper {
+            position: relative;
+            flex: 1 1 0;
+            min-height: 0;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        #chart_container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* TradingView Legend Box */
+        .chart-legend {
+            position: absolute;
+            top: 12px;
+            left: 14px;
+            z-index: 5;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            font-size: 12px;
+        }
+
+        .legend-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            color: #fff;
+        }
+
+        .legend-badge {
+            background-color: var(--accent-blue);
+            color: #fff;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+
+        .legend-values {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .legend-values span b {
+            font-weight: 600;
+        }
+
+        .legend-indicators {
+            display: flex;
+            gap: 12px;
+            font-size: 11px;
+            font-family: 'Courier New', Courier, monospace;
+            margin-top: 2px;
+        }
+
+        /* Session info badges - positioned cleanly above time axis */
+        .session-panel {
+            position: absolute;
+            bottom: 30px;
+            left: 14px;
+            z-index: 5;
+            pointer-events: none;
+            display: flex;
+            gap: 8px;
+            font-size: 11px;
+        }
+        .session-tag {
+            background: rgba(30, 34, 45, 0.85);
+            border: 1px solid var(--border-color);
+            padding: 2px 7px;
+            border-radius: 3px;
+            color: var(--text-secondary);
+        }
+        .session-tag.active {
+            color: #fff;
+            border-color: var(--accent-blue);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Toolbar -->
+    <div class="toolbar">
+        <!-- Symbol & Precision -->
+        <div class="tool-group symbol-box">
+            <input type="text" id="symbolInput" class="symbol-input" value="EURUSD" title="Enter symbol & hit Enter">
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Chart Type Selector -->
+        <div class="tool-group">
+            <select id="chartTypeSelect" class="ui-select" title="Chart Series Type">
+                <option value="candlestick" selected>🕯️ Candles</option>
+                <option value="bar">📊 Bars</option>
+                <option value="line">📈 Line</option>
+                <option value="area">🏔️ Area</option>
+            </select>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Quick Second Presets -->
+        <div class="tool-group">
+            <button class="tf-btn" data-tf="1s">1s</button>
+            <button class="tf-btn active" data-tf="5s">5s</button>
+            <button class="tf-btn" data-tf="15s">15s</button>
+            <button class="tf-btn" data-tf="30s">30s</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Quick Tick Presets -->
+        <div class="tool-group">
+            <button class="tf-btn tick-preset" data-tf="10t" title="10 Ticks per candle">10t</button>
+            <button class="tf-btn tick-preset" data-tf="50t" title="50 Ticks per candle">50t</button>
+            <button class="tf-btn tick-preset" data-tf="100t" title="100 Ticks per candle">100t</button>
+            <button class="tf-btn tick-preset" data-tf="500t" title="500 Ticks per candle">500t</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Standard Minutes -->
+        <div class="tool-group">
+            <button class="tf-btn" data-tf="1m">1m</button>
+            <button class="tf-btn" data-tf="5m">5m</button>
+            <button class="tf-btn" data-tf="15m">15m</button>
+            <button class="tf-btn" data-tf="1h">1h</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Custom Timeframe Input -->
+        <div class="tool-group">
+            <div class="custom-tf-box">
+                <input type="text" id="customTfInput" class="custom-tf-input" placeholder="e.g. 7s" title="Enter custom timeframe (Xs or Xt)">
+                <button id="customTfApply" class="apply-btn">Set</button>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Price Stream Selector -->
+        <div class="tool-group">
+            <select id="priceTypeSelect" class="ui-select" title="Price series used for OHLC">
+                <option value="bid" selected>Bid</option>
+                <option value="ask">Ask</option>
+                <option value="mid">Mid</option>
+                <option value="last">Last</option>
+            </select>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Date Range Selector Dropdown -->
+        <div class="dropdown">
+            <button class="dropdown-btn" id="rangeMenuBtn">📅 Date Range (24h) ▾</button>
+            <div class="dropdown-menu date-range-menu" id="rangeMenuContent" style="min-width: 340px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-weight: 700; font-size: 13px; color: #fff;">Historical Range (24h UTC)</div>
+                    <span style="font-size: 10px; background: #2a2e39; padding: 2px 6px; border-radius: 3px; color: var(--accent-orange);">24-HOUR CLOCK</span>
+                </div>
+                
+                <!-- Quick 24h Preset Chips -->
+                <div style="display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 12px;">
+                    <button class="range-chip" id="qpToday">Today (00:00-Now)</button>
+                    <button class="range-chip" id="qpYesterday">Yesterday</button>
+                    <button class="range-chip active" id="qp24h">Last 24h</button>
+                    <button class="range-chip" id="qp48h">Last 48h</button>
+                    <button class="range-chip" id="qp7d">Last 7d</button>
+                </div>
+
+                <!-- From 24h -->
+                <div class="date-input-group">
+                    <label>From Date & 24h Time (UTC)</label>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="date" id="dateFromDay" class="date-input-field" style="flex: 1;">
+                        <input type="text" id="dateFromTime" class="date-input-field" placeholder="00:00" value="00:00" style="width: 80px; text-align: center;" title="24h Time (HH:MM)">
+                    </div>
+                </div>
+
+                <!-- To 24h -->
+                <div class="date-input-group">
+                    <label>To Date & 24h Time (UTC)</label>
+                    <div style="display: flex; gap: 6px;">
+                        <input type="date" id="dateToDay" class="date-input-field" style="flex: 1;">
+                        <input type="text" id="dateToTime" class="date-input-field" placeholder="23:59" value="23:59" style="width: 80px; text-align: center;" title="24h Time (HH:MM)">
+                    </div>
+                </div>
+
+                <div class="range-btn-row">
+                    <button class="range-action-btn range-load-btn" id="btnLoadRange">Load Range</button>
+                    <button class="range-action-btn range-reset-btn" id="btnResetLive">⚡ Live Stream</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Indicators Dropdown -->
+        <div class="dropdown">
+            <button class="dropdown-btn" id="indMenuBtn">📊 Indicators ▾</button>
+            <div class="dropdown-menu" id="indMenuContent">
+                <label><input type="checkbox" id="chkEma9" checked> <span style="color: #2962ff;">■</span> EMA 9</label>
+                <label><input type="checkbox" id="chkEma21" checked> <span style="color: #ff9800;">■</span> EMA 21</label>
+                <label><input type="checkbox" id="chkEma50"> <span style="color: #ab47bc;">■</span> EMA 50</label>
+                <label><input type="checkbox" id="chkEma200"> <span style="color: #f23645;">■</span> EMA 200</label>
+                <label><input type="checkbox" id="chkSma20"> <span style="color: #ffd600;">■</span> SMA 20</label>
+                <label><input type="checkbox" id="chkVwap" checked> <span style="color: #00bcd4;">■</span> VWAP</label>
+                <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 6px 0;">
+                <label><input type="checkbox" id="chkVolume" checked> 📊 Volume Pane</label>
+                <label><input type="checkbox" id="chkPriceLines" checked> 🏷️ Live Bid/Ask Lines</label>
+            </div>
+        </div>
+
+        <div style="flex: 1;"></div>
+
+        <!-- Spread & Live Status -->
+        <div class="spread-badge" id="spreadBadge">
+            Spread: <span id="spreadVal">--</span> pts
+        </div>
+
+        <div class="status-pill" id="statusPill">
+            <div class="status-dot pulse" id="statusDot"></div>
+            <span id="statusText">Live MT5</span>
+        </div>
+    </div>
+
+    <!-- Historical Banner -->
+    <div class="historical-banner" id="historicalBanner">
+        <span>⚠️ <b>Historical Mode Active</b>: Displaying fixed historical tick range (<span id="histRangeText">--</span>).</span>
+        <button class="historical-banner-btn" id="btnExitHistorical">Return to Live Stream ⚡</button>
+    </div>
+
+    <!-- Main Chart Wrapper -->
+    <div class="chart-wrapper">
+        <!-- TradingView Overlay Legend -->
+        <div class="chart-legend" id="chartLegend">
+            <div class="legend-title">
+                <span id="legSymbol">EURUSD</span>
+                <span class="legend-badge" id="legTf">5s</span>
+                <span style="font-size: 11px; font-weight: normal; color: var(--text-secondary);" id="legPriceType">BID</span>
+            </div>
+            <div class="legend-values" id="legOhlc">
+                <span>O: <b id="legOpen" style="color: #fff;">--</b></span>
+                <span>H: <b id="legHigh" style="color: #fff;">--</b></span>
+                <span>L: <b id="legLow" style="color: #fff;">--</b></span>
+                <span>C: <b id="legClose" style="color: #fff;">--</b></span>
+                <span>Vol: <b id="legVol" style="color: #fff;">--</b></span>
+                <span>Ticks: <b id="legTicks" style="color: #fff;">--</b></span>
+            </div>
+            <div class="legend-indicators" id="legIndicators">
+                <span id="legEma9" style="color: #2962ff; display: inline;">EMA 9: --</span>
+                <span id="legEma21" style="color: #ff9800; display: inline;">EMA 21: --</span>
+                <span id="legEma50" style="color: #ab47bc; display: none;">EMA 50: --</span>
+                <span id="legEma200" style="color: #f23645; display: none;">EMA 200: --</span>
+                <span id="legSma20" style="color: #ffd600; display: none;">SMA 20: --</span>
+                <span id="legVwap" style="color: #00bcd4; display: inline;">VWAP: --</span>
+            </div>
+        </div>
+
+        <!-- Lightweight Charts Div Container -->
+        <div id="chart_container"></div>
+
+        <!-- Session Badges -->
+        <div class="session-panel">
+            <div class="session-tag" id="sessionAsia">🌏 Asia (00:00 - 09:00 UTC)</div>
+            <div class="session-tag" id="sessionLondon">🏛️ London (08:00 - 16:30 UTC)</div>
+            <div class="session-tag" id="sessionNY">🗽 New York (13:00 - 21:30 UTC)</div>
+        </div>
+    </div>
+
+    <script>
+        // State Configuration
+        const state = {
+            symbol: "EURUSD",
+            timeframe: "5s",
+            priceType: "bid",
+            chartType: "candlestick", // candlestick, bar, line, area
+            isLive: true,
+            dateFrom: null,
+            dateTo: null,
+            digits: 5,
+            point: 0.0001,
+            candles: [],
+            indicators: {},
+            chart: null,
+            candleSeries: null,
+            barSeries: null,
+            lineSeries: null,
+            areaSeries: null,
+            activeMainSeries: null,
+            volumeSeries: null,
+            ema9Series: null,
+            ema21Series: null,
+            ema50Series: null,
+            ema200Series: null,
+            sma20Series: null,
+            vwapSeries: null,
+            bidLine: null,
+            askLine: null,
+            ws: null,
+            reconnectTimer: null
+        };
+
+        // DOM elements
+        const container = document.getElementById("chart_container");
+        const symbolInput = document.getElementById("symbolInput");
+        const chartTypeSelect = document.getElementById("chartTypeSelect");
+        const customTfInput = document.getElementById("customTfInput");
+        const customTfApply = document.getElementById("customTfApply");
+        const priceTypeSelect = document.getElementById("priceTypeSelect");
+        const spreadVal = document.getElementById("spreadVal");
+        const statusText = document.getElementById("statusText");
+        const statusDot = document.getElementById("statusDot");
+        const statusPill = document.getElementById("statusPill");
+        const rangeMenuBtn = document.getElementById("rangeMenuBtn");
+        const rangeMenuContent = document.getElementById("rangeMenuContent");
+        const dateFromDay = document.getElementById("dateFromDay");
+        const dateFromTime = document.getElementById("dateFromTime");
+        const dateToDay = document.getElementById("dateToDay");
+        const dateToTime = document.getElementById("dateToTime");
+        const qpToday = document.getElementById("qpToday");
+        const qpYesterday = document.getElementById("qpYesterday");
+        const qp24h = document.getElementById("qp24h");
+        const qp48h = document.getElementById("qp48h");
+        const qp7d = document.getElementById("qp7d");
+        const btnLoadRange = document.getElementById("btnLoadRange");
+        const btnResetLive = document.getElementById("btnResetLive");
+        const historicalBanner = document.getElementById("historicalBanner");
+        const histRangeText = document.getElementById("histRangeText");
+        const btnExitHistorical = document.getElementById("btnExitHistorical");
+
+        // Legend elements
+        const legSymbol = document.getElementById("legSymbol");
+        const legTf = document.getElementById("legTf");
+        const legPriceType = document.getElementById("legPriceType");
+        const legOpen = document.getElementById("legOpen");
+        const legHigh = document.getElementById("legHigh");
+        const legLow = document.getElementById("legLow");
+        const legClose = document.getElementById("legClose");
+        const legVol = document.getElementById("legVol");
+        const legTicks = document.getElementById("legTicks");
+        const legEma9 = document.getElementById("legEma9");
+        const legEma21 = document.getElementById("legEma21");
+        const legEma50 = document.getElementById("legEma50");
+        const legEma200 = document.getElementById("legEma200");
+        const legSma20 = document.getElementById("legSma20");
+        const legVwap = document.getElementById("legVwap");
+
+        function getTemporalNowUtc() {
+            if (typeof Temporal !== 'undefined' && Temporal.Now) {
+                return Temporal.Now.zonedDateTimeISO('UTC');
+            }
+            return null;
+        }
+
+        function format24hDate(dt) {
+            if (typeof Temporal !== 'undefined') {
+                if (dt instanceof Temporal.ZonedDateTime) return dt.toPlainDate().toString();
+                if (dt instanceof Temporal.PlainDate) return dt.toString();
+                if (dt instanceof Temporal.PlainDateTime) return dt.toPlainDate().toString();
+            }
+            const pad = n => String(n).padStart(2, '0');
+            const d = dt instanceof Date ? dt : new Date(dt);
+            return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+        }
+
+        function format24hTime(dt) {
+            if (typeof Temporal !== 'undefined') {
+                if (dt instanceof Temporal.ZonedDateTime) return dt.toPlainTime().toString().slice(0, 5);
+                if (dt instanceof Temporal.PlainTime) return dt.toString().slice(0, 5);
+                if (dt instanceof Temporal.PlainDateTime) return dt.toPlainTime().toString().slice(0, 5);
+            }
+            const pad = n => String(n).padStart(2, '0');
+            const d = dt instanceof Date ? dt : new Date(dt);
+            return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+        }
+
+        function format24hDisplay(isoStr) {
+            if (!isoStr) return '--';
+            if (typeof Temporal !== 'undefined' && Temporal.Instant) {
+                try {
+                    const clean = isoStr.endsWith('Z') ? isoStr : isoStr + 'Z';
+                    const zdt = Temporal.Instant.from(clean).toZonedDateTimeISO('UTC');
+                    return `${zdt.toPlainDate().toString()} ${zdt.toPlainTime().toString().slice(0, 5)}`;
+                } catch(e) {}
+            }
+            return isoStr.replace('T', ' ').replace('Z', '').slice(0, 16);
+        }
+
+        function initDatePickers() {
+            const nowUtc = getTemporalNowUtc();
+            if (nowUtc) {
+                const past24h = nowUtc.subtract({ hours: 24 });
+                setRangePreset(past24h, nowUtc, "qp24h");
+            } else {
+                const now = new Date();
+                const past24h = new Date(now.getTime() - 24 * 3600 * 1000);
+                setRangePreset(past24h, now, "qp24h");
+            }
+        }
+
+        function setRangePreset(fromDt, toDt, chipId) {
+            dateFromDay.value = format24hDate(fromDt);
+            dateFromTime.value = format24hTime(fromDt);
+            dateToDay.value = format24hDate(toDt);
+            dateToTime.value = format24hTime(toDt);
+            document.querySelectorAll(".range-chip").forEach(c => c.classList.remove("active"));
+            if (chipId) {
+                const el = document.getElementById(chipId);
+                if (el) el.classList.add("active");
+            }
+        }
+
+        // Initialize Lightweight Charts
+        function initChart() {
+            if (state.chart) {
+                container.innerHTML = "";
+            }
+
+            state.chart = LightweightCharts.createChart(container, {
+                width: container.clientWidth,
+                height: container.clientHeight,
+                layout: {
+                    background: { color: "#131722" },
+                    textColor: "#d1d4dc",
+                    fontSize: 12
+                },
+                grid: {
+                    vertLines: { color: "rgba(43, 47, 58, 0.6)" },
+                    horzLines: { color: "rgba(43, 47, 58, 0.6)" }
+                },
+                crosshair: {
+                    mode: LightweightCharts.CrosshairMode.Normal,
+                    vertLine: {
+                        color: "rgba(120, 123, 134, 0.8)",
+                        width: 1,
+                        style: LightweightCharts.LineStyle.Dashed,
+                        labelBackgroundColor: "#1e222d"
+                    },
+                    horzLine: {
+                        color: "rgba(120, 123, 134, 0.8)",
+                        width: 1,
+                        style: LightweightCharts.LineStyle.Dashed,
+                        labelBackgroundColor: "#2962ff"
+                    }
+                },
+                timeScale: {
+                    borderColor: "#2b2f3a",
+                    timeVisible: true,
+                    secondsVisible: true,
+                    shiftVisibleRangeOnNewBar: true,
+                    rightOffset: 12,
+                    barSpacing: 14,      // Wide, crisp default bar width
+                    minBarSpacing: 3
+                },
+                rightPriceScale: {
+                    borderColor: "#2b2f3a",
+                    autoScale: true,
+                    alignLabels: true
+                }
+            });
+
+            // 1. Candlestick Series (Default)
+            state.candleSeries = state.chart.addCandlestickSeries({
+                upColor: "#089981",
+                downColor: "#f23645",
+                borderVisible: true,
+                borderUpColor: "#089981",
+                borderDownColor: "#f23645",
+                wickVisible: true,
+                wickUpColor: "#089981",
+                wickDownColor: "#f23645",
+                priceFormat: {
+                    type: "price",
+                    precision: state.digits,
+                    minMove: 1 / Math.pow(10, state.digits)
+                }
+            });
+
+            // 2. Bar Series
+            state.barSeries = state.chart.addBarSeries({
+                upColor: "#089981",
+                downColor: "#f23645",
+                openVisible: true,
+                thinBars: false,
+                priceFormat: {
+                    type: "price",
+                    precision: state.digits,
+                    minMove: 1 / Math.pow(10, state.digits)
+                }
+            });
+            state.barSeries.applyOptions({ visible: false });
+
+            // 3. Line Series
+            state.lineSeries = state.chart.addLineSeries({
+                color: "#2962ff",
+                lineWidth: 2,
+                priceFormat: {
+                    type: "price",
+                    precision: state.digits,
+                    minMove: 1 / Math.pow(10, state.digits)
+                }
+            });
+            state.lineSeries.applyOptions({ visible: false });
+
+            // 4. Area Series
+            state.areaSeries = state.chart.addAreaSeries({
+                topColor: "rgba(41, 98, 255, 0.4)",
+                bottomColor: "rgba(41, 98, 255, 0.02)",
+                lineColor: "#2962ff",
+                lineWidth: 2,
+                priceFormat: {
+                    type: "price",
+                    precision: state.digits,
+                    minMove: 1 / Math.pow(10, state.digits)
+                }
+            });
+            state.areaSeries.applyOptions({ visible: false });
+
+            state.activeMainSeries = state.candleSeries;
+
+            // Volume Sub-pane Series
+            state.volumeSeries = state.chart.addHistogramSeries({
+                color: "#26a69a",
+                priceFormat: { type: "volume" },
+                priceScaleId: "volume_pane"
+            });
+
+            state.chart.priceScale("volume_pane").applyOptions({
+                scaleMargins: {
+                    top: 0.8,
+                    bottom: 0
+                }
+            });
+
+            // Indicator Line Series
+            state.ema9Series = state.chart.addLineSeries({ color: "#2962ff", lineWidth: 1.5, title: "EMA 9", crosshairMarkerVisible: true });
+            state.ema21Series = state.chart.addLineSeries({ color: "#ff9800", lineWidth: 1.5, title: "EMA 21", crosshairMarkerVisible: true });
+            state.ema50Series = state.chart.addLineSeries({ color: "#ab47bc", lineWidth: 1.5, title: "EMA 50", crosshairMarkerVisible: true });
+            state.ema200Series = state.chart.addLineSeries({ color: "#f23645", lineWidth: 2, title: "EMA 200", crosshairMarkerVisible: true });
+            state.sma20Series = state.chart.addLineSeries({ color: "#ffd600", lineWidth: 1.5, title: "SMA 20", crosshairMarkerVisible: true });
+            state.vwapSeries = state.chart.addLineSeries({ color: "#00bcd4", lineWidth: 2, title: "VWAP", crosshairMarkerVisible: true });
+
+            // Crosshair move listener for interactive Legend
+            state.chart.subscribeCrosshairMove((param) => {
+                if (!param || !param.time || !param.seriesPrices) {
+                    updateLegendWithLatest();
+                    return;
+                }
+
+                const priceData = param.seriesPrices.get(state.activeMainSeries);
+                if (priceData) {
+                    if (typeof priceData === 'object' && 'open' in priceData) {
+                        legOpen.textContent = priceData.open.toFixed(state.digits);
+                        legHigh.textContent = priceData.high.toFixed(state.digits);
+                        legLow.textContent = priceData.low.toFixed(state.digits);
+                        legClose.textContent = priceData.close.toFixed(state.digits);
+                        const isUp = priceData.close >= priceData.open;
+                        legClose.style.color = isUp ? "#089981" : "#f23645";
+                    } else if (typeof priceData === 'number') {
+                        legClose.textContent = priceData.toFixed(state.digits);
+                        legOpen.textContent = "--";
+                        legHigh.textContent = "--";
+                        legLow.textContent = "--";
+                        legClose.style.color = "#2962ff";
+                    }
+                }
+
+                const volData = param.seriesPrices.get(state.volumeSeries);
+                if (volData !== undefined) {
+                    legVol.textContent = volData.toLocaleString();
+                }
+
+                updateIndicatorLegend(param.seriesPrices);
+            });
+
+            window.addEventListener("resize", resizeChart);
+
+            if (window.ResizeObserver) {
+                const ro = new ResizeObserver(() => {
+                    resizeChart();
+                });
+                ro.observe(container);
+            }
+        }
+
+        function resizeChart() {
+            if (state.chart && container) {
+                state.chart.applyOptions({
+                    width: container.clientWidth,
+                    height: container.clientHeight
+                });
+            }
+        }
+
+        function setChartType(type) {
+            state.chartType = type;
+            // Hide all main series
+            state.candleSeries.applyOptions({ visible: type === "candlestick" });
+            state.barSeries.applyOptions({ visible: type === "bar" });
+            state.lineSeries.applyOptions({ visible: type === "line" });
+            state.areaSeries.applyOptions({ visible: type === "area" });
+
+            if (type === "candlestick") state.activeMainSeries = state.candleSeries;
+            else if (type === "bar") state.activeMainSeries = state.barSeries;
+            else if (type === "line") state.activeMainSeries = state.lineSeries;
+            else if (type === "area") state.activeMainSeries = state.areaSeries;
+
+            // Re-attach bid/ask price lines to the active series
+            if (state.candles.length > 0) {
+                const last = state.candles[state.candles.length - 1];
+                updateLivePriceLines(last.bid || last.close, last.ask || last.close);
+            }
+        }
+
+        function updateIndicatorLegend(pricesMap) {
+            const v9 = pricesMap ? pricesMap.get(state.ema9Series) : null;
+            const v21 = pricesMap ? pricesMap.get(state.ema21Series) : null;
+            const v50 = pricesMap ? pricesMap.get(state.ema50Series) : null;
+            const v200 = pricesMap ? pricesMap.get(state.ema200Series) : null;
+            const vsma = pricesMap ? pricesMap.get(state.sma20Series) : null;
+            const vwap = pricesMap ? pricesMap.get(state.vwapSeries) : null;
+
+            if (v9 !== undefined && v9 !== null) legEma9.textContent = `EMA 9: ${v9.toFixed(state.digits)}`;
+            if (v21 !== undefined && v21 !== null) legEma21.textContent = `EMA 21: ${v21.toFixed(state.digits)}`;
+            if (v50 !== undefined && v50 !== null) legEma50.textContent = `EMA 50: ${v50.toFixed(state.digits)}`;
+            if (v200 !== undefined && v200 !== null) legEma200.textContent = `EMA 200: ${v200.toFixed(state.digits)}`;
+            if (vsma !== undefined && vsma !== null) legSma20.textContent = `SMA 20: ${vsma.toFixed(state.digits)}`;
+            if (vwap !== undefined && vwap !== null) legVwap.textContent = `VWAP: ${vwap.toFixed(state.digits)}`;
+        }
+
+        function updateLegendWithLatest() {
+            if (!state.candles || state.candles.length === 0) return;
+            const last = state.candles[state.candles.length - 1];
+            legOpen.textContent = last.open.toFixed(state.digits);
+            legHigh.textContent = last.high.toFixed(state.digits);
+            legLow.textContent = last.low.toFixed(state.digits);
+            legClose.textContent = last.close.toFixed(state.digits);
+            legVol.textContent = last.volume.toLocaleString();
+            legTicks.textContent = last.tick_count ? last.tick_count : "--";
+
+            const isUp = last.close >= last.open;
+            legClose.style.color = isUp ? "#089981" : "#f23645";
+        }
+
+        // Apply snapshot data to series
+        function applySnapshotData(data) {
+            state.candles = data.candles || [];
+            state.indicators = data.indicators || {};
+            state.isLive = data.is_live !== false;
+
+            if (data.symbol_info && data.symbol_info.digits) {
+                state.digits = data.symbol_info.digits;
+                state.point = data.symbol_info.point || 0.0001;
+            }
+
+            legSymbol.textContent = state.symbol;
+            legTf.textContent = state.timeframe;
+            legPriceType.textContent = state.priceType.toUpperCase();
+
+            // Update Live vs Historical Mode UI
+            if (state.isLive) {
+                statusText.textContent = "Live MT5";
+                statusPill.className = "status-pill";
+                statusDot.className = "status-dot pulse";
+                historicalBanner.classList.remove("show");
+                rangeMenuBtn.classList.remove("active");
+                rangeMenuBtn.textContent = "📅 Date Range (24h) ▾";
+            } else {
+                statusText.textContent = "Historical";
+                statusPill.className = "status-pill historical";
+                statusDot.className = "status-dot historical";
+                historicalBanner.classList.add("show");
+                rangeMenuBtn.classList.add("active");
+                const fromDisplay = format24hDisplay(state.dateFrom);
+                const toDisplay = format24hDisplay(state.dateTo);
+                histRangeText.textContent = `${fromDisplay} ➔ ${toDisplay} UTC`;
+                rangeMenuBtn.textContent = "📅 Historical (24h) ▾";
+            }
+
+            // Immediately resize chart to account for banner appearance/disappearance
+            resizeChart();
+
+            const candleItems = [];
+            const lineItems = [];
+            const volumeItems = [];
+
+            state.candles.forEach(c => {
+                candleItems.push({
+                    time: c.time,
+                    open: c.open,
+                    high: c.high,
+                    low: c.low,
+                    close: c.close
+                });
+                lineItems.push({
+                    time: c.time,
+                    value: c.close
+                });
+                const isUp = c.close >= c.open;
+                volumeItems.push({
+                    time: c.time,
+                    value: c.volume,
+                    color: isUp ? "rgba(8, 153, 129, 0.4)" : "rgba(242, 54, 69, 0.4)"
+                });
+            });
+
+            const priceFormatOpt = {
+                type: "price",
+                precision: state.digits,
+                minMove: 1 / Math.pow(10, state.digits)
+            };
+
+            state.candleSeries.applyOptions({ priceFormat: priceFormatOpt });
+            state.barSeries.applyOptions({ priceFormat: priceFormatOpt });
+            state.lineSeries.applyOptions({ priceFormat: priceFormatOpt });
+            state.areaSeries.applyOptions({ priceFormat: priceFormatOpt });
+
+            state.candleSeries.setData(candleItems);
+            state.barSeries.setData(candleItems);
+            state.lineSeries.setData(lineItems);
+            state.areaSeries.setData(lineItems);
+            state.volumeSeries.setData(volumeItems);
+
+            // Indicators
+            const ema = state.indicators.ema || {};
+            if (ema["9"]) state.ema9Series.setData(ema["9"]);
+            if (ema["21"]) state.ema21Series.setData(ema["21"]);
+            if (ema["50"]) state.ema50Series.setData(ema["50"]);
+            if (ema["200"]) state.ema200Series.setData(ema["200"]);
+            if (state.indicators.sma) state.sma20Series.setData(state.indicators.sma);
+            if (state.indicators.vwap) state.vwapSeries.setData(state.indicators.vwap);
+
+            // Update Bid / Ask Price Lines
+            updateLivePriceLines(data.latest_bid, data.latest_ask);
+
+            if (data.spread_points !== undefined) {
+                spreadVal.textContent = data.spread_points;
+            }
+
+            updateLegendWithLatest();
+
+            // Configure time scale seconds visibility dynamically
+            const isSecondTf = state.timeframe.toLowerCase().endsWith('s') && !state.timeframe.toLowerCase().endsWith('ms');
+            state.chart.applyOptions({
+                timeScale: {
+                    secondsVisible: isSecondTf,
+                    barSpacing: 12,
+                    rightOffset: 12
+                }
+            });
+
+            // Set natural visible zoom range without stretching sparse datasets
+            const total = state.candles.length;
+            if (total > 0) {
+                const visibleCount = Math.min(total, 120);
+                state.chart.timeScale().setVisibleLogicalRange({
+                    from: total - visibleCount,
+                    to: total + 6
+                });
+            }
+
+            updateSessionHighlight();
+        }
+
+        function updateLivePriceLines(bid, ask) {
+            if (!bid || !ask) return;
+
+            // Remove existing lines from all series
+            [state.candleSeries, state.barSeries, state.lineSeries, state.areaSeries].forEach(s => {
+                if (state.bidLine) { try { s.removePriceLine(state.bidLine); } catch(e){} }
+                if (state.askLine) { try { s.removePriceLine(state.askLine); } catch(e){} }
+            });
+
+            const showLines = document.getElementById("chkPriceLines").checked;
+            if (!showLines || !state.activeMainSeries) return;
+
+            state.bidLine = state.activeMainSeries.createPriceLine({
+                price: bid,
+                color: "#2962ff",
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: "BID"
+            });
+
+            state.askLine = state.activeMainSeries.createPriceLine({
+                price: ask,
+                color: "#f23645",
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                axisLabelVisible: true,
+                title: "ASK"
+            });
+        }
+
+        // Live incremental tick/candle update
+        function handleLiveUpdate(msg) {
+            if (!state.isLive) return;
+
+            if (msg.latest_candle) {
+                const c = msg.latest_candle;
+                const ohlc = {
+                    time: c.time,
+                    open: c.open,
+                    high: c.high,
+                    low: c.low,
+                    close: c.close
+                };
+                const lineVal = {
+                    time: c.time,
+                    value: c.close
+                };
+
+                state.candleSeries.update(ohlc);
+                state.barSeries.update(ohlc);
+                state.lineSeries.update(lineVal);
+                state.areaSeries.update(lineVal);
+
+                const isUp = c.close >= c.open;
+                state.volumeSeries.update({
+                    time: c.time,
+                    value: c.volume,
+                    color: isUp ? "rgba(8, 153, 129, 0.4)" : "rgba(242, 54, 69, 0.4)"
+                });
+
+                if (state.candles.length > 0) {
+                    if (state.candles[state.candles.length - 1].time === c.time) {
+                        state.candles[state.candles.length - 1] = c;
+                    } else {
+                        state.candles.push(c);
+                    }
+                }
+                updateLegendWithLatest();
+            }
+
+            if (msg.latest_bid && msg.latest_ask) {
+                updateLivePriceLines(msg.latest_bid, msg.latest_ask);
+                if (msg.spread_points !== undefined) {
+                    spreadVal.textContent = msg.spread_points;
+                }
+            }
+        }
+
+        function updateSessionHighlight() {
+            let utcHour;
+            const nowUtc = getTemporalNowUtc();
+            if (nowUtc) {
+                utcHour = nowUtc.hour + nowUtc.minute / 60;
+            } else {
+                const now = new Date();
+                utcHour = now.getUTCHours() + now.getUTCMinutes() / 60;
+            }
+
+            const asia = document.getElementById("sessionAsia");
+            const london = document.getElementById("sessionLondon");
+            const ny = document.getElementById("sessionNY");
+
+            asia.classList.toggle("active", utcHour >= 0 && utcHour < 9);
+            london.classList.toggle("active", utcHour >= 8 && utcHour < 16.5);
+            ny.classList.toggle("active", utcHour >= 13 && utcHour < 21.5);
+        }
+
+        // WebSocket Connection Manager
+        function connectWebSocket() {
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const wsUrl = `${protocol}//${window.location.host}/ws/chart`;
+
+            statusText.textContent = "Connecting...";
+            statusDot.style.backgroundColor = "#ff9800";
+
+            state.ws = new WebSocket(wsUrl);
+
+            state.ws.onopen = () => {
+                if (state.isLive) {
+                    statusText.textContent = "Live MT5";
+                    statusDot.className = "status-dot pulse";
+                    state.ws.send(JSON.stringify({
+                        action: "subscribe",
+                        symbol: state.symbol,
+                        timeframe: state.timeframe,
+                        price_type: state.priceType,
+                        is_live: true
+                    }));
+                } else {
+                    state.ws.send(JSON.stringify({
+                        action: "load_range",
+                        symbol: state.symbol,
+                        timeframe: state.timeframe,
+                        price_type: state.priceType,
+                        date_from: state.dateFrom,
+                        date_to: state.dateTo
+                    }));
+                }
+            };
+
+            state.ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    if (msg.type === "snapshot") {
+                        applySnapshotData(msg.data);
+                    } else if (msg.type === "live_update") {
+                        handleLiveUpdate(msg);
+                    } else if (msg.type === "ticker") {
+                        if (msg.bid && msg.ask) {
+                            updateLivePriceLines(msg.bid, msg.ask);
+                            spreadVal.textContent = ((msg.ask - msg.bid) / state.point).toFixed(1);
+                        }
+                    }
+                } catch (e) {
+                    console.error("WS Parse error", e);
+                }
+            };
+
+            state.ws.onclose = () => {
+                statusText.textContent = "Reconnecting...";
+                statusDot.style.backgroundColor = "#f23645";
+                clearTimeout(state.reconnectTimer);
+                state.reconnectTimer = setTimeout(connectWebSocket, 2000);
+            };
+
+            state.ws.onerror = () => {
+                state.ws.close();
+            };
+        }
+
+        function switchTimeframe(tfStr) {
+            if (!tfStr) return;
+            state.timeframe = tfStr;
+            document.querySelectorAll(".toolbar button[data-tf]").forEach(btn => {
+                btn.classList.toggle("active", btn.dataset.tf === tfStr);
+            });
+            legTf.textContent = tfStr;
+
+            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                if (state.isLive) {
+                    state.ws.send(JSON.stringify({
+                        action: "change_config",
+                        symbol: state.symbol,
+                        timeframe: state.timeframe,
+                        price_type: state.priceType,
+                        is_live: true
+                    }));
+                } else {
+                    state.ws.send(JSON.stringify({
+                        action: "load_range",
+                        symbol: state.symbol,
+                        timeframe: state.timeframe,
+                        price_type: state.priceType,
+                        date_from: state.dateFrom,
+                        date_to: state.dateTo
+                    }));
+                }
+            }
+        }
+
+        function switchSymbol(newSymbol) {
+            state.symbol = newSymbol.trim().toUpperCase();
+            symbolInput.value = state.symbol;
+            legSymbol.textContent = state.symbol;
+
+            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                if (state.isLive) {
+                    state.ws.send(JSON.stringify({
+                        action: "change_config",
+                        symbol: state.symbol,
+                        timeframe: state.timeframe,
+                        price_type: state.priceType,
+                        is_live: true
+                    }));
+                } else {
+                    state.ws.send(JSON.stringify({
+                        action: "load_range",
+                        symbol: state.symbol,
+                        timeframe: state.timeframe,
+                        price_type: state.priceType,
+                        date_from: state.dateFrom,
+                        date_to: state.dateTo
+                    }));
+                }
+            }
+        }
+
+        function loadHistoricalRange(fromIso, toIso) {
+            state.isLive = false;
+            state.dateFrom = fromIso;
+            state.dateTo = toIso;
+            rangeMenuContent.classList.remove("show");
+
+            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                state.ws.send(JSON.stringify({
+                    action: "load_range",
+                    symbol: state.symbol,
+                    timeframe: state.timeframe,
+                    price_type: state.priceType,
+                    date_from: fromIso,
+                    date_to: toIso
+                }));
+            }
+        }
+
+        function resetToLiveStream() {
+            state.isLive = true;
+            state.dateFrom = null;
+            state.dateTo = null;
+            rangeMenuContent.classList.remove("show");
+
+            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                state.ws.send(JSON.stringify({
+                    action: "subscribe",
+                    symbol: state.symbol,
+                    timeframe: state.timeframe,
+                    price_type: state.priceType,
+                    is_live: true
+                }));
+            }
+        }
+
+        // Event Listeners
+        chartTypeSelect.addEventListener("change", (e) => {
+            setChartType(e.target.value);
+        });
+
+        symbolInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                switchSymbol(symbolInput.value);
+            }
+        });
+
+        document.querySelectorAll(".toolbar button[data-tf]").forEach(btn => {
+            btn.addEventListener("click", () => {
+                switchTimeframe(btn.dataset.tf);
+            });
+        });
+
+        customTfApply.addEventListener("click", () => {
+            const val = customTfInput.value.trim();
+            if (val) {
+                switchTimeframe(val);
+                customTfInput.value = "";
+            }
+        });
+
+        customTfInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                const val = customTfInput.value.trim();
+                if (val) {
+                    switchTimeframe(val);
+                    customTfInput.value = "";
+                }
+            }
+        });
+
+        priceTypeSelect.addEventListener("change", () => {
+            state.priceType = priceTypeSelect.value;
+            legPriceType.textContent = state.priceType.toUpperCase();
+            if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+                state.ws.send(JSON.stringify({
+                    action: state.isLive ? "change_config" : "load_range",
+                    symbol: state.symbol,
+                    timeframe: state.timeframe,
+                    price_type: state.priceType,
+                    date_from: state.dateFrom,
+                    date_to: state.dateTo,
+                    is_live: state.isLive
+                }));
+            }
+        });
+
+        // Dropdown toggles (Indicators & Range)
+        const indMenuBtn = document.getElementById("indMenuBtn");
+        const indMenuContent = document.getElementById("indMenuContent");
+
+        indMenuBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            rangeMenuContent.classList.remove("show");
+            indMenuContent.classList.toggle("show");
+        });
+
+        rangeMenuBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            indMenuContent.classList.remove("show");
+            rangeMenuContent.classList.toggle("show");
+        });
+
+        document.addEventListener("click", () => {
+            indMenuContent.classList.remove("show");
+            rangeMenuContent.classList.remove("show");
+        });
+
+        indMenuContent.addEventListener("click", (e) => {
+            e.stopPropagation();
+        });
+
+        rangeMenuContent.addEventListener("click", (e) => {
+            e.stopPropagation();
+        });
+
+        // Quick 24h Presets
+        if (qpToday) {
+            qpToday.addEventListener("click", () => {
+                const nowUtc = getTemporalNowUtc();
+                if (nowUtc) {
+                    const startToday = nowUtc.toPlainDate().toZonedDateTime({ plainTime: '00:00:00', timeZone: 'UTC' });
+                    setRangePreset(startToday, nowUtc, "qpToday");
+                } else {
+                    const now = new Date();
+                    const startToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0));
+                    setRangePreset(startToday, now, "qpToday");
+                }
+            });
+        }
+        if (qpYesterday) {
+            qpYesterday.addEventListener("click", () => {
+                const nowUtc = getTemporalNowUtc();
+                if (nowUtc) {
+                    const yestDate = nowUtc.subtract({ days: 1 }).toPlainDate();
+                    const yestStart = yestDate.toZonedDateTime({ plainTime: '00:00:00', timeZone: 'UTC' });
+                    const yestEnd = yestDate.toZonedDateTime({ plainTime: '23:59:59', timeZone: 'UTC' });
+                    setRangePreset(yestStart, yestEnd, "qpYesterday");
+                } else {
+                    const now = new Date();
+                    const yestStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 0, 0, 0));
+                    const yestEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 23, 59, 59));
+                    setRangePreset(yestStart, yestEnd, "qpYesterday");
+                }
+            });
+        }
+        if (qp24h) {
+            qp24h.addEventListener("click", () => {
+                const nowUtc = getTemporalNowUtc();
+                if (nowUtc) {
+                    setRangePreset(nowUtc.subtract({ hours: 24 }), nowUtc, "qp24h");
+                } else {
+                    const now = new Date();
+                    setRangePreset(new Date(now.getTime() - 24 * 3600 * 1000), now, "qp24h");
+                }
+            });
+        }
+        if (qp48h) {
+            qp48h.addEventListener("click", () => {
+                const nowUtc = getTemporalNowUtc();
+                if (nowUtc) {
+                    setRangePreset(nowUtc.subtract({ hours: 48 }), nowUtc, "qp48h");
+                } else {
+                    const now = new Date();
+                    setRangePreset(new Date(now.getTime() - 48 * 3600 * 1000), now, "qp48h");
+                }
+            });
+        }
+        if (qp7d) {
+            qp7d.addEventListener("click", () => {
+                const nowUtc = getTemporalNowUtc();
+                if (nowUtc) {
+                    setRangePreset(nowUtc.subtract({ days: 7 }), nowUtc, "qp7d");
+                } else {
+                    const now = new Date();
+                    setRangePreset(new Date(now.getTime() - 7 * 86400 * 1000), now, "qp7d");
+                }
+            });
+        }
+
+        // Range Action Buttons
+        btnLoadRange.addEventListener("click", () => {
+            const fDay = dateFromDay.value;
+            let fTime = dateFromTime.value.trim() || "00:00";
+            if (fTime.length === 5) fTime += ":00";
+
+            const tDay = dateToDay.value;
+            let tTime = dateToTime.value.trim() || "23:59";
+            if (tTime.length === 5) tTime += ":00";
+
+            if (fDay && tDay) {
+                const fromIso = `${fDay}T${fTime}Z`;
+                const toIso = `${tDay}T${tTime}Z`;
+                loadHistoricalRange(fromIso, toIso);
+            }
+        });
+
+        btnResetLive.addEventListener("click", resetToLiveStream);
+        btnExitHistorical.addEventListener("click", resetToLiveStream);
+
+        // Indicator Checkboxes toggles
+        function setupIndicatorToggle(chkId, series, legendId) {
+            const chk = document.getElementById(chkId);
+            const legEl = document.getElementById(legendId);
+            chk.addEventListener("change", () => {
+                series.applyOptions({ visible: chk.checked });
+                if (legEl) legEl.style.display = chk.checked ? "inline" : "none";
+            });
+            series.applyOptions({ visible: chk.checked });
+            if (legEl) legEl.style.display = chk.checked ? "inline" : "none";
+        }
+
+        // Initialize on load
+        window.addEventListener("DOMContentLoaded", () => {
+            initDatePickers();
+            initChart();
+            setupIndicatorToggle("chkEma9", state.ema9Series, "legEma9");
+            setupIndicatorToggle("chkEma21", state.ema21Series, "legEma21");
+            setupIndicatorToggle("chkEma50", state.ema50Series, "legEma50");
+            setupIndicatorToggle("chkEma200", state.ema200Series, "legEma200");
+            setupIndicatorToggle("chkSma20", state.sma20Series, "legSma20");
+            setupIndicatorToggle("chkVwap", state.vwapSeries, "legVwap");
+
+            document.getElementById("chkVolume").addEventListener("change", (e) => {
+                state.volumeSeries.applyOptions({ visible: e.target.checked });
+            });
+            document.getElementById("chkPriceLines").addEventListener("change", () => {
+                updateLivePriceLines(state.candles.length > 0 ? state.candles[state.candles.length - 1].close : null, null);
+            });
+
+            connectWebSocket();
+            setInterval(updateSessionHighlight, 30000);
+        });
+    </script>
+</body>
+</html>
