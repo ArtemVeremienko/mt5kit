@@ -498,82 +498,76 @@ class RegimeVisualizer:
             col=1,
         )
 
-        # 2. Regime Marker Points above candles
-        range_dates = [d.date_str for d in daily if d.regime == DayRegimeType.RANGE_DAY]
-        range_highs = [d.high_price for d in daily if d.regime == DayRegimeType.RANGE_DAY]
+        # 2. Clean Legend Indicators for Regimes & ADR (No Cluttering Markers on Candles)
+        fig.add_trace(
+            go.Scatter(
+                x=[None],
+                y=[None],
+                mode="markers",
+                name="Range Day (Flat)",
+                marker=dict(symbol="square", size=10, color="#f97316"),
+                showlegend=True,
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[None],
+                y=[None],
+                mode="markers",
+                name="Semi-Trend (Swing)",
+                marker=dict(symbol="square", size=10, color="#a855f7"),
+                showlegend=True,
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[None],
+                y=[None],
+                mode="markers",
+                name="V-Shape Reversal (Two-Way)",
+                marker=dict(symbol="square", size=10, color="#06b6d4"),
+                showlegend=True,
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[None],
+                y=[None],
+                mode="markers",
+                name="Strong Trend (Momentum)",
+                marker=dict(symbol="square", size=10, color="#10b981"),
+                showlegend=True,
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=[None],
+                y=[None],
+                mode="lines",
+                name=f"20d ADR ({profile.avg_daily_range_pips:.1f}p)",
+                line=dict(color="#fbbf24", width=2, dash="dash"),
+                showlegend=True,
+            ),
+            row=1,
+            col=1,
+        )
 
-        semi_dates = [d.date_str for d in daily if d.regime == DayRegimeType.SEMI_TREND_DAY]
-        semi_highs = [d.high_price for d in daily if d.regime == DayRegimeType.SEMI_TREND_DAY]
-
-        trend_dates = [d.date_str for d in daily if d.regime == DayRegimeType.STRONG_TREND_DAY]
-        trend_highs = [d.high_price for d in daily if d.regime == DayRegimeType.STRONG_TREND_DAY]
-
-        vshape_dates = [d.date_str for d in daily if d.regime == DayRegimeType.V_SHAPE_REVERSAL_DAY]
-        vshape_highs = [d.high_price for d in daily if d.regime == DayRegimeType.V_SHAPE_REVERSAL_DAY]
-
-        if range_dates:
-            fig.add_trace(
-                go.Scatter(
-                    x=range_dates,
-                    y=range_highs,
-                    mode="markers",
-                    name="Range Day (Flat)",
-                    marker=dict(symbol="square", size=6, color="#f97316", line=dict(color="#ffffff", width=0.5)),
-                    hoverinfo="skip",
-                ),
-                row=1,
-                col=1,
-            )
-
-        if semi_dates:
-            fig.add_trace(
-                go.Scatter(
-                    x=semi_dates,
-                    y=semi_highs,
-                    mode="markers",
-                    name="Semi-Trend (Swing)",
-                    marker=dict(symbol="diamond", size=7, color="#a855f7", line=dict(color="#ffffff", width=0.5)),
-                    hoverinfo="skip",
-                ),
-                row=1,
-                col=1,
-            )
-
-        if vshape_dates:
-            fig.add_trace(
-                go.Scatter(
-                    x=vshape_dates,
-                    y=vshape_highs,
-                    mode="markers",
-                    name="V-Shape Reversal (Two-Way)",
-                    marker=dict(symbol="star", size=8, color="#06b6d4", line=dict(color="#ffffff", width=0.5)),
-                    hoverinfo="skip",
-                ),
-                row=1,
-                col=1,
-            )
-
-        if trend_dates:
-            fig.add_trace(
-                go.Scatter(
-                    x=trend_dates,
-                    y=trend_highs,
-                    mode="markers",
-                    name="Strong Trend (Momentum)",
-                    marker=dict(symbol="triangle-up", size=8, color="#10b981", line=dict(color="#ffffff", width=0.5)),
-                    hoverinfo="skip",
-                ),
-                row=1,
-                col=1,
-            )
-
-        # 3. Subplot 2: Daily Range Bars
+        # 3. Subplot 2: Daily Range Bars (Solid Colors)
         fig.add_trace(
             go.Bar(
                 x=dates,
                 y=ranges,
                 name="Daily Range (pips)",
-                marker=dict(color=colors),
+                marker=dict(color=colors, line=dict(width=0)),
+                opacity=1.0,
                 hovertext=hover_candle,
                 hoverinfo="text",
                 showlegend=False,
@@ -967,24 +961,112 @@ class RegimeVisualizer:
 
     @staticmethod
     def generate_h1_poc_html(profile: AssetBehaviorProfile, output_file: str) -> str:
-        """Generates a standalone POC HTML dashboard on H1 timeframe with regime highlights and dynamic auto-scaling."""
+        """
+        Generates an ultra-fast, 60 FPS hardware-accelerated H1 Intraday POC Chart using Lightweight Charts (TradingView).
+        Features 3 synchronized panes (Candlesticks + Pullback Depth % + Daily Range Pips) with full-day background regime shading.
+        """
+        import json
         os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
-        fig = RegimeVisualizer.create_h1_regime_candlestick_figure(profile)
-        fig_json = fig.to_json()
+
+        pip_size = profile.symbol_info.pip_size
+        day_map = {d.date_str: d for d in profile.daily_classifications}
+        df_h1 = profile.df_h1
+
+        if df_h1 is None or df_h1.empty:
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write("<html><body><h1>No H1 data available</h1></body></html>")
+            return os.path.abspath(output_file)
+
+        df_h1_sorted = df_h1.sort_index()
+
+        candles = []
+        pullbacks = []
+        ranges = []
+        day_markers = []
+        day_info_map = {}
+
+        for idx, row in df_h1_sorted.iterrows():
+            t_sec = int(idx.timestamp())
+            day_str = idx.strftime("%Y-%m-%d")
+            d_class = day_map.get(day_str)
+
+            open_p = round(float(row["open"]), profile.symbol_info.digits)
+            high_p = round(float(row["high"]), profile.symbol_info.digits)
+            low_p = round(float(row["low"]), profile.symbol_info.digits)
+            close_p = round(float(row["close"]), profile.symbol_info.digits)
+
+            candles.append({
+                "time": t_sec,
+                "open": open_p,
+                "high": high_p,
+                "low": low_p,
+                "close": close_p,
+            })
+
+            if d_class:
+                d_range_val = d_class.range_pips
+                d_ker_val = d_class.ker_daily
+                pullback_pct = ((1.0 - d_ker_val) / (1.0 + d_ker_val)) * 100.0 if d_ker_val >= 0 else 100.0
+                pullback_pct = round(float(np.clip(pullback_pct, 0.0, 100.0)), 1)
+                col = d_class.regime.color
+                reg_name = d_class.regime.display_name
+                d_body = d_class.body_pips
+                d_retrace = d_class.retracement_ratio * 100.0
+                d_adr_mult = d_class.adr_multiple
+            else:
+                d_range_val = 50.0
+                d_ker_val = 0.30
+                pullback_pct = 50.0
+                col = "#f97316"
+                reg_name = "Range Day (Flat)"
+                d_body = 10.0
+                d_retrace = 50.0
+                d_adr_mult = 1.0
+
+            pullbacks.append({"time": t_sec, "value": pullback_pct, "color": col})
+            ranges.append({"time": t_sec, "value": round(d_range_val, 1), "color": col})
+
+            if day_str not in day_info_map:
+                day_info_map[day_str] = {
+                    "first_time": t_sec,
+                    "date_str": day_str,
+                    "regime": reg_name,
+                    "color": col,
+                    "range_pips": round(d_range_val, 1),
+                    "body_pips": round(d_body, 1),
+                    "pullback_pct": pullback_pct,
+                    "retrace_pct": round(d_retrace, 0),
+                    "ker": round(d_ker_val, 2),
+                    "adr_mult": round(d_adr_mult, 2),
+                }
+                badge_text = f"{d_class.regime.name.split('_')[0]} ({d_range_val:.0f}p)" if d_class else ""
+                day_markers.append({
+                    "time": t_sec,
+                    "position": "aboveBar",
+                    "color": col,
+                    "shape": "square",
+                    "text": badge_text,
+                })
 
         s_range = profile.regime_stats[DayRegimeType.RANGE_DAY]
         s_semi = profile.regime_stats[DayRegimeType.SEMI_TREND_DAY]
         s_vshape = profile.regime_stats[DayRegimeType.V_SHAPE_REVERSAL_DAY]
         s_trend = profile.regime_stats[DayRegimeType.STRONG_TREND_DAY]
 
+        candles_json = json.dumps(candles)
+        pullbacks_json = json.dumps(pullbacks)
+        ranges_json = json.dumps(ranges)
+        day_info_json = json.dumps(day_info_map)
+        adr_val = float(profile.avg_daily_range_pips)
+
         html_content = f"""<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{profile.symbol} — POC H1 Intraday Candlestick Regime Viewer</title>
+    <title>{profile.symbol} — H1 Intraday POC (Lightweight Charts 60 FPS)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body {{ font-family: 'Inter', sans-serif; background-color: #0b0f19; color: #f1f5f9; }}
@@ -996,77 +1078,283 @@ class RegimeVisualizer:
     <header class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-4">
         <div>
             <div class="flex items-center gap-3">
-                <span class="px-2.5 py-1 bg-purple-600/30 text-purple-400 border border-purple-500/40 rounded text-xs font-bold uppercase tracking-wider">POC H1 Intraday Structure</span>
+                <span class="px-2.5 py-1 bg-purple-600/30 text-purple-400 border border-purple-500/40 rounded text-xs font-bold uppercase tracking-wider">Lightweight Charts (60 FPS)</span>
                 <span class="text-xs text-slate-500">{profile.generated_at}</span>
             </div>
-            <h1 class="text-2xl font-extrabold tracking-tight mt-1 text-white">{profile.symbol} H1 Candlestick Regime Highlighter</h1>
-            <p class="text-xs text-slate-400 mt-1">Inspect hourly price structure with regime color-coding (<span class="text-orange-400 font-bold">Orange = Range</span>, <span class="text-purple-400 font-bold">Purple = Semi-Trend</span>, <span class="text-cyan-400 font-bold">Cyan = V-Shape</span>, <span class="text-emerald-400 font-bold">Green = Strong Trend</span>) and zero weekend gaps.</p>
+            <h1 class="text-2xl font-extrabold tracking-tight mt-1 text-white">{profile.symbol} H1 Intraday Candlestick Regime Highlighter</h1>
+            <p class="text-xs text-slate-400 mt-1">Ultra-smooth hardware-accelerated zoom & pan. Hourly candlesticks with full-day background regime shading and solid-color subplots.</p>
         </div>
-        <div class="flex items-center gap-3 text-xs mt-3 md:mt-0">
+        <div class="flex flex-wrap items-center gap-3 text-xs mt-3 md:mt-0 font-mono">
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-orange-500"></span> Range ({s_range.frequency_pct:.0f}%)</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-purple-500"></span> Semi-Trend ({s_semi.frequency_pct:.0f}%)</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-cyan-500"></span> V-Shape ({s_vshape.frequency_pct:.0f}%)</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-emerald-500"></span> Strong Trend ({s_trend.frequency_pct:.0f}%)</span>
+            <span class="flex items-center gap-1.5 text-amber-400 border-l border-slate-700 pl-3">20d ADR: <b>{adr_val:.1f}p</b></span>
         </div>
     </header>
 
-    <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 shadow-xl mb-6">
-        <div id="poc-h1-container" class="w-full min-h-[960px]"></div>
+    <!-- Floating HUD Info Bar -->
+    <div id="hud-bar" class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 mb-3 flex flex-wrap items-center justify-between text-xs font-mono text-slate-300 shadow-lg">
+        <div class="flex items-center gap-4">
+            <span id="hud-date" class="font-bold text-white">Hover over candles</span>
+            <span id="hud-regime" class="px-2 py-0.5 rounded font-bold"></span>
+        </div>
+        <div class="flex items-center gap-5 text-slate-400">
+            <span>O: <b id="hud-open" class="text-white">-</b></span>
+            <span>H: <b id="hud-high" class="text-white">-</b></span>
+            <span>L: <b id="hud-low" class="text-white">-</b></span>
+            <span>C: <b id="hud-close" class="text-white">-</b></span>
+            <span>Day Range: <b id="hud-range" class="text-amber-400">-</b></span>
+            <span>20d ADR: <b class="text-amber-300">{adr_val:.1f}p</b></span>
+            <span>Pullback: <b id="hud-pullback" class="text-cyan-400">-</b></span>
+        </div>
+    </div>
+
+    <!-- 3 Synchronized Lightweight Charts Panes Stack -->
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-2xl p-4 space-y-3">
+        <!-- Pane 1: Candlesticks -->
+        <div>
+            <div class="text-xs font-bold text-slate-400 mb-1 flex items-center justify-between">
+                <span>{profile.symbol} H1 Price Candlesticks</span>
+                <span class="text-[10px] text-slate-500">Scroll to zoom | Drag to pan</span>
+            </div>
+            <div class="relative w-full h-[520px]">
+                <canvas id="bg-canvas" class="pointer-events-none absolute inset-0 z-0"></canvas>
+                <div id="chart-candlestick" class="relative z-10 w-full h-full"></div>
+            </div>
+        </div>
+
+        <!-- Pane 2: Pullback Depth (%) -->
+        <div class="border-t border-slate-800/80 pt-2">
+            <div class="text-xs font-bold text-slate-400 mb-1 flex items-center justify-between">
+                <span>D1 Daily Pullback Depth (%) [Efficiency-Derived]</span>
+                <span class="text-[10px] text-slate-500">Dotted green: Trend &lt;30% | Dotted orange: Range &gt;60%</span>
+            </div>
+            <div id="chart-pullback" class="w-full h-[180px]"></div>
+        </div>
+
+        <!-- Pane 3: Daily Range Pips -->
+        <div class="border-t border-slate-800/80 pt-2">
+            <div class="text-xs font-bold text-slate-400 mb-1 flex items-center justify-between">
+                <span>D1 Daily Range (Pips) vs. 20-Day ADR ({adr_val:.1f}p)</span>
+                <span class="text-[10px] text-amber-400">Dashed yellow: 20d ADR</span>
+            </div>
+            <div id="chart-range" class="w-full h-[180px]"></div>
+        </div>
     </div>
 
     <script>
-        const chartData = {fig_json};
-        Plotly.react('poc-h1-container', chartData.data, chartData.layout, {{responsive: true}});
+        const candlesData = {candles_json};
+        const pullbacksData = {pullbacks_json};
+        const rangesData = {ranges_json};
+        const dayInfoMap = {day_info_json};
+        const adrValue = {adr_val};
 
-        // Dynamic auto-scaling of candlestick Y-axis on zoom / range slider interaction
-        const chartDiv = document.getElementById('poc-h1-container');
-        let isRelayouting = false;
+        const chartCommonOptions = {{
+            layout: {{
+                background: {{ color: 'transparent' }},
+                textColor: '#94a3b8',
+                fontSize: 11,
+                fontFamily: "'JetBrains Mono', monospace",
+            }},
+            grid: {{
+                vertLines: {{ color: '#1e293b' }},
+                horzLines: {{ color: '#1e293b' }},
+            }},
+            crosshair: {{
+                mode: LightweightCharts.CrosshairMode.Normal,
+                vertLine: {{ color: '#64748b', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: '#334155' }},
+                horzLine: {{ color: '#64748b', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: '#334155' }},
+            }},
+            timeScale: {{
+                borderColor: '#334155',
+                timeVisible: true,
+                secondsVisible: false,
+            }},
+        }};
 
-        chartDiv.on('plotly_relayout', function(eventData) {{
-            if (isRelayouting) return;
+        // 1. Candlestick Chart (Pane 1) - Clean without cluttering markers
+        const chart1 = LightweightCharts.createChart(document.getElementById('chart-candlestick'), {{
+            ...chartCommonOptions,
+            rightPriceScale: {{
+                borderColor: '#334155',
+                autoScale: true,
+            }},
+        }});
+
+        const candleSeries = chart1.addCandlestickSeries({{
+            upColor: '#22c55e',
+            downColor: '#ef4444',
+            borderVisible: false,
+            wickUpColor: '#22c55e',
+            wickDownColor: '#ef4444',
+        }});
+        candleSeries.setData(candlesData);
+
+        // 2. Pullback Depth Chart (Pane 2) - Solid color bars
+        const chart2 = LightweightCharts.createChart(document.getElementById('chart-pullback'), {{
+            ...chartCommonOptions,
+            rightPriceScale: {{
+                borderColor: '#334155',
+                scaleMargins: {{ top: 0.1, bottom: 0.05 }},
+            }},
+        }});
+        const pullbackSeries = chart2.addHistogramSeries({{
+            base: 0,
+            priceFormat: {{ type: 'custom', formatter: val => val.toFixed(0) + '%' }},
+        }});
+        pullbackSeries.setData(pullbacksData);
+        pullbackSeries.createPriceLine({{
+            price: 30.0,
+            color: '#10b981',
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: 'Trend (<30%)',
+        }});
+        pullbackSeries.createPriceLine({{
+            price: 60.0,
+            color: '#f97316',
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: 'Range (>60%)',
+        }});
+
+        // 3. Daily Range Chart (Pane 3) - Solid color bars
+        const chart3 = LightweightCharts.createChart(document.getElementById('chart-range'), {{
+            ...chartCommonOptions,
+            rightPriceScale: {{
+                borderColor: '#334155',
+                scaleMargins: {{ top: 0.1, bottom: 0.05 }},
+            }},
+        }});
+        const rangeSeries = chart3.addHistogramSeries({{
+            base: 0,
+            priceFormat: {{ type: 'custom', formatter: val => val.toFixed(1) + 'p' }},
+        }});
+        rangeSeries.setData(rangesData);
+        rangeSeries.createPriceLine({{
+            price: adrValue,
+            color: '#fbbf24',
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `ADR: ${{adrValue.toFixed(1)}}p`,
+        }});
+
+        // Synchronize Visible Time Range across all 3 charts
+        let isSyncingRange = false;
+        function syncCharts(source, targets) {{
+            source.timeScale().subscribeVisibleLogicalRangeChange(range => {{
+                if (isSyncingRange || !range) return;
+                isSyncingRange = true;
+                targets.forEach(t => t.timeScale().setVisibleLogicalRange(range));
+                drawDayBackgrounds();
+                isSyncingRange = false;
+            }});
+        }}
+        syncCharts(chart1, [chart2, chart3]);
+        syncCharts(chart2, [chart1, chart3]);
+        syncCharts(chart3, [chart1, chart2]);
+
+        // Background Day Shading Overlay
+        function drawDayBackgrounds() {{
+            const canvas = document.getElementById('bg-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const parent = canvas.parentElement;
+            const width = parent.clientWidth;
+            const height = parent.clientHeight;
             
-            let x0 = null, x1 = null;
-            if (eventData['xaxis.range[0]'] !== undefined && eventData['xaxis.range[1]'] !== undefined) {{
-                x0 = eventData['xaxis.range[0]'];
-                x1 = eventData['xaxis.range[1]'];
-            }} else if (eventData['xaxis.range']) {{
-                x0 = eventData['xaxis.range'][0];
-                x1 = eventData['xaxis.range'][1];
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, width, height);
+
+            const timeScale = chart1.timeScale();
+            const dayKeys = Object.keys(dayInfoMap);
+
+            for (let i = 0; i < dayKeys.length; i++) {{
+                const day = dayInfoMap[dayKeys[i]];
+                const nextDay = i < dayKeys.length - 1 ? dayInfoMap[dayKeys[i + 1]] : null;
+
+                const x0 = timeScale.timeToCoordinate(day.first_time);
+                if (x0 === null) continue;
+
+                let x1;
+                if (nextDay) {{
+                    const nextX = timeScale.timeToCoordinate(nextDay.first_time);
+                    x1 = nextX !== null ? nextX : x0 + (timeScale.options().barSpacing * 24);
+                }} else {{
+                    x1 = x0 + (timeScale.options().barSpacing * 24);
+                }}
+
+                if (x1 < 0 || x0 > width) continue;
+
+                // Colored background shade
+                ctx.fillStyle = day.color + '1a'; // ~10% opacity
+                ctx.fillRect(Math.max(0, x0), 0, Math.max(1, x1 - x0), height);
+
+                // Boundary dotted separator
+                ctx.strokeStyle = day.color + '44';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x0, 0);
+                ctx.lineTo(x0, height);
+                ctx.stroke();
             }}
+        }}
 
-            if (x0 !== null && x1 !== null) {{
-                const candleTrace = chartData.data[0];
-                const allDates = candleTrace.x;
-                
-                let idx0 = typeof x0 === 'number' ? Math.floor(x0) : allDates.indexOf(x0);
-                let idx1 = typeof x1 === 'number' ? Math.ceil(x1) : allDates.indexOf(x1);
+        // HUD Bar Tooltip Handler
+        chart1.subscribeCrosshairMove(param => {{
+            if (!param.time || !param.seriesData.get(candleSeries)) {{
+                return;
+            }}
+            const c = param.seriesData.get(candleSeries);
+            const d = new Date(param.time * 1000);
+            const dateStr = d.toISOString().slice(0, 10);
+            const timeStr = d.toISOString().slice(0, 16).replace('T', ' ');
+            const info = dayInfoMap[dateStr] || {{}};
 
-                if (idx0 < 0) idx0 = 0;
-                if (idx1 < 0 || idx1 >= allDates.length) idx1 = allDates.length - 1;
-                if (idx0 > idx1) {{ const t = idx0; idx0 = idx1; idx1 = t; }}
-
-                let minL = Infinity, maxH = -Infinity;
-                for (let i = idx0; i <= idx1; i++) {{
-                    const l = candleTrace.low[i];
-                    const h = candleTrace.high[i];
-                    if (l !== undefined && l !== null && l < minL) minL = l;
-                    if (h !== undefined && h !== null && h > maxH) maxH = h;
-                }}
-
-                if (minL !== Infinity && maxH !== -Infinity && minL < maxH) {{
-                    const pad = (maxH - minL) * 0.06 || (minL * 0.005);
-                    isRelayouting = true;
-                    Plotly.relayout(chartDiv, {{
-                        'yaxis.range': [minL - pad, maxH + pad],
-                        'yaxis.autorange': false
-                    }}).then(() => {{
-                        isRelayouting = false;
-                    }}).catch(() => {{
-                        isRelayouting = false;
-                    }});
-                }}
+            document.getElementById('hud-date').innerText = timeStr;
+            document.getElementById('hud-open').innerText = c.open.toFixed({profile.symbol_info.digits});
+            document.getElementById('hud-high').innerText = c.high.toFixed({profile.symbol_info.digits});
+            document.getElementById('hud-low').innerText = c.low.toFixed({profile.symbol_info.digits});
+            document.getElementById('hud-close').innerText = c.close.toFixed({profile.symbol_info.digits});
+            
+            if (info.regime) {{
+                const rEl = document.getElementById('hud-regime');
+                rEl.innerText = info.regime;
+                rEl.style.backgroundColor = info.color + '22';
+                rEl.style.color = info.color;
+                rEl.style.border = '1px solid ' + info.color + '66';
+                document.getElementById('hud-range').innerText = info.range_pips + 'p (' + info.adr_mult + 'x ADR)';
+                document.getElementById('hud-pullback').innerText = info.pullback_pct + '% (KER: ' + info.ker + ')';
             }}
         }});
+
+        // Responsive Resize
+        window.addEventListener('resize', () => {{
+            const w = document.getElementById('chart-candlestick').parentElement.clientWidth;
+            chart1.applyOptions({{ width: w }});
+            chart2.applyOptions({{ width: w }});
+            chart3.applyOptions({{ width: w }});
+            drawDayBackgrounds();
+        }});
+
+        // Initial default zoom to the most recent 25 days (~400 bars)
+        setTimeout(() => {{
+            const totalBars = candlesData.length;
+            if (totalBars > 0) {{
+                const fromIdx = Math.max(0, totalBars - 400);
+                chart1.timeScale().setVisibleLogicalRange({{ from: fromIdx, to: totalBars - 1 }});
+            }}
+            drawDayBackgrounds();
+        }}, 100);
     </script>
 </body>
 </html>
@@ -1078,24 +1366,64 @@ class RegimeVisualizer:
 
     @staticmethod
     def generate_d1_poc_html(profile: AssetBehaviorProfile, output_file: str) -> str:
-        """Generates a standalone POC HTML dashboard focusing on the D1 Candlestick regime highlights."""
+        """
+        Generates an ultra-fast D1 Candlestick POC Viewer using Lightweight Charts.
+        Features interactive legend HUD for regime/ADR and solid color subplots.
+        """
+        import json
         os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
-        fig = RegimeVisualizer.create_d1_regime_candlestick_figure(profile)
-        fig_json = fig.to_json()
+
+        candles = []
+        pullbacks = []
+        ranges = []
+        day_info_map = {}
+
+        for d in profile.daily_classifications:
+            t_str = d.date_str
+            pullback_pct = ((1.0 - d.ker_daily) / (1.0 + d.ker_daily)) * 100.0 if d.ker_daily >= 0 else 100.0
+            pullback_pct = round(float(np.clip(pullback_pct, 0.0, 100.0)), 1)
+
+            candles.append({
+                "time": t_str,
+                "open": round(d.open_price, profile.symbol_info.digits),
+                "high": round(d.high_price, profile.symbol_info.digits),
+                "low": round(d.low_price, profile.symbol_info.digits),
+                "close": round(d.close_price, profile.symbol_info.digits),
+            })
+            pullbacks.append({"time": t_str, "value": pullback_pct, "color": d.regime.color})
+            ranges.append({"time": t_str, "value": round(d.range_pips, 1), "color": d.regime.color})
+
+            day_info_map[t_str] = {
+                "date_str": t_str,
+                "regime": d.regime.display_name,
+                "color": d.regime.color,
+                "range_pips": round(d.range_pips, 1),
+                "body_pips": round(d.body_pips, 1),
+                "pullback_pct": pullback_pct,
+                "retrace_pct": round(d.retracement_ratio * 100, 0),
+                "ker": round(d.ker_daily, 2),
+                "adr_mult": round(d.adr_multiple, 2),
+            }
 
         s_range = profile.regime_stats[DayRegimeType.RANGE_DAY]
         s_semi = profile.regime_stats[DayRegimeType.SEMI_TREND_DAY]
         s_vshape = profile.regime_stats[DayRegimeType.V_SHAPE_REVERSAL_DAY]
         s_trend = profile.regime_stats[DayRegimeType.STRONG_TREND_DAY]
 
+        candles_json = json.dumps(candles)
+        pullbacks_json = json.dumps(pullbacks)
+        ranges_json = json.dumps(ranges)
+        day_info_json = json.dumps(day_info_map)
+        adr_val = float(profile.avg_daily_range_pips)
+
         html_content = f"""<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{profile.symbol} — POC D1 Candlestick Regime Highlighter</title>
+    <title>{profile.symbol} — D1 Candlestick POC (Lightweight Charts 60 FPS)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         body {{ font-family: 'Inter', sans-serif; background-color: #0b0f19; color: #f1f5f9; }}
@@ -1103,30 +1431,183 @@ class RegimeVisualizer:
     </style>
 </head>
 <body class="p-6 max-w-[1600px] mx-auto">
+    <!-- Header -->
     <header class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-4">
         <div>
             <div class="flex items-center gap-3">
-                <span class="px-2.5 py-1 bg-purple-600/30 text-purple-400 border border-purple-500/40 rounded text-xs font-bold uppercase tracking-wider">POC Proof of Concept</span>
+                <span class="px-2.5 py-1 bg-purple-600/30 text-purple-400 border border-purple-500/40 rounded text-xs font-bold uppercase tracking-wider">POC D1 Structure</span>
                 <span class="text-xs text-slate-500">{profile.generated_at}</span>
             </div>
-            <h1 class="text-2xl font-extrabold tracking-tight mt-1 text-white">{profile.symbol} D1 Candlestick Regime Visualizer</h1>
-            <p class="text-xs text-slate-400 mt-1">Each candle is highlighted with market regime markers and subplots without weekend gaps.</p>
+            <h1 class="text-2xl font-extrabold tracking-tight mt-1 text-white">{profile.symbol} D1 Daily Candlestick Regime Highlighter</h1>
+            <p class="text-xs text-slate-400 mt-1">Lightweight Charts D1 macro price structure with regime legend and synchronized solid-color subplots.</p>
         </div>
-        <div class="flex items-center gap-3 text-xs mt-3 md:mt-0">
+        <div class="flex flex-wrap items-center gap-3 text-xs mt-3 md:mt-0 font-mono">
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-orange-500"></span> Range ({s_range.frequency_pct:.0f}%)</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-purple-500"></span> Semi-Trend ({s_semi.frequency_pct:.0f}%)</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-cyan-500"></span> V-Shape ({s_vshape.frequency_pct:.0f}%)</span>
             <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded bg-emerald-500"></span> Strong Trend ({s_trend.frequency_pct:.0f}%)</span>
+            <span class="flex items-center gap-1.5 text-amber-400 border-l border-slate-700 pl-3">20d ADR: <b>{adr_val:.1f}p</b></span>
         </div>
     </header>
 
-    <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 shadow-xl mb-6">
-        <div id="poc-chart-container" class="w-full min-h-[780px]"></div>
+    <!-- Floating HUD Info Bar -->
+    <div id="hud-bar-d1" class="bg-slate-900 border border-slate-800 rounded-lg px-4 py-2.5 mb-3 flex flex-wrap items-center justify-between text-xs font-mono text-slate-300 shadow-lg">
+        <div class="flex items-center gap-4">
+            <span id="hud-date-d1" class="font-bold text-white">Hover over candles</span>
+            <span id="hud-regime-d1" class="px-2 py-0.5 rounded font-bold"></span>
+        </div>
+        <div class="flex items-center gap-5 text-slate-400">
+            <span>O: <b id="hud-open-d1" class="text-white">-</b></span>
+            <span>H: <b id="hud-high-d1" class="text-white">-</b></span>
+            <span>L: <b id="hud-low-d1" class="text-white">-</b></span>
+            <span>C: <b id="hud-close-d1" class="text-white">-</b></span>
+            <span>Day Range: <b id="hud-range-d1" class="text-amber-400">-</b></span>
+            <span>20d ADR: <b class="text-amber-300">{adr_val:.1f}p</b></span>
+            <span>Pullback: <b id="hud-pullback-d1" class="text-cyan-400">-</b></span>
+        </div>
+    </div>
+
+    <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-xl space-y-3">
+        <!-- Pane 1: D1 Candlesticks -->
+        <div>
+            <div class="text-xs font-bold text-slate-400 mb-1 flex items-center justify-between">
+                <span>{profile.symbol} D1 Daily Price Candlesticks</span>
+                <span class="text-[10px] text-slate-500">Scroll to zoom | Drag to pan</span>
+            </div>
+            <div id="d1-chart-main" class="w-full h-[500px]"></div>
+        </div>
+
+        <!-- Pane 2: Pullback Depth -->
+        <div class="border-t border-slate-800 pt-2">
+            <div class="text-xs font-bold text-slate-400 mb-1 flex items-center justify-between">
+                <span>D1 Daily Pullback Depth (%) [Efficiency-Derived]</span>
+                <span class="text-[10px] text-slate-500">Dotted green: Trend &lt;30% | Dotted orange: Range &gt;60%</span>
+            </div>
+            <div id="d1-chart-pullback" class="w-full h-[160px]"></div>
+        </div>
+
+        <!-- Pane 3: Daily Range -->
+        <div class="border-t border-slate-800 pt-2">
+            <div class="text-xs font-bold text-slate-400 mb-1 flex items-center justify-between">
+                <span>D1 Daily Range (Pips) vs. 20-Day ADR ({adr_val:.1f}p)</span>
+                <span class="text-[10px] text-amber-400">Dashed yellow: 20d ADR</span>
+            </div>
+            <div id="d1-chart-range" class="w-full h-[160px]"></div>
+        </div>
     </div>
 
     <script>
-        const chartData = {fig_json};
-        Plotly.react('poc-chart-container', chartData.data, chartData.layout, {{responsive: true}});
+        const candlesData = {candles_json};
+        const pullbacksData = {pullbacks_json};
+        const rangesData = {ranges_json};
+        const dayInfoMap = {day_info_json};
+        const adrValue = {adr_val};
+
+        const opts = {{
+            layout: {{
+                background: {{ color: 'transparent' }},
+                textColor: '#94a3b8',
+                fontSize: 11,
+                fontFamily: "'JetBrains Mono', monospace",
+            }},
+            grid: {{
+                vertLines: {{ color: '#1e293b' }},
+                horzLines: {{ color: '#1e293b' }},
+            }},
+            crosshair: {{
+                mode: LightweightCharts.CrosshairMode.Normal,
+                vertLine: {{ color: '#64748b', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: '#334155' }},
+                horzLine: {{ color: '#64748b', width: 1, style: LightweightCharts.LineStyle.Dashed, labelBackgroundColor: '#334155' }},
+            }},
+            timeScale: {{ borderColor: '#334155' }},
+        }};
+
+        // 1. D1 Candlesticks - Clean without cluttering markers
+        const c1 = LightweightCharts.createChart(document.getElementById('d1-chart-main'), {{
+            ...opts,
+            rightPriceScale: {{ borderColor: '#334155', autoScale: true }},
+        }});
+        const s1 = c1.addCandlestickSeries({{
+            upColor: '#22c55e',
+            downColor: '#ef4444',
+            borderVisible: false,
+            wickUpColor: '#22c55e',
+            wickDownColor: '#ef4444',
+        }});
+        s1.setData(candlesData);
+
+        // 2. D1 Pullback Depth (%) - Solid Color Bars
+        const c2 = LightweightCharts.createChart(document.getElementById('d1-chart-pullback'), {{
+            ...opts,
+            rightPriceScale: {{ borderColor: '#334155', scaleMargins: {{ top: 0.1, bottom: 0.05 }} }},
+        }});
+        const s2 = c2.addHistogramSeries({{
+            base: 0,
+            priceFormat: {{ type: 'custom', formatter: val => val.toFixed(0) + '%' }},
+        }});
+        s2.setData(pullbacksData);
+        s2.createPriceLine({{ price: 30.0, color: '#10b981', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, title: 'Trend (<30%)' }});
+        s2.createPriceLine({{ price: 60.0, color: '#f97316', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted, title: 'Range (>60%)' }});
+
+        // 3. D1 Daily Range (Pips) - Solid Color Bars
+        const c3 = LightweightCharts.createChart(document.getElementById('d1-chart-range'), {{
+            ...opts,
+            rightPriceScale: {{ borderColor: '#334155', scaleMargins: {{ top: 0.1, bottom: 0.05 }} }},
+        }});
+        const s3 = c3.addHistogramSeries({{
+            base: 0,
+            priceFormat: {{ type: 'custom', formatter: val => val.toFixed(1) + 'p' }},
+        }});
+        s3.setData(rangesData);
+        s3.createPriceLine({{ price: adrValue, color: '#fbbf24', lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dashed, title: `ADR: ${{adrValue.toFixed(1)}}p` }});
+
+        // Synchronize Visible Time Range across all 3 charts
+        let syncing = false;
+        function syncD1(source, targets) {{
+            source.timeScale().subscribeVisibleLogicalRangeChange(range => {{
+                if (syncing || !range) return;
+                syncing = true;
+                targets.forEach(t => t.timeScale().setVisibleLogicalRange(range));
+                syncing = false;
+            }});
+        }}
+        syncD1(c1, [c2, c3]);
+        syncD1(c2, [c1, c3]);
+        syncD1(c3, [c1, c2]);
+
+        // HUD Bar Tooltip Handler
+        c1.subscribeCrosshairMove(param => {{
+            if (!param.time || !param.seriesData.get(s1)) {{
+                return;
+            }}
+            const c = param.seriesData.get(s1);
+            const dateStr = typeof param.time === 'string' ? param.time : new Date(param.time * 1000).toISOString().slice(0, 10);
+            const info = dayInfoMap[dateStr] || {{}};
+
+            document.getElementById('hud-date-d1').innerText = dateStr;
+            document.getElementById('hud-open-d1').innerText = c.open.toFixed({profile.symbol_info.digits});
+            document.getElementById('hud-high-d1').innerText = c.high.toFixed({profile.symbol_info.digits});
+            document.getElementById('hud-low-d1').innerText = c.low.toFixed({profile.symbol_info.digits});
+            document.getElementById('hud-close-d1').innerText = c.close.toFixed({profile.symbol_info.digits});
+
+            if (info.regime) {{
+                const rEl = document.getElementById('hud-regime-d1');
+                rEl.innerText = info.regime;
+                rEl.style.backgroundColor = info.color + '22';
+                rEl.style.color = info.color;
+                rEl.style.border = '1px solid ' + info.color + '66';
+                document.getElementById('hud-range-d1').innerText = info.range_pips + 'p (' + info.adr_mult + 'x ADR)';
+                document.getElementById('hud-pullback-d1').innerText = info.pullback_pct + '% (KER: ' + info.ker + ')';
+            }}
+        }});
+
+        // Responsive Resize
+        window.addEventListener('resize', () => {{
+            const w = document.getElementById('d1-chart-main').parentElement.clientWidth;
+            c1.applyOptions({{ width: w }});
+            c2.applyOptions({{ width: w }});
+            c3.applyOptions({{ width: w }});
+        }});
     </script>
 </body>
 </html>
@@ -1135,6 +1616,266 @@ class RegimeVisualizer:
             f.write(html_content)
 
         return os.path.abspath(output_file)
+
+    @staticmethod
+    def generate_portfolio_overview_html(profiles: List[AssetBehaviorProfile], output_file: str) -> str:
+        """
+        Generates a fast, responsive Multi-Symbol Master Overview Dashboard (HTML table view).
+        Contains top KPI summary cards, 4-regime distribution matrix, calibrated exit rules,
+        and direct action links to each symbol's dedicated reports.
+        """
+        os.makedirs(os.path.dirname(os.path.abspath(output_file)), exist_ok=True)
+
+        if not profiles:
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write("<html><body><h1>No profiles available</h1></body></html>")
+            return os.path.abspath(output_file)
+
+        total_symbols = len(profiles)
+        avg_adr = float(np.mean([p.avg_daily_range_pips for p in profiles]))
+
+        # Calculate portfolio average regime frequencies
+        range_freqs = [p.regime_stats[DayRegimeType.RANGE_DAY].frequency_pct for p in profiles if DayRegimeType.RANGE_DAY in p.regime_stats]
+        semi_freqs = [p.regime_stats[DayRegimeType.SEMI_TREND_DAY].frequency_pct for p in profiles if DayRegimeType.SEMI_TREND_DAY in p.regime_stats]
+        vshape_freqs = [p.regime_stats[DayRegimeType.V_SHAPE_REVERSAL_DAY].frequency_pct for p in profiles if DayRegimeType.V_SHAPE_REVERSAL_DAY in p.regime_stats]
+        trend_freqs = [p.regime_stats[DayRegimeType.STRONG_TREND_DAY].frequency_pct for p in profiles if DayRegimeType.STRONG_TREND_DAY in p.regime_stats]
+
+        avg_range_pct = float(np.mean(range_freqs)) if range_freqs else 0.0
+        avg_semi_pct = float(np.mean(semi_freqs)) if semi_freqs else 0.0
+        avg_vshape_pct = float(np.mean(vshape_freqs)) if vshape_freqs else 0.0
+        avg_trend_pct = float(np.mean(trend_freqs)) if trend_freqs else 0.0
+
+        table_rows_html = ""
+        for p in profiles:
+            sym = p.symbol
+            spread = p.symbol_info.spread_pips
+            adr = p.avg_daily_range_pips
+
+            s_rng = p.regime_stats.get(DayRegimeType.RANGE_DAY)
+            s_sem = p.regime_stats.get(DayRegimeType.SEMI_TREND_DAY)
+            s_vsh = p.regime_stats.get(DayRegimeType.V_SHAPE_REVERSAL_DAY)
+            s_trd = p.regime_stats.get(DayRegimeType.STRONG_TREND_DAY)
+
+            # Determine dominant regime
+            all_s = [(s_rng.frequency_pct if s_rng else 0, "Range", "#f97316"),
+                     (s_sem.frequency_pct if s_sem else 0, "Semi-Trend", "#a855f7"),
+                     (s_vsh.frequency_pct if s_vsh else 0, "V-Shape", "#06b6d4"),
+                     (s_trd.frequency_pct if s_trd else 0, "Strong Trend", "#10b981")]
+            dom_pct, dom_name, dom_col = max(all_s, key=lambda x: x[0])
+
+            # Exit targets strings
+            rng_tp1 = f"+{s_rng.recommended_tp1_pips:.1f}p" if s_rng else "-"
+            sem_tp = f"TP1: +{s_sem.recommended_tp1_pips:.1f}p | TP2: +{s_sem.recommended_tp2_pips:.1f}p" if s_sem else "-"
+            vsh_tp = f"Lock: +{s_vsh.recommended_tp1_pips:.1f}p | Fade: +{s_vsh.recommended_tp2_pips:.1f}p" if s_vsh else "-"
+            trd_trail = f"Scalp: +{s_trd.recommended_tp1_pips:.1f}p | Trail: {s_trd.recommended_trail_pips:.1f}p" if s_trd else "-"
+
+            table_rows_html += f"""
+            <tr class="hover:bg-slate-800/80 transition border-b border-slate-800/60 symbol-row" data-symbol="{sym}">
+                <td class="px-4 py-3 font-bold text-white flex items-center gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full" style="background-color: {dom_col};"></span>
+                    <span class="text-base">{sym}</span>
+                    <span class="text-[11px] px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 font-mono">{spread:.1f}p</span>
+                </td>
+                <td class="px-4 py-3 text-right font-mono font-bold text-amber-400">{adr:.1f}p</td>
+                <td class="px-4 py-3 text-center">
+                    <span style="background-color: {dom_col}22; color: {dom_col}; border: 1px solid {dom_col}66; padding: 3px 8px; border-radius: 6px; font-weight: 700; font-size: 11px;">
+                        {dom_name} ({dom_pct:.0f}%)
+                    </span>
+                </td>
+                <td class="px-4 py-3">
+                    <div class="space-y-1.5 font-mono text-xs">
+                        <div class="flex items-center justify-between text-[11px]">
+                            <span class="text-orange-400">1. Range:</span>
+                            <span class="text-white font-bold">{s_rng.frequency_pct:.1f}% ({s_rng.days_count}d)</span>
+                        </div>
+                        <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                            <div class="bg-orange-500 h-1.5 rounded-full" style="width: {s_rng.frequency_pct}%;"></div>
+                        </div>
+
+                        <div class="flex items-center justify-between text-[11px] pt-0.5">
+                            <span class="text-purple-400">2. Semi-Trend:</span>
+                            <span class="text-white font-bold">{s_sem.frequency_pct:.1f}% ({s_sem.days_count}d)</span>
+                        </div>
+                        <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                            <div class="bg-purple-500 h-1.5 rounded-full" style="width: {s_sem.frequency_pct}%;"></div>
+                        </div>
+
+                        <div class="flex items-center justify-between text-[11px] pt-0.5">
+                            <span class="text-cyan-400">3. V-Shape:</span>
+                            <span class="text-white font-bold">{s_vsh.frequency_pct:.1f}% ({s_vsh.days_count}d)</span>
+                        </div>
+                        <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                            <div class="bg-cyan-500 h-1.5 rounded-full" style="width: {s_vsh.frequency_pct}%;"></div>
+                        </div>
+
+                        <div class="flex items-center justify-between text-[11px] pt-0.5">
+                            <span class="text-emerald-400">4. Strong Trend:</span>
+                            <span class="text-white font-bold">{s_trd.frequency_pct:.1f}% ({s_trd.days_count}d)</span>
+                        </div>
+                        <div class="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                            <div class="bg-emerald-500 h-1.5 rounded-full" style="width: {s_trd.frequency_pct}%;"></div>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-4 py-3 text-xs space-y-1 font-mono">
+                    <div class="text-slate-300"><span class="text-orange-400 font-semibold">Range (Fixed):</span> {rng_tp1}</div>
+                    <div class="text-slate-300"><span class="text-purple-400 font-semibold">Semi (Split):</span> {sem_tp}</div>
+                    <div class="text-slate-300"><span class="text-cyan-400 font-semibold">V-Shape (Lock):</span> {vsh_tp}</div>
+                    <div class="text-slate-300"><span class="text-emerald-400 font-semibold">Trend (Trail):</span> {trd_trail}</div>
+                </td>
+                <td class="px-4 py-3 text-right whitespace-nowrap">
+                    <div class="flex flex-col gap-1.5 items-end">
+                        <a href="{sym}_behavior_profile_365d.html" class="px-2.5 py-1 bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 rounded text-xs font-semibold transition flex items-center gap-1">
+                            <span>📊</span> Profile Dashboard
+                        </a>
+                        <a href="{sym}_h1_regime_poc.html" class="px-2.5 py-1 bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/40 rounded text-xs font-semibold transition flex items-center gap-1">
+                            <span>⚡</span> H1 POC (60 FPS)
+                        </a>
+                        <a href="{sym}_d1_regime_poc.html" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-xs font-semibold transition flex items-center gap-1">
+                            <span>🕯️</span> D1 POC
+                        </a>
+                    </div>
+                </td>
+            </tr>
+            """
+
+        html_template = f"""<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio Asset Regime Overview & Empirical Exit Playbook</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {{ font-family: 'Inter', sans-serif; background-color: #0b0f19; color: #f1f5f9; }}
+        font-mono {{ font-family: 'JetBrains Mono', monospace; }}
+    </style>
+</head>
+<body class="p-6 max-w-[1600px] mx-auto">
+    <!-- Header -->
+    <header class="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center border-b border-slate-800 pb-6">
+        <div>
+            <div class="flex items-center gap-3">
+                <span class="px-2.5 py-1 bg-indigo-600/30 text-indigo-400 border border-indigo-500/40 rounded text-xs font-bold uppercase tracking-wider">Multi-Symbol Master Overview</span>
+                <span class="text-xs text-slate-500">{profiles[0].generated_at if profiles else ''}</span>
+            </div>
+            <h1 class="text-3xl font-extrabold tracking-tight mt-1 text-white">Portfolio Market Regime Matrix & Exit Playbook</h1>
+            <p class="text-sm text-slate-400 mt-1">High-level comparative census and empirical position management calibration across all analyzed instruments.</p>
+        </div>
+        <div class="mt-4 md:mt-0 flex gap-2">
+            <button onclick="window.print()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-sm font-medium transition border border-slate-700">Export / Print</button>
+        </div>
+    </header>
+
+    <!-- Top Portfolio KPI Summary Cards (4 Regimes) -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-sm">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Analyzed Assets</div>
+            <div class="text-3xl font-extrabold text-white mt-1">{total_symbols} Symbols</div>
+            <div class="text-xs text-amber-400 font-mono mt-1">Average ADR: {avg_adr:.1f}p</div>
+        </div>
+
+        <div class="bg-slate-900/80 border border-orange-900/60 rounded-xl p-5 shadow-sm">
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-bold text-orange-400 uppercase tracking-wider">1. Range Days</span>
+                <span class="text-xs px-2 py-0.5 bg-orange-500/20 text-orange-300 rounded font-mono font-bold">{avg_range_pct:.1f}%</span>
+            </div>
+            <div class="text-sm font-bold text-slate-300 mt-2">Single Fixed Goal</div>
+            <div class="text-xs text-slate-500 mt-0.5">100% at TP1 (70% range)</div>
+        </div>
+
+        <div class="bg-slate-900/80 border border-purple-900/60 rounded-xl p-5 shadow-sm">
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-bold text-purple-400 uppercase tracking-wider">2. Semi-Trending</span>
+                <span class="text-xs px-2 py-0.5 bg-purple-500/20 text-purple-300 rounded font-mono font-bold">{avg_semi_pct:.1f}%</span>
+            </div>
+            <div class="text-sm font-bold text-slate-300 mt-2">50/50 Split Exit</div>
+            <div class="text-xs text-slate-500 mt-0.5">TP1 Cash + Offset BE + TP2</div>
+        </div>
+
+        <div class="bg-slate-900/80 border border-cyan-900/60 rounded-xl p-5 shadow-sm">
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-bold text-cyan-400 uppercase tracking-wider">3. V-Shape Reversal</span>
+                <span class="text-xs px-2 py-0.5 bg-cyan-500/20 text-cyan-300 rounded font-mono font-bold">{avg_vshape_pct:.1f}%</span>
+            </div>
+            <div class="text-sm font-bold text-slate-300 mt-2">Split Lock + Fade</div>
+            <div class="text-xs text-slate-500 mt-0.5">Lock Leg 1 + session turn</div>
+        </div>
+
+        <div class="bg-slate-900/80 border border-emerald-900/60 rounded-xl p-5 shadow-sm">
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider">4. Strong Trend</span>
+                <span class="text-xs px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded font-mono font-bold">{avg_trend_pct:.1f}%</span>
+            </div>
+            <div class="text-sm font-bold text-slate-300 mt-2">Dynamic Trail (20/80)</div>
+            <div class="text-xs text-slate-500 mt-0.5">Scalp TP1 + Chandelier runner</div>
+        </div>
+    </div>
+
+    <!-- Master Matrix Table Section -->
+    <div class="bg-slate-900/80 border border-slate-800 rounded-xl overflow-hidden shadow-2xl mb-8">
+        <div class="px-6 py-4 border-b border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 gap-3">
+            <div>
+                <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                    <span>📋</span> Asset Regime Census & Empirical Exit Rules Matrix
+                </h2>
+                <p class="text-xs text-slate-400 mt-0.5">High-level comparison across 1-year historical lookback. Click action links to open dedicated interactive charts.</p>
+            </div>
+            <!-- Search & Filter -->
+            <div class="w-full md:w-64">
+                <input 
+                    type="text" 
+                    id="search-input" 
+                    placeholder="Search symbol (e.g. EUR, GOLD)..." 
+                    oninput="filterTable()"
+                    class="w-full px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
+                >
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-slate-950/90 text-xs text-slate-400 uppercase tracking-wider border-b border-slate-800 font-mono">
+                    <tr>
+                        <th class="px-4 py-3">Symbol & Spread</th>
+                        <th class="px-4 py-3 text-right">20d ADR</th>
+                        <th class="px-4 py-3 text-center">Dominant Regime</th>
+                        <th class="px-4 py-3 w-80">1-Year Regime Distribution</th>
+                        <th class="px-4 py-3">Calibrated Exit Strategy Rules</th>
+                        <th class="px-4 py-3 text-right">Action Links</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body" class="divide-y divide-slate-800/60">
+                    {table_rows_html}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        function filterTable() {{
+            const query = document.getElementById('search-input').value.toUpperCase().trim();
+            const rows = document.querySelectorAll('.symbol-row');
+            rows.forEach(r => {{
+                const sym = r.getAttribute('data-symbol') || '';
+                const text = r.innerText.toUpperCase();
+                if (sym.includes(query) || text.includes(query)) {{
+                    r.style.display = '';
+                }} else {{
+                    r.style.display = 'none';
+                }}
+            }});
+        }}
+    </script>
+</body>
+</html>
+"""
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(html_template)
+
+        return os.path.abspath(output_file)
+
 
 
 

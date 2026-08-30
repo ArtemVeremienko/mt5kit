@@ -37,6 +37,7 @@ def run_profiler(symbols: List[str], days: int, output_dir: str) -> int:
         return 1
 
     profiler = AssetBehaviorProfiler()
+    profiles = []
 
     for sym in symbols:
         logger.info(f"Profiling historical behavior for {sym} over the last {days} days...")
@@ -45,7 +46,9 @@ def run_profiler(symbols: List[str], days: int, output_dir: str) -> int:
             logger.error(f"Failed to generate behavior profile for {sym}.")
             continue
 
-        # Print Playbook Card in console
+        profiles.append(profile)
+
+        # Print Individual Playbook Card in console
         profiler.print_playbook_card(profile)
 
         # Generate HTML Profile Report, H1 POC Chart, & D1 POC Chart
@@ -61,6 +64,14 @@ def run_profiler(symbols: List[str], days: int, output_dir: str) -> int:
         print(f"[SUCCESS] Interactive Profile Report: file:///{path.replace(os.sep, '/')}")
         print(f"[SUCCESS] Dedicated H1 POC Chart:     file:///{poc_h1_path.replace(os.sep, '/')}")
         print(f"[SUCCESS] Dedicated D1 POC Chart:     file:///{poc_d1_path.replace(os.sep, '/')}\n")
+
+    # Generate Portfolio Overview Dashboard & Console Matrix Table
+    if profiles:
+        profiler.print_portfolio_overview_table(profiles)
+        overview_file = os.path.join(output_dir, "portfolio_overview.html")
+        overview_path = RegimeVisualizer.generate_portfolio_overview_html(profiles, overview_file)
+        logger.info(f"Multi-Symbol Master Overview generated: {overview_path}")
+        print(f"[SUCCESS] Master Portfolio Overview: file:///{overview_path.replace(os.sep, '/')}\n")
 
     return 0
 
@@ -88,7 +99,7 @@ def main():
     args = parser.parse_args()
 
     raw_symbols = args.symbols or args.symbol or "EURUSD"
-    symbols = [s.strip().upper() for s in raw_symbols.split(",") if s.strip()]
+    symbols = [s.strip() for s in raw_symbols.split(",") if s.strip()]
     days = args.days or 365
     output_dir = args.output_dir or DEFAULT_OUTPUT_DIR
 

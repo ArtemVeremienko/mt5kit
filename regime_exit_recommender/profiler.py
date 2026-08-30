@@ -35,22 +35,24 @@ class AssetBehaviorProfiler:
         """
         Profiles a single symbol over the specified lookback horizon (default: 365 calendar days).
         """
-        sym_clean = symbol.strip().upper()
+        sym_clean = symbol.strip()
         sym_info = get_symbol_info(sym_clean)
         if sym_info is None:
             logger.error(f"Could not retrieve symbol info for {sym_clean}")
             return None
 
+        sym_exact = sym_info.name
+
         # Fetch Daily (D1) bars for daily categorization
-        df_d1 = fetch_rates_days(sym_clean, "D1", days=days)
+        df_d1 = fetch_rates_days(sym_exact, "D1", days=days)
         if df_d1 is None or len(df_d1) < 20:
-            logger.error(f"Insufficient D1 rates for {sym_clean} over {days} days")
+            logger.error(f"Insufficient D1 rates for {sym_exact} over {days} days")
             return None
 
         # Fetch Hourly (H1) bars for intraday swing decomposition
-        df_h1 = fetch_rates_days(sym_clean, "H1", days=days)
+        df_h1 = fetch_rates_days(sym_exact, "H1", days=days)
         if df_h1 is None or len(df_h1) < 100:
-            logger.warning(f"Hourly rates limited for {sym_clean}; falling back to daily-only stats.")
+            logger.warning(f"Hourly rates limited for {sym_exact}; falling back to daily-only stats.")
             df_h1 = pd.DataFrame()
 
         pip_size = sym_info.pip_size
@@ -146,7 +148,7 @@ class AssetBehaviorProfiler:
         avg_adr = float(np.mean([d.range_pips for d in daily_list]))
 
         profile = AssetBehaviorProfile(
-            symbol=sym_clean,
+            symbol=sym_exact,
             symbol_info=sym_info,
             lookback_days=days,
             total_trading_days=total_days,
@@ -358,3 +360,40 @@ class AssetBehaviorProfiler:
         print(f"   - Median Potential:   +{s_trend.median_range_pips:.1f} pips (90th percentile: +{s_trend.p90_range_pips:.1f} pips)")
         print(f"   - Time Management:    {s_trend.suggested_time_stop}")
         print("=" * 105 + "\n")
+
+    @staticmethod
+    def print_portfolio_overview_table(profiles: List[AssetBehaviorProfile]):
+        """Prints a clean ASCII multi-symbol comparison table to the console."""
+        if not profiles:
+            return
+
+        print("\n" + "=" * 120)
+        print("PORTFOLIO ASSET REGIME DISTRIBUTION & EMPIRICAL EXIT COMPARISON")
+        print("=" * 120)
+        header = f"{'Symbol':<9} {'ADR(20)':<10} {'Spread':<8} {'1. Range':<16} {'2. Semi-Trend':<16} {'3. V-Shape':<16} {'4. Strong Trend':<16} {'Dominant Strategy':<25}"
+        print(header)
+        print("-" * 120)
+
+        for p in profiles:
+            s_rng = p.regime_stats.get(DayRegimeType.RANGE_DAY)
+            s_sem = p.regime_stats.get(DayRegimeType.SEMI_TREND_DAY)
+            s_vsh = p.regime_stats.get(DayRegimeType.V_SHAPE_REVERSAL_DAY)
+            s_trd = p.regime_stats.get(DayRegimeType.STRONG_TREND_DAY)
+
+            rng_str = f"{s_rng.frequency_pct:>4.1f}% ({s_rng.days_count:>2}d)" if s_rng else "-"
+            sem_str = f"{s_sem.frequency_pct:>4.1f}% ({s_sem.days_count:>2}d)" if s_sem else "-"
+            vsh_str = f"{s_vsh.frequency_pct:>4.1f}% ({s_vsh.days_count:>2}d)" if s_vsh else "-"
+            trd_str = f"{s_trd.frequency_pct:>4.1f}% ({s_trd.days_count:>2}d)" if s_trd else "-"
+
+            # Determine dominant strategy
+            all_stats = [
+                (s.frequency_pct, s.regime.display_name, s.recommended_strategy.display_name)
+                for s in [s_rng, s_sem, s_vsh, s_trd]
+                if s
+            ]
+            dominant_strategy = max(all_stats, key=lambda x: x[0])[2] if all_stats else "N/A"
+
+            line = f"{p.symbol:<9} {p.avg_daily_range_pips:>7.1f}p {p.symbol_info.spread_pips:>5.1f}p {rng_str:<16} {sem_str:<16} {vsh_str:<16} {trd_str:<16} {dominant_strategy:<25}"
+            print(line)
+
+        print("=" * 120 + "\n")

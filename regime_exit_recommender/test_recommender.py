@@ -271,3 +271,10 @@ def test_profile_html_report_generation(sample_symbol_info, sample_h1_dataframe)
         assert os.path.getsize(path_h1) > 1000
         assert os.path.exists(path_d1)
         assert os.path.getsize(path_d1) > 1000
+
+        # Test Portfolio Overview Dashboard
+        out_overview = os.path.join(tmpdir, "test_portfolio_overview.html")
+        path_ov = RegimeVisualizer.generate_portfolio_overview_html([profile], out_overview)
+        assert os.path.exists(path_ov)
+        assert os.path.getsize(path_ov) > 1000
+
