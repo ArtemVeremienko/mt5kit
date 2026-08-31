@@ -6,8 +6,8 @@
 
 ### 1. ⚡ Turbo Mode with ADR/ATR In-Memory TTL Caching
 - [ ] **Decouple Daily Volatility from Ticks**:
-  - Implement a 15-minute TTL cache for 14-day D1 ADR/ATR calculation.
-  - Sub-second tick polling will only query fast `mt5.symbol_info_tick(symbol)` (< 0.05ms per symbol).
+  - Implement a 15-minute in-memory TTL cache for 14-day D1 ADR/ATR calculations.
+  - Sub-second tick polling will only query fast `mt5.symbol_info_tick(symbol)` (< 0.05ms per symbol), dropping IPC latency from ~300ms to < 5ms.
 - [ ] **Async Thread Offloading**:
   - Offload synchronous MT5 C-extension calls via `asyncio.to_thread` to prevent blocking the FastAPI event loop.
 - [ ] **Turbo Mode Switch**:
@@ -43,18 +43,14 @@
 
 ---
 
-## 🌐 Phase 3: Portfolio Exposure & Execution Quality (P2 Priority)
+## 🌐 Phase 3: Real-Time Portfolio Risk (P2 Priority)
 
-### 5. 🌐 Currency Exposure & Portfolio Heat Matrix
+### 5. 🌐 Real-Time Currency Exposure & Portfolio Heat Matrix
 - [ ] **Net Currency Exposure**: Computes net dollar exposure across USD, EUR, GBP, JPY, AUD, CAD, CHF, NZD.
 - [ ] **Total Portfolio Heat**: Real-time sum of total dollar risk across all open stop-losses:
   $$\text{Portfolio Heat} = \sum_{k} |\text{OpenPrice}_k - \text{SL}_k| \times \text{Volume}_k \times \text{PipValue}_k$$
 
-### 6. ⏱️ Slippage & Latency Decomposition Tracker
-- [ ] Tracks network, FastAPI processing, MT5 IPC, and broker execution latency per trade.
-- [ ] Measures positive and adverse slippage in pips.
-
 ---
 
 > [!NOTE]
-> **Monte Carlo Simulation** and historical post-trade audit tools have been moved to the dedicated [`trade_performance_analytics`](../trade_performance_analytics/IMPLEMENTATION_PLAN.md) module.
+> All post-trade statistical audit tools (Monte Carlo simulation, MAE/MFE, R-multiples, calendar heatmaps, and slippage analytics) are housed in the dedicated [`trade_performance_analytics`](../trade_performance_analytics/IMPLEMENTATION_PLAN.md) module.

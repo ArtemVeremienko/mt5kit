@@ -92,11 +92,14 @@ $$\text{Required Margin} = \frac{\text{Executable Lot} \times \text{Contract Siz
 
 ---
 
-## 🗺️ Roadmap & TODO Items ([`TODO.md`](TODO.md))
+## 🗺️ Execution Roadmap ([`TODO.md`](TODO.md))
 
-- [ ] **⚡ Turbo Mode Switch**: High-frequency 500ms polling rate for active trading.
-- [ ] **🎲 Monte Carlo Simulation**: Resampling of closed deals for risk of ruin, maximum drawdown distributions, and equity fan charts.
+- [ ] **⚡ Turbo Mode Switch**: High-frequency 500ms polling rate with 15-min in-memory ADR/ATR TTL caching.
 - [ ] **📊 Order Management Panel**: Live open positions table with One-Click Close, Break-Even (BE), Partial Close, and inline SL/TP editing.
+- [ ] **🛑 Daily Drawdown Circuit Breaker**: Multi-stage equity stop (Soft Warning -3.0%, Lockout -4.5%, Hard Liquidation -5.0%).
+- [ ] **🛡️ Pre-Trade Execution Gatekeeper**: Spread blowout filter and double-click debounce.
+
+*(Note: Post-trade statistical audit tools including Monte Carlo simulation, MAE/MFE, and calendar heatmaps are housed in [`trade_performance_analytics`](../trade_performance_analytics/IMPLEMENTATION_PLAN.md)).*
 
 ---
 
