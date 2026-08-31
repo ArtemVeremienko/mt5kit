@@ -275,3 +275,19 @@ def test_websocket_stream():
         resp = websocket.receive_json()
         assert resp["type"] == "pong"
 
+
+def test_symbol_categorization():
+    """Verify that USDJPY is correctly classified as Forex Majors and not Indices."""
+    from risk_management_dashboard.feed import feed
+    assert feed._determine_category("USDJPY") == "Forex Majors"
+    assert feed._determine_category("EURUSD") == "Forex Majors"
+    assert feed._determine_category("GBPUSD") == "Forex Majors"
+    assert feed._determine_category("EURGBP") == "Forex Minors"
+    assert feed._determine_category(".JP225Cash") == "Indices"
+    assert feed._determine_category(".DE40Cash") == "Indices"
+    assert feed._determine_category(".US500Cash") == "Indices"
+    assert feed._determine_category("XAUUSD") == "Metals"
+    assert feed._determine_category("BRENT") == "Energies"
+    assert feed._determine_category("BTCUSD") == "Crypto"
+
+

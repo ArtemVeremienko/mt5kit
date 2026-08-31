@@ -53,16 +53,18 @@
         header {
             background-color: var(--bg-secondary);
             border-bottom: 1px solid var(--border-color);
-            padding: 12px 24px;
+            padding: 10px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             position: sticky;
             top: 0;
             z-index: 100;
+            gap: 16px;
+            flex-wrap: wrap;
         }
 
-        .header-title {
+        .header-left {
             display: flex;
             align-items: center;
             gap: 12px;
@@ -82,15 +84,56 @@
         }
 
         h1 {
-            font-size: 18px;
+            font-size: 17px;
             font-weight: 700;
             letter-spacing: 0.3px;
         }
 
         .subtitle {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text-secondary);
-            margin-top: 2px;
+            margin-top: 1px;
+        }
+
+        /* Center Main Balance & Leverage Card */
+        .header-center-metrics {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background-color: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 6px 18px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+        }
+
+        .header-metric-item {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+
+        .header-metric-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .header-metric-val {
+            font-size: 15px;
+            font-weight: 800;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .header-divider {
+            width: 1px;
+            height: 26px;
+            background-color: var(--border-color);
         }
 
         .account-badge-group {
@@ -133,7 +176,7 @@
             border-bottom: 1px solid var(--border-color);
             padding: 16px 24px;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 16px;
             align-items: end;
         }
@@ -709,11 +752,29 @@
 
     <!-- Header -->
     <header>
-        <div class="header-title">
+        <div class="header-left">
             <div class="logo-icon">⚖️</div>
             <div>
-                <h1>MT5 Risk Management & Dynamic Lot Sizer</h1>
-                <div class="subtitle">Multi-Model Position Calculator • Fractional • Kelly Criterion • Ralph Vince Optimal f</div>
+                <h1>MT5 Risk Management & Lot Sizer</h1>
+                <div class="subtitle">Multi-Model Position Calculator • Fractional • Kelly • Optimal f</div>
+            </div>
+        </div>
+
+        <!-- Center Main Balance & Leverage Card (Prominent at a glance) -->
+        <div class="header-center-metrics">
+            <div class="header-metric-item">
+                <span class="header-metric-label">Broker Balance</span>
+                <div class="header-metric-val" style="color: var(--accent-green);" x-text="`$${(account.balance || 0).toFixed(2)}`"></div>
+            </div>
+            <div class="header-divider"></div>
+            <div class="header-metric-item">
+                <span class="header-metric-label">Account Equity</span>
+                <div class="header-metric-val" x-text="`$${(account.equity || account.balance || 0).toFixed(2)}`"></div>
+            </div>
+            <div class="header-divider"></div>
+            <div class="header-metric-item">
+                <span class="header-metric-label">Leverage</span>
+                <div class="header-metric-val" style="color: var(--accent-cyan);" x-text="`1:${(account.leverage || leverage || 300).toFixed(0)}`"></div>
             </div>
         </div>
 
@@ -721,9 +782,6 @@
             <div class="live-pill">
                 <div class="live-dot"></div>
                 <span x-text="account.is_live ? `Live MT5 (${account.login})` : `Demo/Simulated (${account.currency || 'USD'})`"></span>
-            </div>
-            <div style="font-size: 12px; color: var(--text-secondary);">
-                Broker Balance: <strong style="color: #fff;" x-text="`$${(account.balance || 0).toFixed(2)}`"></strong>
             </div>
         </div>
     </header>
@@ -733,33 +791,11 @@
         <div class="control-group">
             <div class="control-label">
                 <span>Working Capital (Real Money)</span>
-                <span>USD</span>
+                <button class="quick-sl-btn" style="font-size: 10px; padding: 1px 6px;" title="Reset to Live MT5 Broker Balance" @click="resetWorkingCapital()">Reset to Balance</button>
             </div>
             <div class="control-input-wrapper with-prefix">
                 <span class="control-input-prefix">$</span>
-                <input type="number" x-model.number="workingCapital" @input="recalculate()" step="10" min="5">
-            </div>
-        </div>
-
-        <div class="control-group">
-            <div class="control-label">
-                <span>Deposited Broker Cash</span>
-                <span>Margin Check</span>
-            </div>
-            <div class="control-input-wrapper with-prefix">
-                <span class="control-input-prefix">$</span>
-                <input type="number" x-model.number="depositedCash" @input="recalculate()" step="5" min="1">
-            </div>
-        </div>
-
-        <div class="control-group">
-            <div class="control-label">
-                <span>Account Leverage</span>
-                <span>MT5 Broker</span>
-            </div>
-            <div class="control-info-box">
-                <span style="font-size: 12px; color: var(--text-secondary);">Live:</span>
-                <strong x-text="`1:${(leverage || 300).toFixed(0)}`"></strong>
+                <input type="number" x-model.number="workingCapital" @input="onWorkingCapitalInput()" step="10" min="5">
             </div>
         </div>
 
@@ -790,7 +826,7 @@
         <div class="control-group">
             <div class="control-label">
                 <span>Global Stop Loss Mode</span>
-                <span>Preset</span>
+                <span>Volatility Preset</span>
             </div>
             <select x-model="slMode" @change="recalculate()">
                 <option value="1/4 ADR">1/4 Daily ADR (14D)</option>
@@ -798,8 +834,6 @@
                 <option value="1/2 ADR">1/2 Daily ADR (14D)</option>
                 <option value="1.0 ADR">1.0 Full Daily ADR (14D)</option>
                 <option value="ATR(14)">1.0 ATR (14D)</option>
-                <option value="20 pips">Fixed 20 Pips</option>
-                <option value="50 pips">Fixed 50 Pips</option>
             </select>
         </div>
     </div>
@@ -891,8 +925,7 @@
                         <th>Pip Value ($)</th>
                         <th @click="toggleSort('lot')">Executable Lot <span x-text="sortIcon('lot')"></span></th>
                         <th @click="toggleSort('risk_pct')">Effective Risk <span x-text="sortIcon('risk_pct')"></span></th>
-                        <th @click="toggleSort('margin')">Req. Margin <span x-text="sortIcon('margin')"></span></th>
-                        <th>Margin Health</th>
+                        <th @click="toggleSort('margin')">Req. Margin / Health <span x-text="sortIcon('margin')"></span></th>
                         <th>Action</th>
                     </tr>
                 </thead>
@@ -915,7 +948,10 @@
                             <td><strong x-text="item.spec.adr_14_pips"></strong> p</td>
                             <td>
                                 <div class="sl-input-cell">
-                                    <input type="number" class="sl-input" :value="item.calc.sl_pips" step="1" min="1"
+                                    <input type="number" class="sl-input" 
+                                           :value="slOverrides[item.spec.symbol] !== undefined ? slOverrides[item.spec.symbol] : item.calc.sl_pips" 
+                                           step="1" min="1"
+                                           @input.debounce.250ms="setSymbolSL(item.spec.symbol, $event.target.value)"
                                            @change="setSymbolSL(item.spec.symbol, $event.target.value)">
                                     <button class="quick-sl-btn" title="Reset to 1/4 ADR" @click="resetSymbolSL(item.spec.symbol)">1/4 ADR</button>
                                 </div>
@@ -938,18 +974,16 @@
                                 </div>
                             </td>
                             <td>
-                                <div class="risk-display">
-                                    <div :class="`risk-pct-val ${item.calc.effective_risk_pct > item.calc.target_risk_pct * 1.2 ? 'risk-pct-high' : ''}`"
-                                         x-text="`${item.calc.effective_risk_pct.toFixed(2)}%`"></div>
-                                    <div class="risk-amt-sub" x-text="`$${item.calc.effective_risk_amount.toFixed(2)} (Target: ${item.calc.target_risk_pct.toFixed(2)}%)`"></div>
+                                <div style="font-weight: 700; font-size: 13px;"
+                                     :style="item.calc.effective_risk_pct > item.calc.target_risk_pct * 1.2 ? 'color: var(--accent-amber);' : 'color: #fff;'"
+                                     x-text="`$${item.calc.effective_risk_amount.toFixed(2)} (${item.calc.effective_risk_pct.toFixed(2)}%)`"></div>
+                            </td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <strong style="color: #fff; font-size: 13px;" x-text="`$${item.calc.required_margin.toFixed(2)}`"></strong>
+                                    <span :class="`margin-status-pill ${item.calc.is_margin_exceeded ? 'margin-exceeded' : (item.calc.margin_status === 'warning' ? 'margin-warning' : 'margin-healthy')}`"
+                                          x-text="item.calc.is_margin_exceeded ? '🚨 Exceeded' : `${item.calc.margin_utilization_pct.toFixed(0)}%`"></span>
                                 </div>
-                            </td>
-                            <td>
-                                <strong x-text="`$${item.calc.required_margin.toFixed(2)}`"></strong>
-                            </td>
-                            <td>
-                                <span :class="`margin-status-pill ${item.calc.is_margin_exceeded ? 'margin-exceeded' : (item.calc.margin_status === 'warning' ? 'margin-warning' : 'margin-healthy')}`"
-                                      x-text="item.calc.is_margin_exceeded ? '🚨 Exceeded' : `${item.calc.margin_utilization_pct.toFixed(0)}% Utilized`"></span>
                             </td>
                             <td>
                                 <button class="btn btn-primary" @click="openDeepDive(item)">Deep Dive</button>
@@ -968,90 +1002,92 @@
                 <h2 style="font-size: 16px; font-weight: 700;" x-text="selectedItem ? `${selectedItem.spec.symbol} — Risk & Mathematical Lot Sizing Breakdown` : ''"></h2>
                 <button class="close-btn" @click="modals.deepDive = false">&times;</button>
             </div>
-            <div class="modal-body" x-if="selectedItem">
-                <div class="math-breakdown-box">
-                    <div class="math-step">
-                        <span>Working Capital (Real Money):</span>
-                        <span class="math-step-highlight" x-text="`$${selectedItem.calc.working_capital.toFixed(2)}`"></span>
+            <template x-if="selectedItem">
+                <div class="modal-body">
+                    <div class="math-breakdown-box">
+                        <div class="math-step">
+                            <span>Working Capital (Real Money):</span>
+                            <span class="math-step-highlight" x-text="`$${selectedItem.calc.working_capital.toFixed(2)}`"></span>
+                        </div>
+                        <div class="math-step">
+                            <span>Deposited Broker Balance:</span>
+                            <span class="math-step-highlight" x-text="`$${selectedItem.calc.deposited_cash.toFixed(2)}`"></span>
+                        </div>
+                        <div class="math-step">
+                            <span>Account Leverage:</span>
+                            <span class="math-step-highlight" x-text="`1:${selectedItem.calc.leverage.toFixed(0)}`"></span>
+                        </div>
+                        <div class="math-step">
+                            <span>Selected Risk Method:</span>
+                            <span class="math-step-highlight" x-text="`${selectedItem.calc.risk_method} (${selectedItem.calc.target_risk_pct.toFixed(2)}%)`"></span>
+                        </div>
+                        <div class="math-step">
+                            <span>Target Risk Budget ($):</span>
+                            <span class="math-step-highlight" x-text="`$${selectedItem.calc.target_risk_amount.toFixed(2)}`"></span>
+                        </div>
+                        <div class="math-step">
+                            <span>Stop Loss Distance:</span>
+                            <span class="math-step-highlight" x-text="`${selectedItem.calc.sl_pips} pips (14D ADR: ${selectedItem.spec.adr_14_pips} pips)`"></span>
+                        </div>
+                        <div class="math-step">
+                            <span>Pip Value (1.0 lot):</span>
+                            <span class="math-step-highlight" x-text="`$${selectedItem.calc.pip_value_per_lot.toFixed(4)}`"></span>
+                        </div>
+                        <div class="math-step">
+                            <span>Exact Formula: Lot = Risk$ / (SL * PipValue)</span>
+                            <span class="math-step-highlight" x-text="`${selectedItem.calc.exact_lot.toFixed(5)} lots`"></span>
+                        </div>
+                        <div class="math-step">
+                            <span>Broker Volume Clamping [Min: <span x-text="selectedItem.spec.volume_min"></span>, Step: <span x-text="selectedItem.spec.volume_step"></span>]:</span>
+                            <span class="math-step-highlight" style="color: var(--accent-cyan);" x-text="`${selectedItem.calc.executable_lot} lots`"></span>
+                        </div>
+                        <div class="math-step">
+                            <span>Effective Risk Exposure:</span>
+                            <span class="math-step-highlight" :style="`color: ${selectedItem.calc.is_clamped_to_min ? 'var(--accent-amber)' : 'var(--accent-green)'}`"
+                                  x-text="`$${selectedItem.calc.effective_risk_amount.toFixed(2)} (${selectedItem.calc.effective_risk_pct.toFixed(2)}%)`"></span>
+                        </div>
+                        <div class="math-step">
+                            <span>Required Broker Margin:</span>
+                            <span class="math-step-highlight" :style="`color: ${selectedItem.calc.is_margin_exceeded ? 'var(--accent-red)' : '#fff'}`"
+                                  x-text="`$${selectedItem.calc.required_margin.toFixed(2)} (${selectedItem.calc.margin_utilization_pct.toFixed(1)}% of $${selectedItem.calc.deposited_cash.toFixed(2)})`"></span>
+                        </div>
                     </div>
-                    <div class="math-step">
-                        <span>Deposited Broker Balance:</span>
-                        <span class="math-step-highlight" x-text="`$${selectedItem.calc.deposited_cash.toFixed(2)}`"></span>
-                    </div>
-                    <div class="math-step">
-                        <span>Account Leverage:</span>
-                        <span class="math-step-highlight" x-text="`1:${selectedItem.calc.leverage.toFixed(0)}`"></span>
-                    </div>
-                    <div class="math-step">
-                        <span>Selected Risk Method:</span>
-                        <span class="math-step-highlight" x-text="`${selectedItem.calc.risk_method} (${selectedItem.calc.target_risk_pct.toFixed(2)}%)`"></span>
-                    </div>
-                    <div class="math-step">
-                        <span>Target Risk Budget ($):</span>
-                        <span class="math-step-highlight" x-text="`$${selectedItem.calc.target_risk_amount.toFixed(2)}`"></span>
-                    </div>
-                    <div class="math-step">
-                        <span>Stop Loss Distance:</span>
-                        <span class="math-step-highlight" x-text="`${selectedItem.calc.sl_pips} pips (14D ADR: ${selectedItem.spec.adr_14_pips} pips)`"></span>
-                    </div>
-                    <div class="math-step">
-                        <span>Pip Value (1.0 lot):</span>
-                        <span class="math-step-highlight" x-text="`$${selectedItem.calc.pip_value_per_lot.toFixed(4)}`"></span>
-                    </div>
-                    <div class="math-step">
-                        <span>Exact Formula: Lot = Risk$ / (SL * PipValue)</span>
-                        <span class="math-step-highlight" x-text="`${selectedItem.calc.exact_lot.toFixed(5)} lots`"></span>
-                    </div>
-                    <div class="math-step">
-                        <span>Broker Volume Clamping [Min: <span x-text="selectedItem.spec.volume_min"></span>, Step: <span x-text="selectedItem.spec.volume_step"></span>]:</span>
-                        <span class="math-step-highlight" style="color: var(--accent-cyan);" x-text="`${selectedItem.calc.executable_lot} lots`"></span>
-                    </div>
-                    <div class="math-step">
-                        <span>Effective Risk Exposure:</span>
-                        <span class="math-step-highlight" :style="`color: ${selectedItem.calc.is_clamped_to_min ? 'var(--accent-amber)' : 'var(--accent-green)'}`"
-                              x-text="`$${selectedItem.calc.effective_risk_amount.toFixed(2)} (${selectedItem.calc.effective_risk_pct.toFixed(2)}%)`"></span>
-                    </div>
-                    <div class="math-step">
-                        <span>Required Broker Margin:</span>
-                        <span class="math-step-highlight" :style="`color: ${selectedItem.calc.is_margin_exceeded ? 'var(--accent-red)' : '#fff'}`"
-                              x-text="`$${selectedItem.calc.required_margin.toFixed(2)} (${selectedItem.calc.margin_utilization_pct.toFixed(1)}% of $${selectedItem.calc.deposited_cash.toFixed(2)})`"></span>
-                    </div>
-                </div>
 
-                <h3 style="font-size: 14px; font-weight: 700; margin-top: 8px;" x-text="`Multi-Model Sizing Comparison for ${selectedItem.spec.symbol}`"></h3>
-                <div class="table-container" style="box-shadow: none;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Method</th>
-                                <th>Risk %</th>
-                                <th>Executable Lot</th>
-                                <th>Required Margin</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><strong>Fixed Fractional (1%)</strong></td>
-                                <td>1.00%</td>
-                                <td><strong x-text="selectedItem.comparison.fractional_1pct.lot"></strong></td>
-                                <td x-text="`$${selectedItem.comparison.fractional_1pct.margin.toFixed(2)}`"></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Half Kelly (f*/2)</strong></td>
-                                <td x-text="`${selectedItem.comparison.half_kelly.risk_pct.toFixed(2)}%`"></td>
-                                <td><strong x-text="selectedItem.comparison.half_kelly.lot"></strong></td>
-                                <td x-text="`$${selectedItem.comparison.half_kelly.margin.toFixed(2)}`"></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Half Optimal f (Vince)</strong></td>
-                                <td x-text="`${selectedItem.comparison.half_optimal_f.risk_pct.toFixed(2)}%`"></td>
-                                <td><strong x-text="selectedItem.comparison.half_optimal_f.lot"></strong></td>
-                                <td x-text="`$${selectedItem.comparison.half_optimal_f.margin.toFixed(2)}`"></td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <h3 style="font-size: 14px; font-weight: 700; margin-top: 8px;" x-text="`Multi-Model Sizing Comparison for ${selectedItem.spec.symbol}`"></h3>
+                    <div class="table-container" style="box-shadow: none;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Method</th>
+                                    <th>Risk %</th>
+                                    <th>Executable Lot</th>
+                                    <th>Required Margin</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Fixed Fractional (1%)</strong></td>
+                                    <td>1.00%</td>
+                                    <td><strong x-text="selectedItem.comparison.fractional_1pct.lot"></strong></td>
+                                    <td x-text="`$${selectedItem.comparison.fractional_1pct.margin.toFixed(2)}`"></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Half Kelly (f*/2)</strong></td>
+                                    <td x-text="`${selectedItem.comparison.half_kelly.risk_pct.toFixed(2)}%`"></td>
+                                    <td><strong x-text="selectedItem.comparison.half_kelly.lot"></strong></td>
+                                    <td x-text="`$${selectedItem.comparison.half_kelly.margin.toFixed(2)}`"></td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Half Optimal f (Vince)</strong></td>
+                                    <td x-text="`${selectedItem.comparison.half_optimal_f.risk_pct.toFixed(2)}%`"></td>
+                                    <td><strong x-text="selectedItem.comparison.half_optimal_f.lot"></strong></td>
+                                    <td x-text="`$${selectedItem.comparison.half_optimal_f.margin.toFixed(2)}`"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
+            </template>
         </div>
     </div>
 
@@ -1209,6 +1245,13 @@
                         this.account = acc;
                         if (acc.balance && acc.balance > 0) {
                             this.depositedCash = acc.balance;
+                            // Check localStorage first
+                            const savedWc = localStorage.getItem('mt5_risk_working_capital');
+                            if (savedWc !== null && !isNaN(parseFloat(savedWc)) && parseFloat(savedWc) > 0) {
+                                this.workingCapital = parseFloat(savedWc);
+                            } else {
+                                this.workingCapital = acc.balance;
+                            }
                         }
                         if (acc.leverage && acc.leverage > 0) {
                             this.leverage = acc.leverage;
@@ -1218,12 +1261,25 @@
                     }
                 },
 
+                onWorkingCapitalInput() {
+                    if (this.workingCapital !== null && this.workingCapital !== undefined && !isNaN(this.workingCapital) && this.workingCapital > 0) {
+                        localStorage.setItem('mt5_risk_working_capital', this.workingCapital.toString());
+                    }
+                    this.recalculate();
+                },
+
+                resetWorkingCapital() {
+                    localStorage.removeItem('mt5_risk_working_capital');
+                    this.workingCapital = this.account.balance || 27.0;
+                    this.recalculate();
+                },
+
                 async recalculate() {
                     try {
                         const payload = {
                             working_capital: this.workingCapital,
-                            deposited_cash: this.depositedCash,
-                            leverage: this.leverage,
+                            deposited_cash: this.account.balance || this.depositedCash || 20.0,
+                            leverage: this.account.leverage || this.leverage || 300.0,
                             risk_method: this.riskMethod,
                             custom_risk_pct: this.customRiskPct,
                             global_sl_mode: this.slMode,
@@ -1287,9 +1343,15 @@
                 },
 
                 setSymbolSL(symbol, value) {
-                    const pips = parseFloat(value);
-                    if (pips > 0) {
-                        this.slOverrides[symbol] = pips;
+                    const val = String(value).trim();
+                    if (val !== "") {
+                        const pips = parseFloat(val);
+                        if (!isNaN(pips) && pips > 0) {
+                            this.slOverrides[symbol] = pips;
+                            this.recalculate();
+                        }
+                    } else {
+                        delete this.slOverrides[symbol];
                         this.recalculate();
                     }
                 },

@@ -130,11 +130,12 @@ def generate_mock_trades_pnl(count: int = 185, win_rate: float = 0.56, payoff_ra
 class MT5RiskFeed:
     """Manages MT5 live data retrieval and fallback mock structures."""
 
-    def __init__(self):
+    def __init__(self, mock_mode: bool = False):
         self._is_connected = False
-        self._mock_mode = False
+        self._mock_mode = mock_mode
         self._cached_trades: List[float] = []
-        self._init_mt5()
+        if not mock_mode:
+            self._init_mt5()
 
     def _init_mt5(self) -> bool:
         if mt5 is None:
@@ -212,21 +213,33 @@ class MT5RiskFeed:
     def _determine_category(self, symbol: str, path: str = "") -> str:
         s = symbol.upper()
         p = path.upper()
-        if "XAU" in s or "XAG" in s or "GOLD" in s or "SILVER" in s or "METALS" in p:
-            return "Metals"
-        if "OIL" in s or "BRENT" in s or "WTI" in s or "GAS" in s or "ENERGY" in p:
-            return "Energies"
-        if any(idx in s for idx in ["500", "TECH", "DOW", "DAX", "FTSE", "NIKKEI", "NAS", "SPX", "DJ"]) or "INDEX" in p or "INDICES" in p:
-            return "Indices"
-        if any(c in s for c in ["BTC", "ETH", "SOL", "XRP", "LTC"]) or "CRYPTO" in p:
-            return "Crypto"
         
+        # 1. Check Forex Majors first (including broker prefixes/suffixes)
         majors = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"]
-        if s in majors:
+        if any(m in s for m in majors):
             return "Forex Majors"
-        if len(s) >= 6 and (any(s.startswith(cur) for cur in ["EUR", "GBP", "USD", "AUD", "CAD", "CHF", "NZD", "JPY"])):
+
+        # 2. Metals
+        if any(m in s for m in ["XAU", "XAG", "GOLD", "SILVER", "PLATINUM", "PALLADIUM"]) or "METALS" in p:
+            return "Metals"
+
+        # 3. Energies
+        if any(e in s for e in ["OIL", "BRENT", "WTI", "GAS", "CRUDE", "NGAS"]) or "ENERGY" in p or "ENERGIES" in p:
+            return "Energies"
+
+        # 4. Crypto
+        if any(c in s for c in ["BTC", "ETH", "SOL", "XRP", "LTC", "DOGE", "ADA", "BNB"]) or "CRYPTO" in p:
+            return "Crypto"
+
+        # 5. Indices (avoid broad 2-letter matches like 'DJ' that match currency pairs)
+        index_keywords = ["500", "TECH", "DOW", "DAX", "FTSE", "NIKKEI", "NAS", "SPX", "DJ30", "DJIA", "US30", "JP225", "DE40", "DE30", "UK100", "US100", "US500", "HK50", "WS30", "CAC", "STOXX"]
+        if any(idx in s for idx in index_keywords) or "INDEX" in p or "INDICES" in p:
+            return "Indices"
+
+        # 6. Forex Minors / Crosses
+        if len(s) >= 6 and any(s.startswith(cur) or cur in s for cur in ["EUR", "GBP", "USD", "AUD", "CAD", "CHF", "NZD", "JPY"]):
             return "Forex Minors"
-        
+
         return "Other"
 
     def _calculate_adr_and_atr(self, symbol: str, point: float, digits: int, period: int = 14) -> Tuple[float, float, float]:
@@ -430,3 +443,7 @@ class MT5RiskFeed:
     def set_custom_trades(self, pnl_list: List[float]):
         """Sets custom trade history (from CSV or manual upload)."""
         self._cached_trades = pnl_list
+
+
+feed = MT5RiskFeed(mock_mode=False)
+
