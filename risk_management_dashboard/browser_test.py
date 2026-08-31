@@ -93,7 +93,7 @@ async def run_browser_tests():
         # 5. Test Global Stop Loss Mode Presets
         print("\n[4] Testing Global Stop Loss Mode Presets...")
         sl_mode_select = page.locator("select").nth(1)
-        for mode in ["1/2 ADR", "1.0 ADR", "ATR(14)", "1/3 ADR", "1/4 ADR"]:
+        for mode in ["1/2 ADR", "1 ADR", "1 ATR", "1/3 ADR", "1/4 ADR"]:
             await sl_mode_select.select_option(mode)
             await page.wait_for_timeout(300)
             first_sl = await page.locator(".sl-input").nth(0).input_value()
@@ -118,9 +118,11 @@ async def run_browser_tests():
             updated_val = await input_el.input_value()
             print(f"    Symbol {symbol_name.strip()}: SL changed from {current_val} -> {updated_val} pips")
 
-        # 7. Test Quick Reset Button (1/4 ADR)
-        print("\n[6] Testing 1/4 ADR reset button...")
-        reset_btn = page.locator(".quick-sl-btn").nth(0)
+        # 7. Test Quick Reset Button (Dynamic Preset)
+        print("\n[6] Testing dynamic SL preset reset button...")
+        reset_btn = page.locator("tbody .quick-sl-btn").nth(0)
+        reset_btn_label = await reset_btn.text_content()
+        print(f"    Table Reset Shield Label: [{reset_btn_label.strip()}]")
         await reset_btn.click()
         await page.wait_for_timeout(400)
         reset_sl = await page.locator(".sl-input").nth(0).input_value()
@@ -145,9 +147,9 @@ async def run_browser_tests():
         await search_input.fill("")
         await page.wait_for_timeout(200)
 
-        # 10. Test Deep-Dive Modal
+        # 10. Test Deep-Dive Modal with Search / Icon Button
         print("\n[9] Testing Deep-Dive Modal...")
-        deep_dive_btn = page.locator("tbody button:has-text('Deep Dive')").nth(0)
+        deep_dive_btn = page.locator(".btn-icon").nth(0)
         await deep_dive_btn.click()
         await page.wait_for_timeout(400)
         modal_visible = await page.locator(".modal-overlay").nth(0).is_visible()
@@ -167,10 +169,61 @@ async def run_browser_tests():
         await close_twr.click()
         await page.wait_for_timeout(300)
 
+        # 12. Test Risk:Reward (TP) dropdown
+        print("\n[11] Testing Risk:Reward (TP) Dropdown...")
+        rr_select = page.locator("select").nth(2)
+        await rr_select.select_option("2.0")
+        await page.wait_for_timeout(300)
+        saved_rr = await page.evaluate("localStorage.getItem('mt5_risk_rr_ratio')")
+        print(f"    Selected R:R = 2.0 (Saved to localStorage: {saved_rr})")
+
+        # 13. Test Trade Confirmation Popover (when One-Click is OFF)
+        print("\n[12] Testing Trade Confirmation Popover (One-Click OFF)...")
+        one_click_toggle = page.locator(".one-click-toggle")
+        is_active = await page.evaluate("document.querySelector('.one-click-toggle').classList.contains('active')")
+        if is_active:
+            await one_click_toggle.click()
+            await page.wait_for_timeout(300)
+        
+        # Click BUY on EURUSD (first row)
+        buy_btn = page.locator(".btn-buy").nth(0)
+        await buy_btn.click()
+        await page.wait_for_timeout(400)
+        confirm_modal_visible = await page.locator(".modal-compact").is_visible()
+        print(f"    Confirm Trade Modal Visible: {confirm_modal_visible}")
+        assert confirm_modal_visible is True
+        
+        # Cancel trade
+        cancel_btn = page.locator(".modal-compact button:has-text('Cancel')")
+        await cancel_btn.click()
+        await page.wait_for_timeout(300)
+        assert await page.locator(".modal-compact").is_visible() is False
+
+        # 14. Test One-Click Execution & Toast Notifications (One-Click ON)
+        print("\n[13] Testing One-Click Execution & Toast Notifications...")
+        await one_click_toggle.click()  # Enable One-Click
+        await page.wait_for_timeout(300)
+        is_active_now = await page.evaluate("document.querySelector('.one-click-toggle').classList.contains('active')")
+        print(f"    One-Click Mode Enabled: {is_active_now}")
+        assert is_active_now is True
+
+        # Click SELL on EURUSD
+        sell_btn = page.locator(".btn-sell").nth(0)
+        await sell_btn.click()
+        await page.wait_for_timeout(600)
+        
+        # Check Toast presence
+        toast_count = await page.locator(".toast").count()
+        print(f"    Active Toast Notifications on screen: {toast_count}")
+        assert toast_count > 0
+        toast_title = (await page.locator(".toast-title").nth(0).text_content() or "").encode('ascii', 'replace').decode('ascii')
+        toast_msg = (await page.locator(".toast-msg").nth(0).text_content() or "").encode('ascii', 'replace').decode('ascii')
+        print(f"    Toast: [{toast_title.strip()}] {toast_msg.strip()}")
+
         # Take final screenshot
         screenshot_path = "d:/projects/metatrader5/risk_management_dashboard/output_screenshot.png"
         await page.screenshot(path=screenshot_path)
-        print(f"\n[11] Captured screenshot to: {screenshot_path}")
+        print(f"\n[14] Captured screenshot to: {screenshot_path}")
 
         # Check for errors
         print("\n" + "=" * 60)

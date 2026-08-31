@@ -91,9 +91,11 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(2.0)
             if manager.active_connections:
                 symbols = feed.get_market_symbols()
+                account = feed.get_account_summary()
                 await manager.broadcast({
                     "type": "symbols_update",
                     "symbols": symbols,
+                    "account": account,
                     "timestamp": asyncio.get_event_loop().time()
                 })
 
@@ -124,9 +126,9 @@ def compute_effective_sl_pips(spec: Dict[str, Any], global_mode: str, global_pip
         return max(5.0, round(adr * (1.0 / 3.0), 1))
     elif global_mode == "1/2 ADR":
         return max(5.0, round(adr * 0.5, 1))
-    elif global_mode == "1.0 ADR":
+    elif global_mode in ("1 ADR", "1.0 ADR"):
         return max(10.0, round(adr * 1.0, 1))
-    elif global_mode == "ATR(14)":
+    elif global_mode in ("1 ATR", "1.0 ATR", "ATR(14)"):
         return max(10.0, round(atr * 1.0, 1))
     elif global_mode == "20 pips":
         return 20.0
@@ -353,15 +355,49 @@ async def set_manual_stats(req: ManualStatsRequest):
     }
 
 
+class OrderExecuteRequest(BaseModel):
+    symbol: str
+    action: str = Field(..., description="'BUY' or 'SELL'")
+    volume: float = Field(..., ge=0.001, description="Lot size")
+    sl_pips: float = Field(..., gt=0, description="Stop loss in pips")
+    rr_ratio: float = Field(default=1.0, ge=0.0, description="Risk:Reward ratio for Take Profit (0 for no TP)")
+    comment: str = Field(default="RiskDashboard", description="Trade comment")
+
+
+@app.post("/api/order/execute")
+async def execute_order(req: OrderExecuteRequest):
+    """Executes a market BUY or SELL order directly into MT5 with exact lot sizing and SL/TP prices."""
+    res = feed.send_market_order(
+        symbol=req.symbol,
+        action=req.action,
+        volume=req.volume,
+        sl_pips=req.sl_pips,
+        rr_ratio=req.rr_ratio,
+        comment=req.comment
+    )
+    if not res.get("success"):
+        return res
+    
+    # Broadcast update event to connected WebSocket clients
+    asyncio.create_task(manager.broadcast({
+        "type": "symbols_update",
+        "timestamp": asyncio.get_event_loop().time()
+    }))
+    return res
+
+
+
 @app.websocket("/ws/live")
 async def websocket_live(websocket: WebSocket):
     await manager.connect(websocket)
     try:
-        # Send initial symbols
+        # Send initial symbols and account state
         symbols = feed.get_market_symbols()
+        account = feed.get_account_summary()
         await websocket.send_json({
             "type": "initial_symbols",
-            "symbols": symbols
+            "symbols": symbols,
+            "account": account
         })
         while True:
             data = await websocket.receive_text()

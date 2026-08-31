@@ -179,6 +179,14 @@ class MT5RiskFeed:
             try:
                 acc = mt5.account_info()
                 if acc is not None:
+                    margin_mode_raw = getattr(acc, "margin_mode", 2)
+                    if margin_mode_raw == 2:
+                        account_type = "Hedge"
+                    elif margin_mode_raw in (0, 1):
+                        account_type = "Netting"
+                    else:
+                        account_type = "Hedge"
+
                     return {
                         "is_live": True,
                         "login": acc.login,
@@ -190,6 +198,7 @@ class MT5RiskFeed:
                         "margin_free": float(acc.margin_free),
                         "margin_level": float(acc.margin_level) if acc.margin_level else 0.0,
                         "leverage": float(acc.leverage) if acc.leverage > 0 else 300.0,
+                        "account_type": account_type,
                         "name": acc.name
                     }
             except Exception as e:
@@ -207,6 +216,7 @@ class MT5RiskFeed:
             "margin_free": 20.0,
             "margin_level": 0.0,
             "leverage": 300.0,
+            "account_type": "Hedge",
             "name": "Simulated MT5 User"
         }
 
@@ -444,6 +454,141 @@ class MT5RiskFeed:
         """Sets custom trade history (from CSV or manual upload)."""
         self._cached_trades = pnl_list
 
+    def send_market_order(
+        self,
+        symbol: str,
+        action: str,
+        volume: float,
+        sl_pips: float,
+        rr_ratio: float = 1.0,
+        comment: str = "RiskDashboard",
+        magic: int = 900100,
+        slippage: int = 20
+    ) -> Dict[str, Any]:
+        """
+        Executes a direct market order in MT5 with computed SL and TP prices.
+        Returns execution result status, ticket, price, volume, sl, and tp.
+        """
+        action_upper = action.upper().strip()
+        if action_upper not in ("BUY", "SELL"):
+            return {"success": False, "message": f"Invalid order action: {action}"}
+
+        if not self.is_live or mt5 is None:
+            # Simulated execution mode
+            spec = self.get_symbol_specs(symbol)
+            digits = spec["digits"] if spec else 5
+            pip_size = spec["pip_size"] if spec else 0.0001
+            base_price = (spec["ask"] if action_upper == "BUY" else spec["bid"]) if spec else 1.0850
+            
+            if action_upper == "BUY":
+                sl_price = round(base_price - (sl_pips * pip_size), digits)
+                tp_price = round(base_price + (sl_pips * rr_ratio * pip_size), digits) if rr_ratio > 0 else 0.0
+            else:
+                sl_price = round(base_price + (sl_pips * pip_size), digits)
+                tp_price = round(base_price - (sl_pips * rr_ratio * pip_size), digits) if rr_ratio > 0 else 0.0
+
+            mock_ticket = int(np.random.randint(10000000, 99999999))
+            return {
+                "success": True,
+                "mock": True,
+                "ticket": mock_ticket,
+                "symbol": symbol,
+                "action": action_upper,
+                "volume": volume,
+                "price": base_price,
+                "sl": sl_price,
+                "tp": tp_price,
+                "retcode": 10009,
+                "message": f"Simulated {action_upper} {volume} {symbol} @ {base_price} (SL: {sl_price}, TP: {tp_price})"
+            }
+
+        try:
+            if not mt5.symbol_select(symbol, True):
+                return {"success": False, "message": f"Symbol {symbol} cannot be selected in MT5"}
+
+            info = mt5.symbol_info(symbol)
+            tick = mt5.symbol_info_tick(symbol)
+            if not info or not tick:
+                return {"success": False, "message": f"Could not retrieve live price tick for {symbol}"}
+
+            digits = info.digits
+            point = info.point
+            pip_multiplier = 10.0 if digits in (3, 5) else 1.0
+            pip_size = point * pip_multiplier if point > 0 else 0.0001
+
+            # Clamp volume
+            vol_min = float(info.volume_min) if info.volume_min > 0 else 0.01
+            vol_max = float(info.volume_max) if info.volume_max > 0 else 100.0
+            vol_step = float(info.volume_step) if info.volume_step > 0 else 0.01
+            
+            steps = round(volume / vol_step)
+            clamped_vol = max(vol_min, min(vol_max, round(steps * vol_step, 6)))
+
+            if action_upper == "BUY":
+                order_type = mt5.ORDER_TYPE_BUY
+                price = float(tick.ask)
+                sl_price = round(price - (sl_pips * pip_size), digits)
+                tp_price = round(price + (sl_pips * rr_ratio * pip_size), digits) if rr_ratio > 0 else 0.0
+            else:
+                order_type = mt5.ORDER_TYPE_SELL
+                price = float(tick.bid)
+                sl_price = round(price + (sl_pips * pip_size), digits)
+                tp_price = round(price - (sl_pips * rr_ratio * pip_size), digits) if rr_ratio > 0 else 0.0
+
+            filling_mode = mt5.ORDER_FILLING_IOC
+            if hasattr(info, "filling_mode"):
+                if info.filling_mode & 1:
+                    filling_mode = mt5.ORDER_FILLING_FOK
+                elif info.filling_mode & 2:
+                    filling_mode = mt5.ORDER_FILLING_IOC
+                else:
+                    filling_mode = mt5.ORDER_FILLING_RETURN
+
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL,
+                "symbol": symbol,
+                "volume": clamped_vol,
+                "type": order_type,
+                "price": price,
+                "sl": sl_price,
+                "tp": tp_price,
+                "deviation": slippage,
+                "magic": magic,
+                "comment": comment,
+                "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": filling_mode,
+            }
+
+            result = mt5.order_send(request)
+            if result is None:
+                err = mt5.last_error()
+                return {"success": False, "message": f"mt5.order_send failed: {err}"}
+
+            if result.retcode != mt5.TRADE_RETCODE_DONE:
+                return {
+                    "success": False,
+                    "retcode": result.retcode,
+                    "message": f"Order rejected: [{result.retcode}] {result.comment}"
+                }
+
+            return {
+                "success": True,
+                "ticket": result.order or result.deal,
+                "symbol": symbol,
+                "action": action_upper,
+                "volume": clamped_vol,
+                "price": result.price if result.price > 0 else price,
+                "sl": sl_price,
+                "tp": tp_price,
+                "retcode": result.retcode,
+                "comment": result.comment,
+                "message": f"Executed {action_upper} {clamped_vol} {symbol} @ {price:.{digits}f} (SL: {sl_price:.{digits}f}, TP: {tp_price:.{digits}f})"
+            }
+        except Exception as e:
+            logger.error(f"Exception during send_market_order: {e}")
+            return {"success": False, "message": f"Execution exception: {str(e)}"}
+
 
 feed = MT5RiskFeed(mock_mode=False)
+
 

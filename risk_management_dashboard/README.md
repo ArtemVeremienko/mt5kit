@@ -78,8 +78,31 @@ $$\text{Required Margin} = \frac{\text{Executable Lot} \times \text{Contract Siz
 
 ---
 
+## ⚡ Direct MT5 Execution & Real-Time Streaming
+
+1. **One-Click Trading & Safety Toggle**:
+   - `BUY` and `SELL` buttons send calculated market orders directly to MT5 terminal IPC.
+   - Global Risk:Reward multiplier presets (`1:1`, `1:1.5`, `1:2`, `1:3`, `No TP`).
+   - Confirmation popover when One-Click is OFF.
+   - Non-blocking floating toast notifications for filled tickets and broker rejections.
+
+2. **Live Account & PnL Streaming**:
+   - Real-time WebSocket streaming of Broker Balance, Account Equity, and Floating P&L.
+   - Live Account Mode detection (`Hedge` vs `Netting`).
+
+---
+
+## 🗺️ Roadmap & TODO Items ([`TODO.md`](TODO.md))
+
+- [ ] **⚡ Turbo Mode Switch**: High-frequency 500ms polling rate for active trading.
+- [ ] **🎲 Monte Carlo Simulation**: Resampling of closed deals for risk of ruin, maximum drawdown distributions, and equity fan charts.
+- [ ] **📊 Order Management Panel**: Live open positions table with One-Click Close, Break-Even (BE), Partial Close, and inline SL/TP editing.
+
+---
+
 ## 🧪 Running Tests
 
 ```powershell
 uv run pytest risk_management_dashboard/test_risk_calculator.py -v
 ```
+

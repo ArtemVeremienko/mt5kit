@@ -165,10 +165,16 @@ def test_adr_dynamic_sl_resolution():
     
     # 1/4 ADR of 80 = 20 pips
     assert compute_effective_sl_pips(spec, "1/4 ADR", 20.0, {}) == 20.0
+    # 1/3 ADR of 80 = 26.7 pips
+    assert compute_effective_sl_pips(spec, "1/3 ADR", 20.0, {}) == 26.7
     # 1/2 ADR of 80 = 40 pips
     assert compute_effective_sl_pips(spec, "1/2 ADR", 20.0, {}) == 40.0
-    # 1.0 ADR of 80 = 80 pips
+    # 1 ADR of 80 = 80 pips
+    assert compute_effective_sl_pips(spec, "1 ADR", 20.0, {}) == 80.0
     assert compute_effective_sl_pips(spec, "1.0 ADR", 20.0, {}) == 80.0
+    # 1 ATR of 85 = 85 pips
+    assert compute_effective_sl_pips(spec, "1 ATR", 20.0, {}) == 85.0
+    assert compute_effective_sl_pips(spec, "ATR(14)", 20.0, {}) == 85.0
     # Per-symbol override
     assert compute_effective_sl_pips(spec, "1/4 ADR", 20.0, {"EURUSD": 35.0}) == 35.0
 
@@ -289,5 +295,88 @@ def test_symbol_categorization():
     assert feed._determine_category("XAUUSD") == "Metals"
     assert feed._determine_category("BRENT") == "Energies"
     assert feed._determine_category("BTCUSD") == "Crypto"
+
+
+def test_send_market_order_feed():
+    """Test order pricing, SL/TP calculation, and execution structure in feed."""
+    from risk_management_dashboard.feed import MT5RiskFeed
+    mock_feed = MT5RiskFeed(mock_mode=True)
+    
+    # 1. Buy Order with 1.5 R:R
+    buy_res = mock_feed.send_market_order(
+        symbol="EURUSD",
+        action="BUY",
+        volume=0.05,
+        sl_pips=20.0,
+        rr_ratio=1.5
+    )
+    assert buy_res["success"] is True
+    assert buy_res["action"] == "BUY"
+    assert buy_res["volume"] == 0.05
+    assert buy_res["sl"] < buy_res["price"]  # SL is below entry for BUY
+    assert buy_res["tp"] > buy_res["price"]  # TP is above entry for BUY
+
+    # 2. Sell Order with 2.0 R:R
+    sell_res = mock_feed.send_market_order(
+        symbol="EURUSD",
+        action="SELL",
+        volume=0.02,
+        sl_pips=30.0,
+        rr_ratio=2.0
+    )
+    assert sell_res["success"] is True
+    assert sell_res["action"] == "SELL"
+    assert sell_res["volume"] == 0.02
+    assert sell_res["sl"] > sell_res["price"]  # SL is above entry for SELL
+    assert sell_res["tp"] < sell_res["price"]  # TP is below entry for SELL
+
+    # 3. Invalid Action
+    invalid_res = mock_feed.send_market_order(
+        symbol="EURUSD",
+        action="HOLD",
+        volume=0.01,
+        sl_pips=10.0
+    )
+    assert invalid_res["success"] is False
+
+
+def test_execute_order_endpoint(monkeypatch):
+    """Test POST /api/order/execute endpoint validation and execution."""
+    from risk_management_dashboard.app import feed
+    
+    monkeypatch.setattr(
+        feed,
+        "send_market_order",
+        lambda symbol, action, volume, sl_pips, rr_ratio, comment: {
+            "success": True,
+            "ticket": 12345678,
+            "symbol": symbol,
+            "action": action,
+            "volume": volume,
+            "price": 1.0850,
+            "sl": 1.0830,
+            "tp": 1.0890,
+            "retcode": 10009,
+            "message": "Executed BUY 0.01 EURUSD @ 1.08500"
+        }
+    )
+    
+    client = TestClient(app)
+    payload = {
+        "symbol": "EURUSD",
+        "action": "BUY",
+        "volume": 0.01,
+        "sl_pips": 25.0,
+        "rr_ratio": 2.0,
+        "comment": "TestExecution"
+    }
+    resp = client.post("/api/order/execute", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["action"] == "BUY"
+    assert data["ticket"] == 12345678
+
+
 
 

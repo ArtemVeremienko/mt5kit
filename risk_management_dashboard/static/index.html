@@ -746,6 +746,233 @@
             color: #fff;
             font-weight: bold;
         }
+
+        /* One-Click Header Toggle */
+        .one-click-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            background-color: rgba(255,255,255,0.05);
+            color: var(--text-muted);
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .one-click-toggle:hover {
+            border-color: var(--accent-cyan);
+            color: #fff;
+        }
+
+        .one-click-toggle.active {
+            background-color: rgba(0, 230, 118, 0.15);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+            box-shadow: 0 0 10px rgba(0, 230, 118, 0.2);
+        }
+
+        .one-click-icon {
+            font-size: 13px;
+        }
+
+        /* Trade Action Buttons in Table */
+        .trade-btn-group {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-trade {
+            padding: 5px 9px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-buy {
+            background-color: rgba(0, 230, 118, 0.15);
+            color: var(--accent-green);
+            border-color: rgba(0, 230, 118, 0.3);
+        }
+
+        .btn-buy:hover {
+            background-color: var(--accent-green);
+            color: #000;
+            box-shadow: 0 2px 8px rgba(0, 230, 118, 0.3);
+        }
+
+        .btn-sell {
+            background-color: rgba(255, 23, 68, 0.15);
+            color: var(--accent-red);
+            border-color: rgba(255, 23, 68, 0.3);
+        }
+
+        .btn-sell:hover {
+            background-color: var(--accent-red);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(255, 23, 68, 0.3);
+        }
+
+        .btn-icon {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            border-radius: 4px;
+            padding: 4px 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-icon:hover {
+            background: var(--accent-cyan);
+            color: #000;
+            border-color: var(--accent-cyan);
+        }
+
+        /* Floating Toast Notification System */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 380px;
+            pointer-events: none;
+        }
+
+        .toast {
+            pointer-events: auto;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 8px;
+            background-color: #1e2538;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            color: #fff;
+            animation: slideInRight 0.25s ease-out;
+        }
+
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .toast-success {
+            border-left: 4px solid var(--accent-green);
+        }
+
+        .toast-error {
+            border-left: 4px solid var(--accent-red);
+        }
+
+        .toast-icon {
+            font-size: 18px;
+            line-height: 1;
+            margin-top: 2px;
+        }
+
+        .toast-body {
+            flex: 1;
+        }
+
+        .toast-title {
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .toast-msg {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .toast-close {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 16px;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .toast-close:hover {
+            color: #fff;
+        }
+
+        /* Compact Trade Confirmation Modal */
+        .modal-compact {
+            max-width: 440px;
+        }
+
+        .confirm-trade-card {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .confirm-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 14px;
+        }
+
+        .confirm-badge.buy {
+            background: rgba(0, 230, 118, 0.15);
+            color: var(--accent-green);
+            border: 1px solid rgba(0, 230, 118, 0.3);
+        }
+
+        .confirm-badge.sell {
+            background: rgba(255, 23, 68, 0.15);
+            color: var(--accent-red);
+            border: 1px solid rgba(255, 23, 68, 0.3);
+        }
+
+        .confirm-detail-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            background: rgba(0,0,0,0.25);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .confirm-item-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .confirm-item-value {
+            font-size: 13px;
+            font-weight: 700;
+            color: #fff;
+            margin-top: 2px;
+        }
     </style>
 </head>
 <body x-data="riskApp()" x-init="init()" x-cloak>
@@ -769,7 +996,16 @@
             <div class="header-divider"></div>
             <div class="header-metric-item">
                 <span class="header-metric-label">Account Equity</span>
-                <div class="header-metric-val" x-text="`$${(account.equity || account.balance || 0).toFixed(2)}`"></div>
+                <div class="header-metric-val" 
+                     :style="account.equity && account.balance ? (account.equity >= account.balance ? 'color: var(--accent-green);' : 'color: var(--accent-red);') : 'color: #fff;'"
+                     x-text="`$${(account.equity !== undefined && account.equity !== null ? account.equity : (account.balance || 0)).toFixed(2)}`"></div>
+            </div>
+            <div class="header-divider"></div>
+            <div class="header-metric-item">
+                <span class="header-metric-label">Floating P&L</span>
+                <div class="header-metric-val" 
+                     :style="((account.equity || account.balance || 0) - (account.balance || 0)) >= 0 ? 'color: var(--accent-green);' : 'color: var(--accent-red);'"
+                     x-text="`${((account.equity || account.balance || 0) - (account.balance || 0)) >= 0 ? '+' : ''}$${(((account.equity || account.balance || 0) - (account.balance || 0))).toFixed(2)}`"></div>
             </div>
             <div class="header-divider"></div>
             <div class="header-metric-item">
@@ -779,9 +1015,13 @@
         </div>
 
         <div class="account-badge-group">
+            <div class="one-click-toggle" :class="{ 'active': oneClickEnabled }" @click="toggleOneClick()" title="When ON, clicking BUY or SELL sends order immediately. When OFF, a confirmation dialog appears.">
+                <span class="one-click-icon">⚡</span>
+                <span x-text="oneClickEnabled ? 'One-Click: ON' : 'One-Click: OFF'"></span>
+            </div>
             <div class="live-pill">
                 <div class="live-dot"></div>
-                <span x-text="account.is_live ? `Live MT5 (${account.login})` : `Demo/Simulated (${account.currency || 'USD'})`"></span>
+                <span x-text="account.is_live ? `Live MT5 (${account.login}) ${account.account_type || 'Hedge'}` : `Demo (${account.currency || 'USD'}) ${account.account_type || 'Hedge'}`"></span>
             </div>
         </div>
     </header>
@@ -826,14 +1066,28 @@
         <div class="control-group">
             <div class="control-label">
                 <span>Global Stop Loss Mode</span>
-                <span>Volatility Preset</span>
+                <span>14D Volatility Range</span>
             </div>
             <select x-model="slMode" @change="recalculate()">
-                <option value="1/4 ADR">1/4 Daily ADR (14D)</option>
-                <option value="1/3 ADR">1/3 Daily ADR (14D)</option>
-                <option value="1/2 ADR">1/2 Daily ADR (14D)</option>
-                <option value="1.0 ADR">1.0 Full Daily ADR (14D)</option>
-                <option value="ATR(14)">1.0 ATR (14D)</option>
+                <option value="1/4 ADR">1/4 ADR (14D)</option>
+                <option value="1/3 ADR">1/3 ADR (14D)</option>
+                <option value="1/2 ADR">1/2 ADR (14D)</option>
+                <option value="1 ADR">1 ADR (14D)</option>
+                <option value="1 ATR">1 ATR (14D)</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <div class="control-label">
+                <span>Risk:Reward (TP)</span>
+                <span>Multiplier</span>
+            </div>
+            <select x-model.number="rrRatio" @change="savePreferences()">
+                <option value="1.0">1:1 (R/R = 1.0)</option>
+                <option value="1.5">1:1.5 (R/R = 1.5)</option>
+                <option value="2.0">1:2 (R/R = 2.0)</option>
+                <option value="3.0">1:3 (R/R = 3.0)</option>
+                <option value="0.0">No TP (Manual Exit)</option>
             </select>
         </div>
     </div>
@@ -926,7 +1180,7 @@
                         <th @click="toggleSort('lot')">Executable Lot <span x-text="sortIcon('lot')"></span></th>
                         <th @click="toggleSort('risk_pct')">Effective Risk <span x-text="sortIcon('risk_pct')"></span></th>
                         <th @click="toggleSort('margin')">Req. Margin / Health <span x-text="sortIcon('margin')"></span></th>
-                        <th>Action</th>
+                        <th style="min-width: 110px; text-align: center;">Execute</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -953,7 +1207,7 @@
                                            step="1" min="1"
                                            @input.debounce.250ms="setSymbolSL(item.spec.symbol, $event.target.value)"
                                            @change="setSymbolSL(item.spec.symbol, $event.target.value)">
-                                    <button class="quick-sl-btn" title="Reset to 1/4 ADR" @click="resetSymbolSL(item.spec.symbol)">1/4 ADR</button>
+                                    <button class="quick-sl-btn" :title="`Reset to active preset (${slMode})`" @click="resetSymbolSL(item.spec.symbol)" x-text="slMode"></button>
                                 </div>
                             </td>
                             <td x-text="`$${item.calc.pip_value_per_lot.toFixed(2)}`"></td>
@@ -974,9 +1228,12 @@
                                 </div>
                             </td>
                             <td>
-                                <div style="font-weight: 700; font-size: 13px;"
-                                     :style="item.calc.effective_risk_pct > item.calc.target_risk_pct * 1.2 ? 'color: var(--accent-amber);' : 'color: #fff;'"
-                                     x-text="`$${item.calc.effective_risk_amount.toFixed(2)} (${item.calc.effective_risk_pct.toFixed(2)}%)`"></div>
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                                    <div style="font-weight: 700; font-size: 13px;"
+                                         :style="item.calc.effective_risk_pct > item.calc.target_risk_pct * 1.2 ? 'color: var(--accent-amber);' : 'color: #fff;'"
+                                         x-text="`$${item.calc.effective_risk_amount.toFixed(2)} (${item.calc.effective_risk_pct.toFixed(2)}%)`"></div>
+                                    <button class="btn-icon" @click="openDeepDive(item)" title="Deep Dive Math & Multi-Model Sizing Comparison">🔍</button>
+                                </div>
                             </td>
                             <td>
                                 <div style="display: flex; align-items: center; gap: 8px;">
@@ -985,8 +1242,19 @@
                                           x-text="item.calc.is_margin_exceeded ? '🚨 Exceeded' : `${item.calc.margin_utilization_pct.toFixed(0)}%`"></span>
                                 </div>
                             </td>
-                            <td>
-                                <button class="btn btn-primary" @click="openDeepDive(item)">Deep Dive</button>
+                            <td style="text-align: center;">
+                                <div class="trade-btn-group">
+                                    <button class="btn-trade btn-buy" 
+                                            @click="handleTradeClick(item, 'BUY')" 
+                                            :title="`BUY ${item.calc.executable_lot} lot @ Ask ${item.spec.ask.toFixed(item.spec.digits)}`">
+                                        <span>BUY</span>
+                                    </button>
+                                    <button class="btn-trade btn-sell" 
+                                            @click="handleTradeClick(item, 'SELL')" 
+                                            :title="`SELL ${item.calc.executable_lot} lot @ Bid ${item.spec.bid.toFixed(item.spec.digits)}`">
+                                        <span>SELL</span>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     </template>
@@ -1154,6 +1422,78 @@
             </div>
         </div>
     </div>
+    <!-- Compact Fast Order Confirmation Modal (when One-Click is OFF) -->
+    <div class="modal-overlay" x-show="modals.confirmTrade" x-transition>
+        <div class="modal-card modal-compact" @click.away="modals.confirmTrade = false">
+            <div class="modal-header">
+                <h2 style="font-size: 15px; font-weight: 700;">Confirm Order Execution</h2>
+                <button class="close-btn" @click="modals.confirmTrade = false">&times;</button>
+            </div>
+            <template x-if="pendingTrade">
+                <div class="modal-body">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div :class="`confirm-badge ${pendingTrade.action.toLowerCase()}`">
+                            <span x-text="pendingTrade.action === 'BUY' ? '🟢 BUY' : '🔴 SELL'"></span>
+                            <span x-text="`${pendingTrade.volume} Lot`"></span>
+                        </div>
+                        <div style="font-weight: 800; font-size: 16px; color: #fff;" x-text="pendingTrade.symbol"></div>
+                    </div>
+
+                    <div class="confirm-detail-grid">
+                        <div>
+                            <div class="confirm-item-label">Entry Price</div>
+                            <div class="confirm-item-value" x-text="pendingTrade.price"></div>
+                        </div>
+                        <div>
+                            <div class="confirm-item-label">Req. Margin</div>
+                            <div class="confirm-item-value" style="color: var(--accent-cyan);" x-text="`$${pendingTrade.margin.toFixed(2)}`"></div>
+                        </div>
+                        <div>
+                            <div class="confirm-item-label">Stop Loss</div>
+                            <div class="confirm-item-value" style="color: var(--accent-red);" x-text="`${pendingTrade.sl_price} (${pendingTrade.sl_pips}p)`"></div>
+                        </div>
+                        <div>
+                            <div class="confirm-item-label">Take Profit</div>
+                            <div class="confirm-item-value" style="color: var(--accent-green);" x-text="pendingTrade.tp_price > 0 ? `${pendingTrade.tp_price} (R/R: ${pendingTrade.rr_ratio})` : 'None'"></div>
+                        </div>
+                        <div>
+                            <div class="confirm-item-label">Max Risk ($)</div>
+                            <div class="confirm-item-value" style="color: var(--accent-amber);" x-text="`$${pendingTrade.risk_amount.toFixed(2)} (${pendingTrade.risk_pct.toFixed(2)}%)`"></div>
+                        </div>
+                        <div>
+                            <div class="confirm-item-label">Target Reward ($)</div>
+                            <div class="confirm-item-value" style="color: var(--accent-green);" x-text="pendingTrade.tp_price > 0 ? `$${(pendingTrade.risk_amount * pendingTrade.rr_ratio).toFixed(2)}` : 'Manual Exit'"></div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 8px;">
+                        <button class="btn" style="flex: 1;" @click="modals.confirmTrade = false">Cancel</button>
+                        <button :class="`btn btn-${pendingTrade.action.toLowerCase() === 'buy' ? 'primary' : 'danger'}`" 
+                                style="flex: 1.5; font-weight: 700;"
+                                :style="pendingTrade.action === 'BUY' ? 'background-color: var(--accent-green); color: #000;' : 'background-color: var(--accent-red); color: #fff;'"
+                                @click="executeConfirmedTrade()"
+                                :disabled="isSubmittingOrder">
+                            <span x-text="isSubmittingOrder ? 'Sending...' : `⚡ Execute ${pendingTrade.action}`"></span>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Floating Toast Notification System -->
+    <div class="toast-container">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div :class="`toast toast-${toast.type}`" x-transition>
+                <div class="toast-icon" x-text="toast.type === 'success' ? '✅' : '❌'"></div>
+                <div class="toast-body">
+                    <div class="toast-title" x-text="toast.title"></div>
+                    <div class="toast-msg" x-text="toast.message"></div>
+                </div>
+                <button class="toast-close" @click="removeToast(toast.id)">&times;</button>
+            </div>
+        </template>
+    </div>
 
     <script>
         function riskApp() {
@@ -1176,11 +1516,18 @@
                 selectedItem: null,
                 twrChartInstance: null,
                 categories: ["All", "Forex Majors", "Forex Minors", "Metals", "Energies", "Indices", "Crypto"],
+                oneClickEnabled: localStorage.getItem('mt5_risk_one_click') === 'true',
+                rrRatio: parseFloat(localStorage.getItem('mt5_risk_rr_ratio')) || 1.5,
+                toasts: [],
+                toastSeq: 0,
+                pendingTrade: null,
+                isSubmittingOrder: false,
                 modals: {
                     deepDive: false,
                     twr: false,
                     csv: false,
-                    manual: false
+                    manual: false,
+                    confirmTrade: false
                 },
                 manualParams: {
                     win_rate: 0.55,
@@ -1242,22 +1589,28 @@
                     try {
                         const res = await fetch("/api/account");
                         const acc = await res.json();
-                        this.account = acc;
-                        if (acc.balance && acc.balance > 0) {
-                            this.depositedCash = acc.balance;
-                            // Check localStorage first
-                            const savedWc = localStorage.getItem('mt5_risk_working_capital');
-                            if (savedWc !== null && !isNaN(parseFloat(savedWc)) && parseFloat(savedWc) > 0) {
-                                this.workingCapital = parseFloat(savedWc);
-                            } else {
-                                this.workingCapital = acc.balance;
-                            }
-                        }
-                        if (acc.leverage && acc.leverage > 0) {
-                            this.leverage = acc.leverage;
-                        }
+                        this.updateAccountInfo(acc, true);
                     } catch (e) {
                         console.warn("Could not fetch account info:", e);
+                    }
+                },
+
+                updateAccountInfo(acc, isInitial = false) {
+                    if (!acc) return;
+                    this.account = acc;
+                    if (acc.balance && acc.balance > 0) {
+                        this.depositedCash = acc.balance;
+                        const savedWc = localStorage.getItem('mt5_risk_working_capital');
+                        if (savedWc !== null && !isNaN(parseFloat(savedWc)) && parseFloat(savedWc) > 0) {
+                            if (isInitial) {
+                                this.workingCapital = parseFloat(savedWc);
+                            }
+                        } else {
+                            this.workingCapital = acc.balance;
+                        }
+                    }
+                    if (acc.leverage && acc.leverage > 0) {
+                        this.leverage = acc.leverage;
                     }
                 },
 
@@ -1315,6 +1668,9 @@
                     ws.onmessage = (event) => {
                         try {
                             const data = JSON.parse(event.data);
+                            if (data.account) {
+                                this.updateAccountInfo(data.account, false);
+                            }
                             if (data.type === "symbols_update") {
                                 this.recalculate();
                             }
@@ -1463,6 +1819,112 @@
                         }
                     } catch (e) {
                         alert(`Upload failed: ${e}`);
+                    }
+                },
+
+                toggleOneClick() {
+                    this.oneClickEnabled = !this.oneClickEnabled;
+                    localStorage.setItem('mt5_risk_one_click', this.oneClickEnabled.toString());
+                    this.showToast('success', 'One-Click Mode', `One-Click Trading is now ${this.oneClickEnabled ? 'ENABLED ⚡' : 'DISABLED 🛡️'}`);
+                },
+
+                savePreferences() {
+                    localStorage.setItem('mt5_risk_rr_ratio', this.rrRatio.toString());
+                },
+
+                showToast(type, title, message, timeout = 5000) {
+                    const id = ++this.toastSeq;
+                    this.toasts.push({ id, type, title, message });
+                    setTimeout(() => this.removeToast(id), timeout);
+                },
+
+                removeToast(id) {
+                    this.toasts = this.toasts.filter(t => t.id !== id);
+                },
+
+                handleTradeClick(item, action) {
+                    const sym = item.spec.symbol;
+                    const digits = item.spec.digits || 5;
+                    const pipSize = item.spec.pip_size || 0.0001;
+                    const basePrice = action === 'BUY' ? item.spec.ask : item.spec.bid;
+                    const slPips = this.slOverrides[sym] !== undefined ? this.slOverrides[sym] : item.calc.sl_pips;
+                    const rr = this.rrRatio;
+                    
+                    let slPrice, tpPrice;
+                    if (action === 'BUY') {
+                        slPrice = (basePrice - (slPips * pipSize)).toFixed(digits);
+                        tpPrice = rr > 0 ? (basePrice + (slPips * rr * pipSize)).toFixed(digits) : '0';
+                    } else {
+                        slPrice = (basePrice + (slPips * pipSize)).toFixed(digits);
+                        tpPrice = rr > 0 ? (basePrice - (slPips * rr * pipSize)).toFixed(digits) : '0';
+                    }
+
+                    const tradePayload = {
+                        symbol: sym,
+                        action: action,
+                        volume: item.calc.executable_lot,
+                        price: basePrice.toFixed(digits),
+                        sl_pips: slPips,
+                        sl_price: slPrice,
+                        tp_price: tpPrice,
+                        rr_ratio: rr,
+                        risk_amount: item.calc.effective_risk_amount,
+                        risk_pct: item.calc.effective_risk_pct,
+                        margin: item.calc.required_margin,
+                        comment: "RiskDashboard"
+                    };
+
+                    if (this.oneClickEnabled) {
+                        this.executeTrade(tradePayload);
+                    } else {
+                        this.pendingTrade = tradePayload;
+                        this.modals.confirmTrade = true;
+                    }
+                },
+
+                async executeConfirmedTrade() {
+                    if (!this.pendingTrade) return;
+                    await this.executeTrade(this.pendingTrade);
+                    this.modals.confirmTrade = false;
+                },
+
+                async executeTrade(trade) {
+                    this.isSubmittingOrder = true;
+                    try {
+                        const res = await fetch("/api/order/execute", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                symbol: trade.symbol,
+                                action: trade.action,
+                                volume: trade.volume,
+                                sl_pips: trade.sl_pips,
+                                rr_ratio: trade.rr_ratio,
+                                comment: trade.comment || "RiskDashboard"
+                            })
+                        });
+
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                            const tpText = data.tp > 0 ? ` | TP: ${data.tp}` : '';
+                            this.showToast(
+                                'success',
+                                `Order #${data.ticket} Filled!`,
+                                `${data.action} ${data.volume} ${data.symbol} @ ${data.price} | SL: ${data.sl}${tpText}`
+                            );
+                            this.fetchAccount();
+                            this.recalculate();
+                        } else {
+                            this.showToast(
+                                'error',
+                                'Order Rejected',
+                                data.message || 'Broker rejected the order.'
+                            );
+                        }
+                    } catch (err) {
+                        this.showToast('error', 'Execution Exception', err.message || String(err));
+                    } finally {
+                        this.isSubmittingOrder = false;
                     }
                 }
             };
