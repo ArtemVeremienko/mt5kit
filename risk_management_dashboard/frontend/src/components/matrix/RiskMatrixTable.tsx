@@ -74,25 +74,25 @@ export const RiskMatrixTable: Component<Props> = (props) => {
           <table class="risk-matrix-table">
             <thead>
               <tr>
-                <th onClick={() => marketStore.toggleSort('symbol')} class="cursor-pointer" style={{ width: '170px' }}>
+                <th onClick={() => marketStore.toggleSort('symbol')} class="cursor-pointer" style={{ width: '160px' }}>
                   Symbol <span class="sort-icon">{marketStore.sortIcon('symbol')}</span>
                 </th>
                 <th onClick={() => marketStore.toggleSort('bid')} class="cursor-pointer text-right" style={{ width: '150px' }}>
                   Market Price (Spread) <span class="sort-icon">{marketStore.sortIcon('bid')}</span>
                 </th>
-                <th onClick={() => marketStore.toggleSort('adr')} class="cursor-pointer text-right" style={{ width: '110px' }}>
+                <th onClick={() => marketStore.toggleSort('adr')} class="cursor-pointer text-right" style={{ width: '100px' }}>
                   14D ADR <span class="sort-icon">{marketStore.sortIcon('adr')}</span>
                 </th>
-                <th class="text-center" style={{ width: '110px' }}>
+                <th class="text-center" style={{ width: '130px' }}>
                   Stop Loss
                 </th>
-                <th onClick={() => marketStore.toggleSort('lot')} class="cursor-pointer text-right" style={{ width: '130px' }}>
+                <th onClick={() => marketStore.toggleSort('lot')} class="cursor-pointer text-right" style={{ width: '120px' }}>
                   Lot Size <span class="sort-icon">{marketStore.sortIcon('lot')}</span>
                 </th>
                 <th onClick={() => marketStore.toggleSort('risk_pct')} class="cursor-pointer text-right" style={{ width: '160px' }}>
                   Effective Risk (Margin) <span class="sort-icon">{marketStore.sortIcon('risk_pct')}</span>
                 </th>
-                <th class="text-center" style={{ width: '130px' }}>
+                <th class="text-center" style={{ width: '140px' }}>
                   Execute
                 </th>
               </tr>

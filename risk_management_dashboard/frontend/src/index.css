@@ -834,76 +834,96 @@ tr.drag-over {
   font-size: 10px;
   font-weight: 700;
   font-family: var(--font-mono);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--accent-cyan);
-  padding: 1px 5px;
+  background: rgba(0, 242, 254, 0.08);
+  color: #00f2fe;
+  padding: 1px 6px;
   border-radius: 4px;
-  border: 1px solid rgba(0, 242, 254, 0.2);
+  border: 1px solid rgba(0, 242, 254, 0.25);
 }
 
 .price-ask-row {
   font-size: 11px;
-  color: var(--text-muted);
 }
 
 .price-ask {
-  color: var(--text-secondary);
+  color: #a2a8b8;
+  font-weight: 500;
 }
 
 .adr-val {
   font-family: var(--font-mono);
   color: #ffffff;
   font-size: 13px;
+  font-weight: 600;
 }
 
-/* Stop Loss Input */
-.sl-input-cell {
+/* ==========================================================================
+   STOP LOSS INPUT - EXPANDED & ERGONOMIC (76px + Glow Rings)
+   ========================================================================== */
+.sl-input-cell-wrapper {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
+  gap: 5px;
 }
 
 .sl-input {
-  width: 58px;
+  min-width: 68px;
+  width: 76px;
+  max-width: 88px;
+  height: 30px;
   text-align: center;
-  background: var(--bg-input);
-  border: 1px solid var(--bg-border);
-  color: #ffffff;
-  padding: 4px 6px;
+  background: #161b26;
+  border: 1px solid #283044;
+  color: #f0f3fa;
+  padding: 4px 8px;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sl-input:hover {
+  border-color: #3d4760;
+  background: #1c2230;
 }
 
 .sl-input:focus {
   border-color: var(--accent-blue);
+  background: #131722;
+  box-shadow: 0 0 0 2px rgba(41, 98, 255, 0.35);
   outline: none;
 }
 
 .sl-input-custom {
   border-color: var(--accent-cyan);
   color: var(--accent-cyan);
+  background: rgba(0, 242, 254, 0.04);
+}
+
+.sl-input-custom:focus {
+  box-shadow: 0 0 0 2px rgba(0, 242, 254, 0.35);
 }
 
 .quick-sl-reset-btn {
-  background: var(--bg-input);
+  background: #1e2433;
   border: 1px solid var(--accent-cyan);
   color: var(--accent-cyan);
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--radius-sm);
-  font-size: 11px;
+  font-size: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .quick-sl-reset-btn:hover {
-  background: rgba(0, 242, 254, 0.15);
+  background: var(--accent-cyan);
+  color: #0b0e14;
 }
 
 /* Lot Size Cell */
@@ -967,9 +987,10 @@ tr.drag-over {
 }
 
 .margin-sub-text {
-  font-size: 10px;
-  color: var(--text-muted);
+  font-size: 11px;
+  color: #8a92a6;
   font-family: var(--font-mono);
+  font-weight: 500;
 }
 
 .margin-status-pill.margin-healthy {
@@ -987,41 +1008,71 @@ tr.drag-over {
   color: var(--accent-red);
 }
 
+/* ==========================================================================
+   EXECUTION BUTTONS - DUAL ACTION HIT-BOX & COLORIMETRY
+   ========================================================================== */
 .trade-btn-group {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   justify-content: center;
+  align-items: center;
 }
 
 .btn-trade {
-  border: none;
-  padding: 6px 12px;
+  border: 1px solid transparent;
+  min-width: 58px;
+  height: 30px;
+  padding: 0 12px;
   border-radius: var(--radius-sm);
-  font-weight: 700;
+  font-weight: 800;
   font-size: 12px;
+  letter-spacing: 0.5px;
   cursor: pointer;
   color: #ffffff;
-  transition: transform 0.1s ease, filter 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  user-select: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
-.btn-trade:active {
-  transform: scale(0.96);
-}
-
+/* BUY (Pine Emerald) */
 .btn-buy {
-  background: var(--accent-green);
+  background: #089981;
+  border-color: #0aa88f;
 }
 
 .btn-buy:hover {
-  background: var(--accent-green-hover);
+  background: #0ba98f;
+  border-color: #0cd4b4;
+  box-shadow: 0 0 12px rgba(8, 153, 129, 0.45);
+  transform: translateY(-1px);
 }
 
+.btn-buy:active {
+  background: #067865;
+  transform: translateY(1px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* SELL (Crimson Coral) */
 .btn-sell {
-  background: var(--accent-red);
+  background: #f23645;
+  border-color: #f44c59;
 }
 
 .btn-sell:hover {
-  background: var(--accent-red-hover);
+  background: #ff4757;
+  border-color: #ff6b78;
+  box-shadow: 0 0 12px rgba(242, 54, 69, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-sell:active {
+  background: #d02735;
+  transform: translateY(1px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 
 .btn-icon {

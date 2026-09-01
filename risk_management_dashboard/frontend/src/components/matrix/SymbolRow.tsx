@@ -128,9 +128,9 @@ export const SymbolRow: Component<Props> = (props) => {
             <span class="adr-val tabular-num">{data().spec.adr_display} p</span>
           </td>
 
-          {/* Col 4: Stop Loss (Clean numeric input with custom reset button) */}
+          {/* Col 4: Stop Loss (Wider 76px numeric input with Auto-Select & Custom Reset) */}
           <td class="text-center">
-            <div class="sl-input-cell">
+            <div class="sl-input-cell-wrapper" classList={{ 'is-overridden': isCustomSL() }}>
               <input
                 type="number"
                 class="sl-input tabular-num"
@@ -138,7 +138,10 @@ export const SymbolRow: Component<Props> = (props) => {
                 step="1"
                 min="1"
                 value={localVal()}
-                onFocus={() => setIsFocused(true)}
+                onFocus={(e) => {
+                  setIsFocused(true);
+                  e.currentTarget.select(); // Auto-select for instant 1-keystroke replacement
+                }}
                 onBlur={(e) => {
                   setIsFocused(false);
                   handleSlCommit(e.currentTarget.value);
@@ -153,6 +156,7 @@ export const SymbolRow: Component<Props> = (props) => {
                     e.currentTarget.blur();
                   }
                 }}
+                title="Stop Loss in Points/Pips (Auto-selects on focus, Enter to commit)"
               />
               <Show when={isCustomSL()}>
                 <button
@@ -208,7 +212,7 @@ export const SymbolRow: Component<Props> = (props) => {
             </div>
           </td>
 
-          {/* Col 7: Execution Buttons */}
+          {/* Col 7: Clean Action Execution Buttons */}
           <td class="text-center">
             <div class="trade-btn-group">
               <button
