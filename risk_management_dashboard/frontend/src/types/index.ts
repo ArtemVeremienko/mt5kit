@@ -12,6 +12,16 @@ export interface AccountSummary {
   login: number;
 }
 
+export interface StepRule {
+  pip_size: number;
+  digits: number;
+  normal_step: number;
+  fast_step: number;
+  precision_step: number;
+  unit_label: string;
+  stops_level_pips?: number;
+}
+
 export interface SymbolSpec {
   symbol: string;
   category: string;
@@ -38,6 +48,7 @@ export interface SymbolSpec {
   spread_display?: string;
   adr_display?: string;
   atr_display?: string;
+  step_rule?: StepRule;
 }
 
 export interface ModelComparison {
@@ -61,18 +72,12 @@ export interface LotCalculation {
   exact_lot: number;
   exact_lot_display: string;
   executable_lot: number;
-  lot_display: string;
+  executable_lot_display: string;
   effective_risk_amount: number;
   effective_risk_pct: number;
-  effective_risk_pct_display: string;
-  risk_display: string;
-  is_clamped_to_min: boolean;
-  is_clamped_to_max: boolean;
-  min_volume: number;
-  max_volume: number;
-  volume_step: number;
-  contract_size: number;
-  market_price: number;
+  clamped_by_min: boolean;
+  clamped_by_max: boolean;
+  clamped_by_step: boolean;
   required_margin: number;
   required_margin_display: string;
   margin_utilization_pct: number;
@@ -109,6 +114,7 @@ export interface OpenPosition {
   time: number;
   digits: number;
   pip_size: number;
+  step_rule?: StepRule;
 }
 
 export interface SampleSizeInfo {

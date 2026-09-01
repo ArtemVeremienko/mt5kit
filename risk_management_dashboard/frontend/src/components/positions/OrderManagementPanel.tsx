@@ -69,15 +69,15 @@ export const OrderManagementPanel: Component = () => {
           <table class="positions-table">
             <thead>
               <tr>
-                <th>Ticket</th>
-                <th>Symbol / Type</th>
-                <th>Volume</th>
-                <th>Open Price</th>
-                <th>Current Price</th>
-                <th>Floating P&L</th>
-                <th>R-Multiple</th>
-                <th>Stop Loss / Take Profit</th>
-                <th class="text-center" style={{ 'min-width': '180px' }}>
+                <th class="text-left">Ticket</th>
+                <th class="text-left">Symbol / Type</th>
+                <th class="text-right">Volume</th>
+                <th class="text-right">Open Price</th>
+                <th class="text-right">Current Price</th>
+                <th class="text-right">Floating P&L</th>
+                <th class="text-center">R-Multiple</th>
+                <th class="text-center" style={{ 'min-width': '140px' }}>Stop Loss / Take Profit</th>
+                <th class="text-right" style={{ 'min-width': '180px' }}>
                   Position Actions
                 </th>
               </tr>

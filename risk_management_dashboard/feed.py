@@ -282,6 +282,83 @@ class MT5RiskFeed:
 
         return "Other"
 
+    def compute_step_rule(self, symbol: str, category: str, digits: int, point: float, pip_size: float, stops_level: int = 0) -> Dict[str, Any]:
+        """
+        Computes exact institutional stepping rules, multiplier increments, and stops limits
+        based on broker instrument metadata.
+        """
+        sym = symbol.upper()
+        cat = (category or "").upper()
+
+        # 1. Forex JPY Pairs (3 digits)
+        if ("JPY" in sym or "JPY" in cat) and digits == 3:
+            normal_step = 0.01
+            fast_step = 0.10
+            precision_step = 0.001
+            unit_label = "pips"
+        # 2. Forex Standard Pairs (5 digits or 4 digits non-metal)
+        elif "FOREX" in cat or digits == 5 or (digits == 4 and "XAU" not in sym and "GOLD" not in sym):
+            normal_step = pip_size if pip_size > 0 else 0.0001
+            fast_step = normal_step * 10.0
+            precision_step = point if point > 0 else 0.00001
+            unit_label = "pips"
+        # 3. Precious Metals (Gold - XAU, Silver - XAG)
+        elif "METAL" in cat or any(m in sym for m in ["XAU", "GOLD", "XAG", "SILVER"]):
+            if "XAU" in sym or "GOLD" in sym:
+                normal_step = 0.50
+                fast_step = 5.00
+                precision_step = 0.05
+            else:
+                normal_step = 0.05
+                fast_step = 0.50
+                precision_step = 0.005
+            unit_label = "pts"
+        # 4. Indices
+        elif "IND" in cat or any(k in sym for k in ["500", "SPX", "30", "NAS", "100", "DE40", "GER"]):
+            if "500" in sym or "SPX" in sym:
+                normal_step = 1.00
+                fast_step = 10.00
+                precision_step = 0.25
+            else:
+                normal_step = 5.00
+                fast_step = 50.00
+                precision_step = 1.00
+            unit_label = "pts"
+        # 5. Crypto
+        elif "CRYPTO" in cat or any(c in sym for c in ["BTC", "ETH", "SOL"]):
+            if "BTC" in sym:
+                normal_step = 10.0
+                fast_step = 100.0
+                precision_step = 1.0
+            else:
+                normal_step = 1.0
+                fast_step = 10.0
+                precision_step = 0.1
+            unit_label = "$"
+        # 6. Energies
+        elif "ENERGY" in cat or any(e in sym for e in ["OIL", "BRENT", "WTI"]):
+            normal_step = 0.10
+            fast_step = 1.00
+            precision_step = 0.01
+            unit_label = "pts"
+        else:
+            normal_step = pip_size if pip_size > 0 else (point * 10 if point > 0 else 0.0001)
+            fast_step = normal_step * 10.0
+            precision_step = point if point > 0 else (normal_step / 10.0)
+            unit_label = "pips" if digits in (3, 5) else "pts"
+
+        stops_level_pips = round((stops_level * point) / pip_size, 1) if (stops_level > 0 and pip_size > 0 and point > 0) else 0.0
+
+        return {
+            "pip_size": round(pip_size, digits) if pip_size > 0 else 0.0001,
+            "digits": digits,
+            "normal_step": round(normal_step, digits),
+            "fast_step": round(fast_step, digits),
+            "precision_step": round(precision_step, digits),
+            "unit_label": unit_label,
+            "stops_level_pips": stops_level_pips
+        }
+
     def _calculate_adr_and_atr(self, symbol: str, point: float, digits: int, period: int = 14) -> Tuple[float, float, float]:
         """
         Calculates 14-day D1 ADR and ATR in pips.
@@ -399,6 +476,7 @@ class MT5RiskFeed:
                                 "trade_contract_size": float(info.trade_contract_size) if info.trade_contract_size > 0 else 100000.0,
                                 "trade_tick_value": float(info.trade_tick_value) if info.trade_tick_value > 0 else 1.0,
                                 "trade_tick_size": float(info.trade_tick_size) if info.trade_tick_size > 0 else point,
+                                "trade_stops_level": int(info.trade_stops_level) if hasattr(info, "trade_stops_level") else 0,
                                 "volume_min": float(info.volume_min) if info.volume_min > 0 else 0.01,
                                 "volume_max": float(info.volume_max) if info.volume_max > 0 else 100.0,
                                 "volume_step": float(info.volume_step) if info.volume_step > 0 else 0.01,
@@ -423,6 +501,7 @@ class MT5RiskFeed:
                             "trade_contract_size": item["trade_contract_size"],
                             "trade_tick_value": item["trade_tick_value"],
                             "trade_tick_size": item["trade_tick_size"],
+                            "trade_stops_level": 0,
                             "volume_min": item["volume_min"],
                             "volume_max": item["volume_max"],
                             "volume_step": item["volume_step"],
@@ -464,6 +543,7 @@ class MT5RiskFeed:
                                 "trade_contract_size": float(info.trade_contract_size) if info.trade_contract_size > 0 else 100000.0,
                                 "trade_tick_value": float(info.trade_tick_value) if info.trade_tick_value > 0 else 1.0,
                                 "trade_tick_size": float(info.trade_tick_size) if info.trade_tick_size > 0 else point,
+                                "trade_stops_level": int(info.trade_stops_level) if hasattr(info, "trade_stops_level") else 0,
                                 "volume_min": float(info.volume_min) if info.volume_min > 0 else 0.01,
                                 "volume_max": float(info.volume_max) if info.volume_max > 0 else 100.0,
                                 "volume_step": float(info.volume_step) if info.volume_step > 0 else 0.01,
@@ -479,6 +559,7 @@ class MT5RiskFeed:
                         pip_size = base_spec["pip_size"]
                         tick_size = base_spec["trade_tick_size"]
                         tick_value = base_spec["trade_tick_value"]
+                        stops_level = int(base_spec.get("trade_stops_level", 0))
                         
                         adr_pips, atr_pips, _ = self._calculate_adr_and_atr(symbol, point, digits)
                         
@@ -490,6 +571,15 @@ class MT5RiskFeed:
                         if pip_value_per_lot <= 0:
                             pip_value_per_lot = 10.0
 
+                        step_rule = self.compute_step_rule(
+                            symbol=symbol,
+                            category=base_spec["category"],
+                            digits=digits,
+                            point=point,
+                            pip_size=pip_size,
+                            stops_level=stops_level
+                        )
+
                         return {
                             **base_spec,
                             "bid": float(bid) if bid else 1.0,
@@ -497,7 +587,8 @@ class MT5RiskFeed:
                             "pip_value_per_lot": round(float(pip_value_per_lot), 4),
                             "spread_pips": spread_pips,
                             "adr_14_pips": adr_pips,
-                            "atr_14_pips": atr_pips
+                            "atr_14_pips": atr_pips,
+                            "step_rule": step_rule
                         }
                 except Exception as e:
                     logger.error(f"Error fetching live symbol specs for {symbol}: {e}")
@@ -513,6 +604,15 @@ class MT5RiskFeed:
                 adr_val = vol["adr_14_pips"] if vol else item["adr_14_pips"]
                 atr_val = vol["atr_14_pips"] if vol else item["atr_14_pips"]
 
+                step_rule = self.compute_step_rule(
+                    symbol=item["symbol"],
+                    category=item["category"],
+                    digits=item["digits"],
+                    point=item["point"],
+                    pip_size=pip_size,
+                    stops_level=0
+                )
+
                 return {
                     **item,
                     "pip_value_per_lot": round(pip_val, 4),
@@ -521,7 +621,8 @@ class MT5RiskFeed:
                     "atr_14_pips": atr_val,
                     "currency_base": symbol[:3] if len(symbol) == 6 else "USD",
                     "currency_profit": symbol[3:6] if len(symbol) == 6 else "USD",
-                    "currency_margin": symbol[:3] if len(symbol) == 6 else "USD"
+                    "currency_margin": symbol[:3] if len(symbol) == 6 else "USD",
+                    "step_rule": step_rule
                 }
         return None
 
@@ -809,6 +910,19 @@ class MT5RiskFeed:
                             gain_dist = (p.price_current - p.price_open) if pos_type_str == "BUY" else (p.price_open - p.price_current)
                             r_multiple = round(gain_dist / risk_dist, 2)
 
+                    category = self._determine_category(p.symbol, info.path if info else "")
+                    point = info.point if info else (0.00001 if digits == 5 else 0.001)
+                    stops_level = info.trade_stops_level if info else 0
+
+                    step_rule = self.compute_step_rule(
+                        symbol=p.symbol,
+                        category=category,
+                        digits=digits,
+                        point=point,
+                        pip_size=pip_size,
+                        stops_level=stops_level
+                    )
+
                     res.append({
                         "ticket": int(p.ticket),
                         "symbol": p.symbol,
@@ -826,7 +940,8 @@ class MT5RiskFeed:
                         "magic": int(p.magic),
                         "time": int(p.time),
                         "digits": digits,
-                        "pip_size": pip_size
+                        "pip_size": pip_size,
+                        "step_rule": step_rule
                     })
                 return res
             except Exception as e:
