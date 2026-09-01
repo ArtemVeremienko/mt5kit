@@ -1,5 +1,6 @@
 import { Component, createSignal, onMount, onCleanup, Show } from 'solid-js';
 import { HeaderMetricsBar } from './components/header/HeaderMetricsBar';
+import { WorkspaceNavTabs } from './components/navigation/WorkspaceNavTabs';
 import { RiskControlsBar } from './components/controls/RiskControlsBar';
 import { StrategyStatsBanner } from './components/stats/StrategyStatsBanner';
 import { RiskMatrixTable } from './components/matrix/RiskMatrixTable';
@@ -25,7 +26,27 @@ export const App: Component = () => {
   const [isCsvUploadOpen, setIsCsvUploadOpen] = createSignal<boolean>(false);
   const [isSubmittingOrder, setIsSubmittingOrder] = createSignal<boolean>(false);
 
+  const handleGlobalKeyDown = (e: KeyboardEvent) => {
+    const target = e.target as HTMLElement;
+    const isEditingText =
+      target &&
+      (target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable);
+
+    if (isEditingText) return;
+
+    if (e.key === '1') {
+      preferencesStore.setActiveView('matrix');
+    } else if (e.key === '2') {
+      preferencesStore.setActiveView('positions');
+    }
+  };
+
   onMount(async () => {
+    window.addEventListener('keydown', handleGlobalKeyDown);
+
     try {
       // 1. Initial account fetch
       const acc = await api.fetchAccount();
@@ -63,6 +84,7 @@ export const App: Component = () => {
   });
 
   onCleanup(() => {
+    window.removeEventListener('keydown', handleGlobalKeyDown);
     wsService.disconnect();
   });
 
@@ -108,19 +130,25 @@ export const App: Component = () => {
       <HeaderMetricsBar />
 
       <main class="dashboard-main">
-        <RiskControlsBar />
+        <WorkspaceNavTabs />
 
-        <StrategyStatsBanner
-          onOpenManualModal={() => setIsManualStatsOpen(true)}
-          onOpenCsvModal={() => setIsCsvUploadOpen(true)}
-        />
+        <Show when={preferencesStore.activeView() === 'matrix'}>
+          <RiskControlsBar />
 
-        <RiskMatrixTable
-          onTradeClick={handleTradeClick}
-          onOpenDeepDive={(item) => setDeepDiveItem(item)}
-        />
+          <StrategyStatsBanner
+            onOpenManualModal={() => setIsManualStatsOpen(true)}
+            onOpenCsvModal={() => setIsCsvUploadOpen(true)}
+          />
 
-        <OrderManagementPanel />
+          <RiskMatrixTable
+            onTradeClick={handleTradeClick}
+            onOpenDeepDive={(item) => setDeepDiveItem(item)}
+          />
+        </Show>
+
+        <Show when={preferencesStore.activeView() === 'positions'}>
+          <OrderManagementPanel />
+        </Show>
       </main>
 
       {/* Modals */}

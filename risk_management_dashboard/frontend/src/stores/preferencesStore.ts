@@ -56,6 +56,15 @@ function createPreferences() {
   const [oneClickEnabled, setOneClickEnabledSignal] = createSignal<boolean>(
     localStorage.getItem('mt5_risk_one_click') === 'true'
   );
+  const [activeView, setActiveViewSignal] = createSignal<'matrix' | 'positions'>(
+    (localStorage.getItem('mt5_active_view') as 'matrix' | 'positions') || 'matrix'
+  );
+
+  const setActiveView = (view: 'matrix' | 'positions') => {
+    setActiveViewSignal(view);
+    localStorage.setItem('mt5_active_view', view);
+  };
+
   const [showStatsBanner, setShowStatsBannerSignal] = createSignal<boolean>(
     localStorage.getItem('mt5_show_stats_banner') === 'true'
   );
@@ -161,6 +170,8 @@ function createPreferences() {
     toggleTurboMode,
     oneClickEnabled,
     toggleOneClick,
+    activeView,
+    setActiveView,
     showStatsBanner,
     toggleStatsBanner,
     pinnedSymbols,

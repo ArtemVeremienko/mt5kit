@@ -21,8 +21,8 @@ function createMarketStore() {
 
   const categories = ['All', 'Forex Majors', 'Forex Minors', 'Metals', 'Energies', 'Indices', 'Crypto'];
 
-  // Fine-grained calculated results
-  const calculatedResults = createMemo<CalculatedSymbolResult[]>(() => {
+  // Map of symbol -> CalculatedSymbolResult
+  const calculatedResultsMap = createMemo<Map<string, CalculatedSymbolResult>>(() => {
     const symbols = rawSymbols();
     const wc = preferencesStore.workingCapital();
     const depCash = accountStore.account().balance || 20.0;
@@ -33,10 +33,17 @@ function createMarketStore() {
     const overrides = preferencesStore.slOverrides();
     const stats = tradeStats();
 
-    return symbols.map((s) =>
-      computeLocalRiskForResult(s, wc, depCash, lev, method, customPct, slM, overrides, stats)
-    );
+    const map = new Map<string, CalculatedSymbolResult>();
+    for (const s of symbols) {
+      const res = computeLocalRiskForResult(s, wc, depCash, lev, method, customPct, slM, overrides, stats);
+      map.set(s.symbol, res);
+    }
+    return map;
   });
+
+  const getCalculatedResult = (symbol: string): CalculatedSymbolResult | undefined => {
+    return calculatedResultsMap().get(symbol);
+  };
 
   const categoryCounts = createMemo<Record<string, number>>(() => {
     const counts: Record<string, number> = { All: rawSymbols().length };
@@ -47,13 +54,20 @@ function createMarketStore() {
     return counts;
   });
 
-  // Filtered and 3-State Sorted results
-  const filteredResults = createMemo<CalculatedSymbolResult[]>(() => {
-    const list = calculatedResults().filter((r) => {
-      const matchCat = activeCategory() === 'All' || r.spec.category === activeCategory();
-      const matchSearch = !searchQuery() || r.spec.symbol.toUpperCase().includes(searchQuery().toUpperCase());
-      return matchCat && matchSearch;
-    });
+  // Filtered and Sorted stable list of symbol strings
+  const filteredSymbols = createMemo<string[]>(() => {
+    const map = calculatedResultsMap();
+    const query = searchQuery().toUpperCase();
+    const cat = activeCategory();
+
+    const matching: CalculatedSymbolResult[] = [];
+    for (const res of map.values()) {
+      const matchCat = cat === 'All' || res.spec.category === cat;
+      const matchSearch = !query || res.spec.symbol.toUpperCase().includes(query);
+      if (matchCat && matchSearch) {
+        matching.push(res);
+      }
+    }
 
     const isPin = (sym: string) => preferencesStore.isPinned(sym);
     const customOrderList = preferencesStore.customOrder();
@@ -65,7 +79,7 @@ function createMarketStore() {
     const col = sortCol();
     const dir = sortDirection();
 
-    return list.slice().sort((a, b) => {
+    matching.sort((a, b) => {
       const pinnedA = isPin(a.spec.symbol);
       const pinnedB = isPin(b.spec.symbol);
 
@@ -111,6 +125,8 @@ function createMarketStore() {
       if (valA > valB) return dir === 'asc' ? 1 : -1;
       return 0;
     });
+
+    return matching.map((r) => r.spec.symbol);
   });
 
   const toggleSort = (col: SortColumn) => {
@@ -183,9 +199,10 @@ function createMarketStore() {
     dragOverSymbol,
     setDragOverSymbol,
     categories,
-    calculatedResults,
+    calculatedResultsMap,
+    getCalculatedResult,
     categoryCounts,
-    filteredResults,
+    filteredSymbols,
     handleDrop,
   };
 }

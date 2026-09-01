@@ -10,7 +10,7 @@ interface Props {
 }
 
 export const RiskMatrixTable: Component<Props> = (props) => {
-  const filteredResults = marketStore.filteredResults;
+  const symbols = marketStore.filteredSymbols;
   const categories = marketStore.categories;
   const counts = marketStore.categoryCounts;
 
@@ -99,7 +99,7 @@ export const RiskMatrixTable: Component<Props> = (props) => {
             </thead>
             <tbody>
               <Show
-                when={filteredResults().length > 0}
+                when={symbols().length > 0}
                 fallback={
                   <tr>
                     <td colspan="10" class="empty-table-msg">
@@ -108,10 +108,10 @@ export const RiskMatrixTable: Component<Props> = (props) => {
                   </tr>
                 }
               >
-                <For each={filteredResults()}>
-                  {(item) => (
+                <For each={symbols()}>
+                  {(sym) => (
                     <SymbolRow
-                      item={item}
+                      symbol={sym}
                       onTradeClick={props.onTradeClick}
                       onOpenDeepDive={props.onOpenDeepDive}
                     />
