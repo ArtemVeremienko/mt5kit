@@ -370,6 +370,17 @@ class OrderExecuteRequest(BaseModel):
     comment: str = Field(default="RiskDashboard", description="Trade comment")
 
 
+class PositionCloseRequest(BaseModel):
+    ticket: int
+    volume: Optional[float] = Field(default=None, description="Optional volume to close (for partial liquidation)")
+
+
+class PositionModifyRequest(BaseModel):
+    ticket: int
+    sl: Optional[float] = Field(default=None, description="New absolute Stop Loss price")
+    tp: Optional[float] = Field(default=None, description="New absolute Take Profit price")
+
+
 @app.post("/api/order/execute")
 async def execute_order(req: OrderExecuteRequest):
     """Executes a market BUY or SELL order directly into MT5 with exact lot sizing and SL/TP prices."""
@@ -393,6 +404,48 @@ async def execute_order(req: OrderExecuteRequest):
     return res
 
 
+@app.get("/api/positions")
+async def get_positions():
+    """Retrieves all currently open positions with floating P&L and R-multiples."""
+    positions = await asyncio.to_thread(feed.get_open_positions)
+    return {"positions": positions, "count": len(positions)}
+
+
+@app.post("/api/position/close")
+async def close_position(req: PositionCloseRequest):
+    """Closes an open position (full or partial volume)."""
+    res = await asyncio.to_thread(feed.close_position, ticket=req.ticket, volume=req.volume)
+    if res.get("success"):
+        asyncio.create_task(manager.broadcast({
+            "type": "symbols_update",
+            "timestamp": asyncio.get_event_loop().time()
+        }))
+    return res
+
+
+@app.post("/api/position/modify")
+async def modify_position(req: PositionModifyRequest):
+    """Modifies SL/TP price levels on an open position."""
+    res = await asyncio.to_thread(feed.modify_position_sltp, ticket=req.ticket, sl=req.sl, tp=req.tp)
+    if res.get("success"):
+        asyncio.create_task(manager.broadcast({
+            "type": "symbols_update",
+            "timestamp": asyncio.get_event_loop().time()
+        }))
+    return res
+
+
+@app.post("/api/position/close-all")
+async def close_all_positions():
+    """Closes all open positions in MT5."""
+    results = await asyncio.to_thread(feed.close_all_positions)
+    asyncio.create_task(manager.broadcast({
+        "type": "symbols_update",
+        "timestamp": asyncio.get_event_loop().time()
+    }))
+    return {"results": results, "count": len(results)}
+
+
 @app.websocket("/ws/live")
 async def websocket_live(websocket: WebSocket):
     """
@@ -409,10 +462,12 @@ async def websocket_live(websocket: WebSocket):
                 await asyncio.sleep(interval)
                 symbols = await asyncio.to_thread(feed.get_market_symbols)
                 account = await asyncio.to_thread(feed.get_account_summary)
+                positions = await asyncio.to_thread(feed.get_open_positions)
                 await websocket.send_json({
                     "type": "symbols_update",
                     "symbols": symbols,
                     "account": account,
+                    "positions": positions,
                     "timestamp": asyncio.get_event_loop().time()
                 })
         except asyncio.CancelledError:
@@ -422,13 +477,15 @@ async def websocket_live(websocket: WebSocket):
 
     streamer_task = asyncio.create_task(client_streamer())
     try:
-        # Send initial symbols and account state
+        # Send initial symbols, account state and open positions
         symbols = await asyncio.to_thread(feed.get_market_symbols)
         account = await asyncio.to_thread(feed.get_account_summary)
+        positions = await asyncio.to_thread(feed.get_open_positions)
         await websocket.send_json({
             "type": "initial_symbols",
             "symbols": symbols,
-            "account": account
+            "account": account,
+            "positions": positions
         })
         while True:
             data = await websocket.receive_text()
@@ -456,12 +513,18 @@ async def websocket_live(websocket: WebSocket):
         await manager.disconnect(websocket)
 
 
-# Mount static directory
+# Mount static directory: check dist first, fallback to static
+DIST_DIR = os.path.join(STATIC_DIR, "dist")
+if os.path.exists(DIST_DIR):
+    app.mount("/assets", StaticFiles(directory=os.path.join(DIST_DIR, "assets")), name="assets")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
+    dist_index = os.path.join(DIST_DIR, "index.html")
+    if os.path.exists(dist_index):
+        return FileResponse(dist_index)
     index_path = os.path.join(STATIC_DIR, "index.html")
     if os.path.exists(index_path):
         return FileResponse(index_path)

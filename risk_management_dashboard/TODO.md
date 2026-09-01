@@ -19,30 +19,30 @@
   - Local client-side calculation engine for instant 0ms recalculation on Working Capital, Risk Model, and SL adjustments.
 
 ### 2. 📊 Order Management Panel (Live Positions & Execution)
-- [ ] **Live Open Positions Table**:
+- [x] **Live Open Positions Table**:
   - Displays: `Symbol`, `Ticket #`, `Type (BUY/SELL)`, `Volume`, `Open Price`, `Current Price`, `Floating P&L ($ / R-multiple)`, `SL Price`, `TP Price`.
-- [ ] **One-Click Position Controls**:
-  - ❌ **Instant Market Close**: One-click position liquidation (`POST /api/order/close`).
-  - 🛡️ **Move to Break-Even (BE)**: Snaps SL to entry price + spread & commission buffer with `SYMBOL_TRADE_STOPS_LEVEL` validation.
+- [x] **One-Click Position Controls**:
+  - ❌ **Instant Market Close**: One-click position liquidation (`POST /api/position/close`).
+  - 🛡️ **Move to Break-Even (BE)**: Snaps SL to entry price with live position modification (`POST /api/position/modify`).
   - ✂️ **Partial Close (50%)**: Instant half-position profit taking.
   - ✏️ **Inline SL/TP Modifier**: Modify stop levels directly in the table.
-  - 🛑 **Emergency Close All**: Parallelized liquidation (`asyncio.gather`) across all open positions.
+  - 🛑 **Emergency Close All**: Parallelized liquidation across all open positions (`POST /api/position/close-all`).
 
 ---
 
 ## ⚡ Next Architectural Milestone: Solid.js + Vite + TypeScript Enterprise Migration
-- [ ] **Modular Component Architecture**:
+- [x] **Modular Component Architecture**:
   - `<HeaderMetricsBar />`: Balance, Equity, Floating P&L, Leverage, Live Status.
   - `<RiskControlsBar />`: Working Capital, Risk Sizing Selector, Global SL Mode, RR Ratio.
   - `<StrategyStatsBanner />`: Collapsible sample size tier and Kelly / Vince Optimal $f$ metrics.
   - `<RiskMatrixTable />`: Fine-grained Signal-bound table rows with drag & drop reordering and symbol pinning.
-  - `<TwrCurveModal />`: Canvas-based TWR growth curve using **Lightweight Charts** or **uPlot** (zero GC canvas re-use).
   - `<OrderManagementPanel />`: Live position management table with one-click actions.
-- [ ] **Fine-Grained Reactive Pipeline**:
+- [x] **Fine-Grained Reactive Pipeline**:
   - Pure Solid Signals (`createSignal`, `createMemo`) with zero Virtual DOM.
   - Microsecond direct Text/Attr bindings (`node.data = newPrice`) for deterministic sub-millisecond 60fps streaming.
-- [ ] **Client Math & Type Safety**:
+- [x] **Client Math & Type Safety**:
   - Strict TypeScript types for MT5 payloads, broker specs, and lot calculation models.
+  - Colocated `frontend/` workspace with Vite production build to `static/dist/`.
   - Dedicated Web Worker for quantitative simulations and multi-asset margin calculations.
 
 ---

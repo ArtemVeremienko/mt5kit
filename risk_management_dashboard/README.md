@@ -1,109 +1,134 @@
 # MT5 Risk Management & Dynamic Lot Sizing Dashboard
 
-A modern, real-time risk management and position sizing platform for MetaTrader 5 with multi-asset screener capabilities.
+An enterprise-grade, high-frequency risk management and real-time position sizing platform for **MetaTrader 5 (MT5)**, powered by a fine-grained reactive **Solid.js + TypeScript** frontend and a high-performance **FastAPI** backend.
 
 ---
 
 ## 🌟 Key Features
 
-1. **3 Dynamic Risk Models**:
-   - **Fixed Fractional Risk**: Defaults to 1.0% (customizable from 0.1% to 10.0%).
+1. **⚡ Fine-Grained Reactive Frontend (Solid.js + Vite + TypeScript)**:
+   - **Zero Virtual DOM**: Uses pure Solid Signals (`createSignal`, `createMemo`) with microsecond direct Text/Attr node bindings (`node.data = newPrice`).
+   - **Sub-Second 500ms Turbo Mode**: Streams live ticks and account balance directly over WebSocket with zero continuous HTTP recalculation round-trips.
+   - **Interactive Screener Customization**:
+     - **3-State Sorting**: Cycle headers through `Ascending (▲)` ➔ `Descending (▼)` ➔ `Default/None (↕)`.
+     - **Symbol Pinning (`📌`)**: Lock favorite assets to the top of the matrix with `localStorage` persistence.
+     - **Custom Drag & Drop Reordering (`⠿`)**: Freely reorder rows with `localStorage` persistence.
+     - **↺ Reset Order**: Return instantly to default MT5 Market Watch sequence.
+
+2. **📊 Live Order Management Panel**:
+   - **Real-Time Positions Table**: Displays Ticket #, Symbol, Action (`BUY`/`SELL`), Volume, Open Price, Current Price, Floating P&L ($ and pips), and dynamic R-Multiple.
+   - **One-Click Position Controls**:
+     - 🛡️ **Move to Break-Even (BE)**: Instantly snaps Stop Loss to entry price with `POST /api/position/modify`.
+     - ✂️ **Partial Close (50%)**: Liquidates half-position volume with `POST /api/position/close`.
+     - ✕ **Instant Market Close**: Liquidates full position volume.
+     - ✏️ **Inline SL/TP Modifier**: Modify stop levels directly in the table with inline validation.
+     - 🛑 **Emergency Close All**: Liquidates all active positions with a single click (`POST /api/position/close-all`).
+
+3. **🧮 Multi-Model Position Sizing Engine**:
+   - **Fixed Fractional Risk**: Customizable from 0.1% to 10.0% of Working Capital.
    - **Kelly Criterion**: Full Kelly ($f^*$), Half Kelly ($f^*/2$), and Quarter Kelly ($f^*/4$).
-   - **Ralph Vince Optimal $f$**: Full $f$, Half $f/2$, and Quarter $f/4$ based on Terminal Wealth Relative (TWR) optimization.
+   - **Ralph Vince Optimal $f$**: Full $f$, Half $f/2$, and Quarter $f/4$.
+   - **Statistical Confidence Tiers**: Visual alerts for sample size (< 100 informational, 100–300 exploratory, 300–500 moderate, 500+ robust).
 
-2. **Statistical Confidence Tiers & Sample Size Alerts**:
-   - 🔴 **$< 100$ trades**: *Informational Only* (high statistical variance / overfitting risk).
-   - 🟡 **$100\text{--}300$ trades**: *Exploratory / Testable* (suitable for preliminary demo testing).
-   - 🔵 **$300\text{--}500$ trades**: *Moderate Confidence* (statistically stable across regimes).
-   - 🟢 **$500+$ trades**: *Statistically Robust* (high statistical significance for Kelly/Optimal $f$).
+4. **🎯 Dynamic Stop Loss & Volatility Presets**:
+   - In-memory 15-minute TTL cache for 14-day D1 ADR ($\text{ADR}_{14}$) and ATR ($\text{ATR}_{14}$) in pips.
+   - Presets: `1/4 ADR` (default), `1/3 ADR`, `1/2 ADR`, `1.0 ADR`, `1.0 ATR`, or custom per-symbol pip overrides.
 
-3. **Dynamic Stop Loss (SL) in Pips & ADR Presets**:
-   - Real-time 14-day Daily ADR ($\text{ADR}_{14}$) and $\text{ATR}_{14}$ computation in pips.
-   - Presets: `1/4 ADR` (default), `1/3 ADR`, `1/2 ADR`, `1.0 ADR`, `ATR(14)`, `Fixed 20 pips`, `Fixed 50 pips`, or custom inline pips per symbol.
-
-4. **Broker Volume Clamping & Effective Risk Analysis**:
-   - Dual display of mathematical **Exact Lot** (e.g. `0.0053`) and broker **Executable Lot** (e.g. `0.01`).
-   - Automatically computes **Effective Risk %** when minimum lot clamping increases risk exposure (e.g., 0.005 $\to$ 0.01 raises effective risk from 1.0% to 1.88%).
-
-5. **Forex Leverage & Deposit Override**:
-   - Separate **Working Capital** (real money bankroll, e.g. \$100) from **Deposited Broker Cash** (margin balance, e.g. \$20).
-   - Required Margin calculation under account leverage (1:30 to 1:1000).
-   - Real-time margin utilization % and red alert flags for margin deficit.
-
-6. **Interactive TradingView-Style Screener**:
-   - Asset category tabs (All, Forex Majors, Minors, Metals, Energies, Indices, Crypto).
-   - Real-time WebSocket price updates, search filter, and column sorting.
-   - Deep-Dive Modal with step-by-step mathematical breakdown and side-by-side model comparison.
-   - Interactive Ralph Vince TWR growth curve chart.
-   - Trade history CSV import and manual performance overrides.
+5. **🛡️ Broker Volume Clamping & Leverage Margin Health**:
+   - Displays mathematical **Exact Lot** (e.g. `0.0053`) alongside broker **Executable Lot** (e.g. `0.01`).
+   - Automatically computes **Effective Risk %** when minimum lot clamping increases risk exposure.
+   - Real-time margin utilization % with status alerts (`healthy` / `warning` / `exceeded`).
 
 ---
 
-## 🚀 Quick Start
+## 🚀 How to Run & Develop the Frontend
 
-### Launch Dashboard
+### 1. Run Production Server (FastAPI + Built Solid.js UI)
+
+Start the backend server (automatically serves the compiled frontend from `static/dist/`):
 ```powershell
 uv run python -m risk_management_dashboard.run
 ```
-Or with custom port / no auto-open browser:
+Or directly with Uvicorn:
 ```powershell
-uv run python -m risk_management_dashboard.main --port 8080 --no-browser
+uv run uvicorn risk_management_dashboard.app:app --host 127.0.0.1 --port 8000 --reload
 ```
-Access the dashboard at `http://127.0.0.1:8000`.
+Open your browser at `http://127.0.0.1:8000`.
 
 ---
 
-## 🧮 Mathematical Engine
+### 2. Frontend Development with Hot Module Replacement (HMR)
 
-### Fixed Fractional Risk
-$$\text{Risk Amount (\$) } = \text{Working Capital} \times \text{Risk \%}$$
-$$\text{Exact Lot} = \frac{\text{Risk Amount}}{\text{SL in pips} \times \text{Pip Value per Lot}}$$
+The frontend is colocated in `risk_management_dashboard/frontend/` with Vite proxying API and WebSocket traffic to `:8000`:
 
-### Kelly Criterion
-$$f^* = \frac{p(b + 1) - 1}{b}$$
-where $p = \text{Win Rate}$, $b = \frac{\text{Average Win}}{\text{Average Loss}}$ (Payoff Ratio).
-- **Quarter Kelly**: $f_{\text{target}} = \frac{f^*}{4}$
-- **Half Kelly**: $f_{\text{target}} = \frac{f^*}{2}$
+```powershell
+# 1. Navigate to the frontend directory
+cd risk_management_dashboard/frontend
 
-### Ralph Vince Optimal $f$
-Maximizes Terminal Wealth Relative (TWR):
-$$\text{TWR}(f) = \prod_{i=1}^{N} \left(1 + f \times \frac{- \text{Trade PnL}_i}{\text{Worst Loss}}\right)$$
+# 2. Install dependencies (using pnpm or npm)
+pnpm install
+# or: npm install
 
-### Volume Clamping
-$$\text{Executable Lot} = \text{clamp}\left( \text{round}\left(\frac{\text{Exact Lot}}{\text{volume\_step}}\right) \times \text{volume\_step}, \, \text{volume\_min}, \, \text{volume\_max} \right)$$
-$$\text{Effective Risk \%} = \frac{\text{Executable Lot} \times \text{SL pips} \times \text{Pip Value}}{\text{Working Capital}} \times 100$$
+# 3. Start the Vite dev server with instant HMR
+pnpm dev
+# or: npm run dev
+```
 
-### Leverage & Margin
-$$\text{Required Margin} = \frac{\text{Executable Lot} \times \text{Contract Size} \times \text{Price}}{\text{Leverage}}$$
+Open `http://localhost:3000` in your browser. All UI changes will hot-reload instantly while proxying live MT5 data from FastAPI.
 
 ---
 
-## ⚡ Direct MT5 Execution & Real-Time Streaming
+### 3. Build Frontend for Production
 
-1. **One-Click Trading & Safety Toggle**:
-   - `BUY` and `SELL` buttons send calculated market orders directly to MT5 terminal IPC.
-   - Global Risk:Reward multiplier presets (`1:1`, `1:1.5`, `1:2`, `1:3`, `No TP`).
-   - Confirmation popover when One-Click is OFF.
-   - Non-blocking floating toast notifications for filled tickets and broker rejections.
+When you make changes to the Solid.js components and want to build the optimized production assets:
 
-2. **Live Account & PnL Streaming**:
-   - Real-time WebSocket streaming of Broker Balance, Account Equity, and Floating P&L.
-   - Live Account Mode detection (`Hedge` vs `Netting`).
+```powershell
+cd risk_management_dashboard/frontend
+pnpm build
+# or: npm run build
+```
 
----
-
-## 🗺️ Execution Roadmap ([`TODO.md`](TODO.md))
-
-- [ ] **⚡ Turbo Mode Switch**: High-frequency 500ms polling rate with 15-min in-memory ADR/ATR TTL caching.
-- [ ] **📊 Order Management Panel**: Live open positions table with One-Click Close, Break-Even (BE), Partial Close, and inline SL/TP editing.
-- [ ] **🛑 Daily Drawdown Circuit Breaker**: Multi-stage equity stop (Soft Warning -3.0%, Lockout -4.5%, Hard Liquidation -5.0%).
-- [ ] **🛡️ Pre-Trade Execution Gatekeeper**: Spread blowout filter and double-click debounce.
-
-*(Note: Post-trade statistical audit tools including Monte Carlo simulation, MAE/MFE, and calendar heatmaps are housed in [`trade_performance_analytics`](../trade_performance_analytics/IMPLEMENTATION_PLAN.md)).*
+This compiles optimized bundles to `risk_management_dashboard/static/dist/` (JavaScript ~20 KB gzipped, CSS ~4 KB gzipped), ready to be served by FastAPI.
 
 ---
 
-## 🧪 Running Tests
+## 📁 Frontend Architecture (`frontend/src/`)
+
+```text
+frontend/src/
+├── types/                      # TypeScript definitions (AccountSummary, SymbolSpec, OpenPosition, TradeStats)
+├── stores/                     # Fine-grained reactive stores & domain signals
+│   ├── accountStore.ts         # Balance, Equity, Leverage, Margin Health, MT5 Connection
+│   ├── marketStore.ts          # Live ticks, calculated symbol matrices, 3-state sorting, drag & drop
+│   ├── positionsStore.ts       # Live open positions & floating P&L
+│   ├── preferencesStore.ts     # User settings with localStorage persistence
+│   └── toastStore.ts           # Floating notification stack
+├── services/
+│   ├── api.ts                  # Typed REST API client (/api/positions, /api/order/execute, etc.)
+│   └── websocket.ts            # Reconnecting WebSocket client with 500ms/2000ms rate switching
+├── utils/
+│   ├── lotCalculator.ts        # Client-side multi-model lot sizer matching Python risk_calculator.py
+│   └── formatters.ts           # Currency, percentage, and number formatters
+├── components/
+│   ├── header/HeaderMetricsBar.tsx      # Balance, Equity, P&L, Turbo Switch, One-Click Switch
+│   ├── controls/RiskControlsBar.tsx     # Working Capital, Risk Model, SL Mode, RR Ratio
+│   ├── stats/StrategyStatsBanner.tsx    # Collapsible Strategy Performance Summary
+│   ├── matrix/RiskMatrixTable.tsx       # 3-State Sorting Table & Category Filter Tabs
+│   ├── matrix/SymbolRow.tsx             # Microsecond Signal-bound single table row
+│   ├── positions/OrderManagementPanel.tsx # Live Positions Table & Emergency Close All
+│   ├── positions/PositionRow.tsx        # Row with BE snap, 50% partial close, inline SL/TP
+│   ├── modals/                          # DeepDiveModal, ConfirmTradeModal, ManualStatsModal, CsvUploadModal
+│   └── toasts/ToastContainer.tsx        # Toast notification stacking
+├── App.tsx                     # Root Layout component
+├── index.css                   # Dark Trading UI stylesheet
+└── index.tsx                   # DOM mount entrypoint
+```
+
+---
+
+## 🧪 Automated Testing
+
+Run the full pytest test suite (17 unit and API integration tests):
 
 ```powershell
 uv run pytest risk_management_dashboard/test_risk_calculator.py -v

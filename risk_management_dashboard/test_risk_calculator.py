@@ -280,6 +280,7 @@ def test_websocket_stream():
         websocket.send_text("ping")
         resp = websocket.receive_json()
         assert resp["type"] == "pong"
+        websocket.close()
 
 
 def test_symbol_categorization():
@@ -426,6 +427,7 @@ def test_turbo_mode_websocket_rate_update():
         rate_resp2 = websocket.receive_json()
         assert rate_resp2["type"] == "rate_updated"
         assert rate_resp2["interval_ms"] == 2000.0
+        websocket.close()
 
 
 def test_fast_symbol_polling_performance():
@@ -447,6 +449,38 @@ def test_fast_symbol_polling_performance():
         assert "atr_14_pips" in sym
         assert "bid" in sym
         assert "ask" in sym
+
+
+def test_positions_api_endpoints():
+    """Test /api/positions, /api/position/modify, /api/position/close, and /api/position/close-all endpoints."""
+    client = TestClient(app)
+    
+    # 1. GET /api/positions
+    resp = client.get("/api/positions")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "positions" in data
+    assert "count" in data
+    assert isinstance(data["positions"], list)
+
+    # 2. POST /api/position/modify (offline/unconnected test)
+    resp = client.post("/api/position/modify", json={"ticket": 999999, "sl": 1.08000, "tp": 1.10000})
+    assert resp.status_code == 200
+    res_data = resp.json()
+    assert "success" in res_data
+
+    # 3. POST /api/position/close
+    resp = client.post("/api/position/close", json={"ticket": 999999, "volume": 0.01})
+    assert resp.status_code == 200
+    res_data = resp.json()
+    assert "success" in res_data
+
+    # 4. POST /api/position/close-all
+    resp = client.post("/api/position/close-all")
+    assert resp.status_code == 200
+    res_data = resp.json()
+    assert "results" in res_data
+
 
 
 

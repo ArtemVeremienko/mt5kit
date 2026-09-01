@@ -191,6 +191,10 @@ class MT5RiskFeed:
                 return False
 
     @property
+    def is_connected(self) -> bool:
+        return self._is_connected
+
+    @property
     def is_live(self) -> bool:
         return self._is_connected and not self._mock_mode
 
@@ -764,6 +768,217 @@ class MT5RiskFeed:
             except Exception as e:
                 logger.error(f"Exception during send_market_order: {e}")
                 return {"success": False, "message": f"Execution exception: {str(e)}"}
+
+    def get_open_positions(self) -> List[Dict[str, Any]]:
+        """
+        Retrieves all currently open positions from MT5 terminal with live floating P&L and R-multiples.
+        """
+        if not self._is_connected or mt5 is None or self._mock_mode:
+            return []
+
+        with self._mt5_lock:
+            try:
+                positions = mt5.positions_get()
+                if positions is None:
+                    return []
+
+                res = []
+                for p in positions:
+                    pos_type_str = "BUY" if p.type == mt5.ORDER_TYPE_BUY else "SELL"
+                    digits = 5
+                    pip_size = 0.0001
+                    info = mt5.symbol_info(p.symbol)
+                    if info:
+                        digits = info.digits
+                        point = info.point
+                        pip_multiplier = 10.0 if digits in (3, 5) else 1.0
+                        pip_size = point * pip_multiplier if point > 0 else 0.0001
+
+                    # Compute PnL in pips
+                    pnl_pips = 0.0
+                    if pos_type_str == "BUY":
+                        pnl_pips = (p.price_current - p.price_open) / pip_size
+                    else:
+                        pnl_pips = (p.price_open - p.price_current) / pip_size
+
+                    # Compute R-Multiple if SL was defined
+                    r_multiple = None
+                    if p.sl and p.sl > 0:
+                        risk_dist = abs(p.price_open - p.sl)
+                        if risk_dist > 0:
+                            gain_dist = (p.price_current - p.price_open) if pos_type_str == "BUY" else (p.price_open - p.price_current)
+                            r_multiple = round(gain_dist / risk_dist, 2)
+
+                    res.append({
+                        "ticket": int(p.ticket),
+                        "symbol": p.symbol,
+                        "type": pos_type_str,
+                        "volume": float(p.volume),
+                        "price_open": round(float(p.price_open), digits),
+                        "price_current": round(float(p.price_current), digits),
+                        "sl": round(float(p.sl), digits) if p.sl else 0.0,
+                        "tp": round(float(p.tp), digits) if p.tp else 0.0,
+                        "profit": round(float(p.profit), 2),
+                        "swap": round(float(p.swap), 2),
+                        "pnl_pips": round(float(pnl_pips), 1),
+                        "r_multiple": r_multiple,
+                        "comment": p.comment or "",
+                        "magic": int(p.magic),
+                        "time": int(p.time),
+                        "digits": digits,
+                        "pip_size": pip_size
+                    })
+                return res
+            except Exception as e:
+                logger.error(f"Error in get_open_positions: {e}")
+                return []
+
+    def modify_position_sltp(self, ticket: int, sl: Optional[float], tp: Optional[float]) -> Dict[str, Any]:
+        """
+        Modifies Stop-Loss and/or Take-Profit on an open position.
+        """
+        if not self._is_connected or mt5 is None or self._mock_mode:
+            return {"success": False, "message": "MT5 Terminal not connected"}
+
+        with self._mt5_lock:
+            try:
+                positions = mt5.positions_get(ticket=ticket)
+                if not positions or len(positions) == 0:
+                    return {"success": False, "message": f"Position #{ticket} not found"}
+
+                pos = positions[0]
+                info = mt5.symbol_info(pos.symbol)
+                digits = info.digits if info else 5
+
+                new_sl = round(float(sl), digits) if sl is not None and sl > 0 else float(pos.sl)
+                new_tp = round(float(tp), digits) if tp is not None and tp > 0 else float(pos.tp)
+
+                request = {
+                    "action": mt5.TRADE_ACTION_SLTP,
+                    "position": int(ticket),
+                    "symbol": pos.symbol,
+                    "sl": new_sl,
+                    "tp": new_tp,
+                }
+
+                result = mt5.order_send(request)
+                if result is None:
+                    err = mt5.last_error()
+                    return {"success": False, "message": f"mt5.order_send failed: {err}"}
+
+                if result.retcode != mt5.TRADE_RETCODE_DONE:
+                    return {
+                        "success": False,
+                        "retcode": result.retcode,
+                        "message": f"Modify SL/TP rejected: [{result.retcode}] {result.comment}"
+                    }
+
+                return {
+                    "success": True,
+                    "ticket": ticket,
+                    "symbol": pos.symbol,
+                    "sl": new_sl,
+                    "tp": new_tp,
+                    "message": f"Modified #{ticket} {pos.symbol} (SL: {new_sl}, TP: {new_tp})"
+                }
+            except Exception as e:
+                logger.error(f"Error in modify_position_sltp: {e}")
+                return {"success": False, "message": f"Modify exception: {str(e)}"}
+
+    def close_position(self, ticket: int, volume: Optional[float] = None) -> Dict[str, Any]:
+        """
+        Closes an open position (full volume or partial volume liquidation).
+        """
+        if not self._is_connected or mt5 is None or self._mock_mode:
+            return {"success": False, "message": "MT5 Terminal not connected"}
+
+        with self._mt5_lock:
+            try:
+                positions = mt5.positions_get(ticket=ticket)
+                if not positions or len(positions) == 0:
+                    return {"success": False, "message": f"Position #{ticket} not found"}
+
+                pos = positions[0]
+                symbol = pos.symbol
+                info = mt5.symbol_info(symbol)
+                tick = mt5.symbol_info_tick(symbol)
+                if not info or not tick:
+                    return {"success": False, "message": f"Could not retrieve tick for {symbol}"}
+
+                digits = info.digits
+                vol_step = float(info.volume_step) if info.volume_step > 0 else 0.01
+                vol_min = float(info.volume_min) if info.volume_min > 0 else 0.01
+
+                close_vol = float(pos.volume)
+                if volume is not None and volume > 0 and volume < pos.volume:
+                    steps = round(volume / vol_step)
+                    close_vol = max(vol_min, round(steps * vol_step, 6))
+
+                # Opposite order type
+                if pos.type == mt5.ORDER_TYPE_BUY:
+                    order_type = mt5.ORDER_TYPE_SELL
+                    price = float(tick.bid)
+                else:
+                    order_type = mt5.ORDER_TYPE_BUY
+                    price = float(tick.ask)
+
+                filling_mode = mt5.ORDER_FILLING_IOC
+                if hasattr(info, "filling_mode"):
+                    if info.filling_mode & 1:
+                        filling_mode = mt5.ORDER_FILLING_FOK
+                    elif info.filling_mode & 2:
+                        filling_mode = mt5.ORDER_FILLING_IOC
+                    else:
+                        filling_mode = mt5.ORDER_FILLING_RETURN
+
+                request = {
+                    "action": mt5.TRADE_ACTION_DEAL,
+                    "position": int(ticket),
+                    "symbol": symbol,
+                    "volume": close_vol,
+                    "type": order_type,
+                    "price": price,
+                    "deviation": 20,
+                    "comment": f"Close #{ticket}",
+                    "type_time": mt5.ORDER_TIME_GTC,
+                    "type_filling": filling_mode,
+                }
+
+                result = mt5.order_send(request)
+                if result is None:
+                    err = mt5.last_error()
+                    return {"success": False, "message": f"mt5.order_send failed: {err}"}
+
+                if result.retcode != mt5.TRADE_RETCODE_DONE:
+                    return {
+                        "success": False,
+                        "retcode": result.retcode,
+                        "message": f"Close rejected: [{result.retcode}] {result.comment}"
+                    }
+
+                return {
+                    "success": True,
+                    "ticket": ticket,
+                    "symbol": symbol,
+                    "closed_volume": close_vol,
+                    "remaining_volume": round(float(pos.volume) - close_vol, 6),
+                    "price": price,
+                    "message": f"Closed {close_vol} lots of #{ticket} {symbol} @ {price:.{digits}f}"
+                }
+            except Exception as e:
+                logger.error(f"Error in close_position: {e}")
+                return {"success": False, "message": f"Close exception: {str(e)}"}
+
+    def close_all_positions(self) -> List[Dict[str, Any]]:
+        """
+        Closes all currently open positions.
+        """
+        positions = self.get_open_positions()
+        results = []
+        for p in positions:
+            res = self.close_position(ticket=p["ticket"])
+            results.append(res)
+        return results
 
 
 feed = MT5RiskFeed(mock_mode=False)
