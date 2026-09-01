@@ -1443,21 +1443,22 @@ tr.drag-over {
 
 .positions-table {
   width: 100%;
+  min-width: 1250px;
   border-collapse: collapse;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
-/* Column Width Allocations */
-.col-th-ticket { width: 90px; }
-.col-th-symbol { width: 140px; }
-.col-th-volume { width: 105px; text-align: right; }
-.col-th-open { width: 105px; text-align: right; }
-.col-th-current { width: 105px; text-align: right; }
-.col-th-sl { width: 145px; text-align: center; }
-.col-th-tp { width: 145px; text-align: center; }
-.col-th-pnl { width: 145px; text-align: right; }
-.col-th-r { width: 95px; text-align: center; }
-.col-th-actions { width: 195px; text-align: right; }
+/* Stable Column Width Allocations (100% total) */
+.col-th-ticket { width: 7%; }
+.col-th-symbol { width: 11%; }
+.col-th-volume { width: 8%; text-align: right; }
+.col-th-open { width: 8%; text-align: right; }
+.col-th-current { width: 8%; text-align: right; }
+.col-th-sl { width: 13%; text-align: center; }
+.col-th-tp { width: 13%; text-align: center; }
+.col-th-pnl { width: 15%; text-align: right; }
+.col-th-r { width: 6%; text-align: center; }
+.col-th-actions { width: 11%; text-align: right; }
 
 .th-actions-header {
   display: flex;
