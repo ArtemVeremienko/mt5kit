@@ -1,10 +1,9 @@
 import { Component, createSignal, onMount, onCleanup, Show } from 'solid-js';
 import { HeaderMetricsBar } from './components/header/HeaderMetricsBar';
-import { WorkspaceNavTabs } from './components/navigation/WorkspaceNavTabs';
-import { RiskControlsBar } from './components/controls/RiskControlsBar';
-import { StrategyStatsBanner } from './components/stats/StrategyStatsBanner';
 import { RiskMatrixTable } from './components/matrix/RiskMatrixTable';
 import { OrderManagementPanel } from './components/positions/OrderManagementPanel';
+import { RiskConfigModal } from './components/modals/RiskConfigModal';
+import { StrategyProfileModal } from './components/modals/StrategyProfileModal';
 import { DeepDiveModal } from './components/modals/DeepDiveModal';
 import { ConfirmTradeModal } from './components/modals/ConfirmTradeModal';
 import { ManualStatsModal } from './components/modals/ManualStatsModal';
@@ -22,6 +21,8 @@ import { CalculatedSymbolResult } from './types';
 export const App: Component = () => {
   const [deepDiveItem, setDeepDiveItem] = createSignal<CalculatedSymbolResult | null>(null);
   const [pendingTrade, setPendingTrade] = createSignal<{ item: CalculatedSymbolResult; action: 'BUY' | 'SELL' } | null>(null);
+  const [isRiskModalOpen, setIsRiskModalOpen] = createSignal<boolean>(false);
+  const [isStrategyModalOpen, setIsStrategyModalOpen] = createSignal<boolean>(false);
   const [isManualStatsOpen, setIsManualStatsOpen] = createSignal<boolean>(false);
   const [isCsvUploadOpen, setIsCsvUploadOpen] = createSignal<boolean>(false);
   const [isSubmittingOrder, setIsSubmittingOrder] = createSignal<boolean>(false);
@@ -35,12 +36,26 @@ export const App: Component = () => {
         target.tagName === 'SELECT' ||
         target.isContentEditable);
 
+    if (e.key === 'Escape') {
+      setIsRiskModalOpen(false);
+      setIsStrategyModalOpen(false);
+      setDeepDiveItem(null);
+      setPendingTrade(null);
+      setIsManualStatsOpen(false);
+      setIsCsvUploadOpen(false);
+      return;
+    }
+
     if (isEditingText) return;
 
     if (e.key === '1') {
       preferencesStore.setActiveView('matrix');
     } else if (e.key === '2') {
       preferencesStore.setActiveView('positions');
+    } else if (e.key === '/') {
+      e.preventDefault();
+      const searchInput = document.querySelector<HTMLInputElement>('.search-input');
+      if (searchInput) searchInput.focus();
     }
   };
 
@@ -127,19 +142,13 @@ export const App: Component = () => {
 
   return (
     <div class="dashboard-container">
-      <HeaderMetricsBar />
+      <HeaderMetricsBar
+        onOpenRiskModal={() => setIsRiskModalOpen(true)}
+        onOpenStrategyModal={() => setIsStrategyModalOpen(true)}
+      />
 
       <main class="dashboard-main">
-        <WorkspaceNavTabs />
-
         <Show when={preferencesStore.activeView() === 'matrix'}>
-          <RiskControlsBar />
-
-          <StrategyStatsBanner
-            onOpenManualModal={() => setIsManualStatsOpen(true)}
-            onOpenCsvModal={() => setIsCsvUploadOpen(true)}
-          />
-
           <RiskMatrixTable
             onTradeClick={handleTradeClick}
             onOpenDeepDive={(item) => setDeepDiveItem(item)}
@@ -152,6 +161,18 @@ export const App: Component = () => {
       </main>
 
       {/* Modals */}
+      <RiskConfigModal
+        isOpen={isRiskModalOpen()}
+        onClose={() => setIsRiskModalOpen(false)}
+      />
+
+      <StrategyProfileModal
+        isOpen={isStrategyModalOpen()}
+        onClose={() => setIsStrategyModalOpen(false)}
+        onOpenManualModal={() => setIsManualStatsOpen(true)}
+        onOpenCsvModal={() => setIsCsvUploadOpen(true)}
+      />
+
       <DeepDiveModal
         item={deepDiveItem()}
         onClose={() => setDeepDiveItem(null)}

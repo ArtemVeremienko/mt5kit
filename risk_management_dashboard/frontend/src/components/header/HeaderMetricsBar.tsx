@@ -1,15 +1,26 @@
-import { Component } from 'solid-js';
+import { Component, Show, createMemo } from 'solid-js';
 import { accountStore } from '../../stores/accountStore';
 import { preferencesStore } from '../../stores/preferencesStore';
 import { positionsStore } from '../../stores/positionsStore';
+import { marketStore } from '../../stores/marketStore';
 import { toastStore } from '../../stores/toastStore';
 import { wsService } from '../../services/websocket';
 import { formatCurrency } from '../../utils/formatters';
 
-export const HeaderMetricsBar: Component = () => {
+interface Props {
+  onOpenRiskModal: () => void;
+  onOpenStrategyModal: () => void;
+}
+
+export const HeaderMetricsBar: Component<Props> = (props) => {
   const account = accountStore.account;
   const isConnected = accountStore.isConnected;
   const floatingProfit = positionsStore.totalFloatingProfit;
+  const posCount = positionsStore.totalPositionsCount;
+  const symbolCount = () => marketStore.rawSymbols().length;
+  const activeView = preferencesStore.activeView;
+  const tradeStats = marketStore.tradeStats;
+  const sampleInfo = marketStore.sampleInfo;
 
   const handleTurboToggle = () => {
     const isTurbo = preferencesStore.toggleTurboMode();
@@ -32,49 +43,151 @@ export const HeaderMetricsBar: Component = () => {
     );
   };
 
+  // Compact Risk summary string
+  const riskSummaryText = createMemo(() => {
+    const wc = formatCurrency(preferencesStore.workingCapital());
+    const method = preferencesStore.riskMethod();
+    const customPct = preferencesStore.customRiskPct();
+    const sl = preferencesStore.slMode();
+    const rr = preferencesStore.rrRatio();
+    const stats = tradeStats();
+
+    let targetRisk = `${customPct.toFixed(1)}%`;
+    if (method === 'kelly_full') targetRisk = `${((stats.kelly_full || 0) * 100).toFixed(1)}% Kelly`;
+    else if (method === 'kelly_half') targetRisk = `${((stats.kelly_half || 0) * 100).toFixed(1)}% 1/2 Kelly`;
+    else if (method === 'kelly_quarter') targetRisk = `${((stats.kelly_quarter || 0) * 100).toFixed(1)}% 1/4 Kelly`;
+    else if (method === 'optimal_f_full') targetRisk = `${((stats.optimal_f || 0) * 100).toFixed(1)}% Opt f`;
+    else if (method === 'optimal_f_half') targetRisk = `${((stats.optimal_f_half || 0) * 100).toFixed(1)}% 1/2 f`;
+    else if (method === 'optimal_f_quarter') targetRisk = `${((stats.optimal_f_quarter || 0) * 100).toFixed(1)}% 1/4 f`;
+
+    return `${wc} · ${targetRisk} · ${sl} · 1:${rr} RR`;
+  });
+
+  // Compact Strategy summary string
+  const strategySummaryText = createMemo(() => {
+    const trades = tradeStats().total_trades || 120;
+    const wr = ((tradeStats().win_rate || 0.55) * 100).toFixed(0);
+    const pf = (tradeStats().profit_factor || 1.83).toFixed(2);
+    const tierName = sampleInfo()?.tier || 'info';
+
+    return `${trades} Tr (${tierName}) · ${wr}% WR · PF ${pf}`;
+  });
+
   return (
     <header class="dashboard-header">
-      <div class="header-brand">
-        <div class="brand-logo">
+      {/* Left Zone: Brand Logo & Segmented Workspace Navigation */}
+      <div class="header-left-zone">
+        <div class="brand-logo" title="MetaTrader 5 Risk Management Engine">
           <span class="logo-icon">⚡</span>
-          <div>
-            <div class="brand-title">MT5 RISK ENGINE</div>
-            <div class="brand-subtitle">SOLID.JS FINE-GRAINED REACTIVE MATRIX</div>
+          <div class="brand-title-group">
+            <span class="brand-title">MT5 RISK</span>
           </div>
         </div>
-      </div>
 
-      <div class="account-metrics-bar">
-        <div class="metric-card">
-          <div class="metric-label">DEPOSITED BALANCE</div>
-          <div class="metric-value">{formatCurrency(account().balance)}</div>
-        </div>
-
-        <div class="metric-card">
-          <div class="metric-label">EQUITY</div>
-          <div class="metric-value">{formatCurrency(account().equity)}</div>
-        </div>
-
-        <div class="metric-card">
-          <div class="metric-label">FLOATING P&L</div>
-          <div
-            class="metric-value"
-            classList={{
-              'text-profit': floatingProfit() > 0,
-              'text-loss': floatingProfit() < 0,
-            }}
+        <div class="header-workspace-switcher">
+          <button
+            class="header-nav-btn"
+            classList={{ active: activeView() === 'matrix' }}
+            onClick={() => preferencesStore.setActiveView('matrix')}
+            title="Market Risk Screener Matrix (Hotkey: 1)"
           >
-            {floatingProfit() >= 0 ? `+${formatCurrency(floatingProfit())}` : formatCurrency(floatingProfit())}
-          </div>
-        </div>
+            <span class="btn-icon">🎯</span>
+            <span class="btn-text">Screener</span>
+            <span class="btn-badge">{symbolCount()}</span>
+            <kbd class="btn-kbd">1</kbd>
+          </button>
 
-        <div class="metric-card">
-          <div class="metric-label">LEVERAGE</div>
-          <div class="metric-value">1:{account().leverage || 300}</div>
+          <button
+            class="header-nav-btn"
+            classList={{
+              active: activeView() === 'positions',
+              'has-orders': posCount() > 0,
+            }}
+            onClick={() => preferencesStore.setActiveView('positions')}
+            title="Live Open Positions Manager (Hotkey: 2)"
+          >
+            <span class="btn-icon">💼</span>
+            <span class="btn-text">Positions</span>
+            <span class="btn-badge" classList={{ 'badge-active': posCount() > 0 }}>
+              {posCount()}
+            </span>
+            <Show when={posCount() > 0}>
+              <span
+                class="header-pnl-tag"
+                classList={{
+                  'text-profit': floatingProfit() > 0,
+                  'text-loss': floatingProfit() < 0,
+                }}
+              >
+                {floatingProfit() >= 0 ? `+${formatCurrency(floatingProfit())}` : formatCurrency(floatingProfit())}
+              </span>
+            </Show>
+            <kbd class="btn-kbd">2</kbd>
+          </button>
         </div>
       </div>
 
-      <div class="header-actions">
+      {/* Center Zone: Account Telemetry + Interactive Summary Pills */}
+      <div class="header-center-zone">
+        <div class="account-inline-metrics">
+          <div class="metric-mini-group" title="Deposited Balance in Broker Account">
+            <span class="metric-mini-label">BAL</span>
+            <span class="metric-mini-val font-mono">{formatCurrency(account().balance || 0.0)}</span>
+          </div>
+
+          <div class="metric-mini-group" title="Net Real-Time Equity">
+            <span class="metric-mini-label">EQ</span>
+            <span class="metric-mini-val font-mono">{formatCurrency(account().equity || 0.0)}</span>
+          </div>
+
+          <div class="metric-mini-group" title="Floating Profit / Loss">
+            <span class="metric-mini-label">P&L</span>
+            <span
+              class="metric-mini-val font-mono"
+              classList={{
+                'text-profit': floatingProfit() > 0,
+                'text-loss': floatingProfit() < 0,
+              }}
+            >
+              {floatingProfit() >= 0 ? `+${formatCurrency(floatingProfit())}` : formatCurrency(floatingProfit())}
+            </span>
+          </div>
+
+          <div class="metric-mini-group" title="Account Leverage">
+            <span class="metric-mini-label">LEV</span>
+            <span class="metric-mini-val font-mono">1:{account().leverage || 300}</span>
+          </div>
+        </div>
+
+        {/* Interactive Configuration Capsule Pills */}
+        <div class="header-capsules-group">
+          <button
+            class="header-capsule-pill"
+            onClick={props.onOpenRiskModal}
+            title="Click to configure Working Capital, Risk Model, SL Presets, and R:R Ratio"
+          >
+            <span class="capsule-icon">⚙️</span>
+            <span class="capsule-text">{riskSummaryText()}</span>
+            <span class="capsule-arrow">▾</span>
+          </button>
+
+          <button
+            class="header-capsule-pill"
+            style={{
+              'border-left-color': sampleInfo()?.badge_color || 'var(--accent-blue)',
+            }}
+            onClick={props.onOpenStrategyModal}
+            title="Click to view Strategy Sample Profile, Ralph Vince Optimal f, and Kelly math"
+          >
+            <span class="capsule-icon">📊</span>
+            <span class="capsule-text">{strategySummaryText()}</span>
+            <span class="capsule-arrow">▾</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Right Zone: System Toggles & Connection Status */}
+      <div class="header-right-zone">
         <button
           class="btn-toggle"
           classList={{ active: preferencesStore.turboMode() }}
@@ -82,7 +195,7 @@ export const HeaderMetricsBar: Component = () => {
           title="Toggle 500ms Turbo streaming rate"
         >
           <span class="toggle-indicator"></span>
-          <span>{preferencesStore.turboMode() ? '⚡ Turbo (500ms)' : '🐢 Standard (2s)'}</span>
+          <span>{preferencesStore.turboMode() ? '⚡ Turbo (500ms)' : '🐢 Std (2s)'}</span>
         </button>
 
         <button
