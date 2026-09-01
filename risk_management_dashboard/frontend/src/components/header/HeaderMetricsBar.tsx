@@ -1,4 +1,4 @@
-import { Component, Show, createMemo } from 'solid-js';
+import { Component, Show, createMemo, createSignal, createEffect, onCleanup } from 'solid-js';
 import { accountStore } from '../../stores/accountStore';
 import { preferencesStore } from '../../stores/preferencesStore';
 import { positionsStore } from '../../stores/positionsStore';
@@ -21,6 +21,34 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
   const activeView = preferencesStore.activeView;
   const tradeStats = marketStore.tradeStats;
   const sampleInfo = marketStore.sampleInfo;
+
+  const [isAccountInfoOpen, setIsAccountInfoOpen] = createSignal<boolean>(false);
+  let accountInfoRef: HTMLDivElement | undefined;
+
+  // Global Escape & Click-Outside dismissal for Account Info popover
+  createEffect(() => {
+    if (!isAccountInfoOpen()) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsAccountInfoOpen(false);
+      }
+    };
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (accountInfoRef && !accountInfoRef.contains(e.target as Node)) {
+        setIsAccountInfoOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleClickOutside);
+
+    onCleanup(() => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleClickOutside);
+    });
+  });
 
   const handleTurboToggle = () => {
     const isTurbo = preferencesStore.toggleTurboMode();
@@ -53,12 +81,12 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
     const stats = tradeStats();
 
     let targetRisk = `${customPct.toFixed(1)}%`;
-    if (method === 'kelly_full') targetRisk = `${((stats.kelly_full || 0) * 100).toFixed(1)}% Kelly`;
-    else if (method === 'kelly_half') targetRisk = `${((stats.kelly_half || 0) * 100).toFixed(1)}% 1/2 Kelly`;
-    else if (method === 'kelly_quarter') targetRisk = `${((stats.kelly_quarter || 0) * 100).toFixed(1)}% 1/4 Kelly`;
-    else if (method === 'optimal_f_full') targetRisk = `${((stats.optimal_f || 0) * 100).toFixed(1)}% Opt f`;
-    else if (method === 'optimal_f_half') targetRisk = `${((stats.optimal_f_half || 0) * 100).toFixed(1)}% 1/2 f`;
-    else if (method === 'optimal_f_quarter') targetRisk = `${((stats.optimal_f_quarter || 0) * 100).toFixed(1)}% 1/4 f`;
+    if (method === 'kelly_full') targetRisk = `${((stats.kelly_full ?? 0) * 100).toFixed(1)}% Kelly`;
+    else if (method === 'kelly_half') targetRisk = `${((stats.kelly_half ?? 0) * 100).toFixed(1)}% 1/2 Kelly`;
+    else if (method === 'kelly_quarter') targetRisk = `${((stats.kelly_quarter ?? 0) * 100).toFixed(1)}% 1/4 Kelly`;
+    else if (method === 'optimal_f_full') targetRisk = `${((stats.optimal_f ?? 0) * 100).toFixed(1)}% Opt f`;
+    else if (method === 'optimal_f_half') targetRisk = `${((stats.optimal_f_half ?? 0) * 100).toFixed(1)}% 1/2 f`;
+    else if (method === 'optimal_f_quarter') targetRisk = `${((stats.optimal_f_quarter ?? 0) * 100).toFixed(1)}% 1/4 f`;
 
     return `${wc} · ${targetRisk} · ${sl} · 1:${rr} RR`;
   });
@@ -128,34 +156,88 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
 
       {/* Center Zone: Account Telemetry + Interactive Summary Pills */}
       <div class="header-center-zone">
-        <div class="account-inline-metrics">
-          <div class="metric-mini-group" title="Deposited Balance in Broker Account">
-            <span class="metric-mini-label">BAL</span>
-            <span class="metric-mini-val font-mono">{formatCurrency(account().balance || 0.0)}</span>
-          </div>
+        <div class="account-inline-metrics-container" ref={accountInfoRef}>
+          <div class="account-inline-metrics">
+            <div class="metric-mini-group" title="Deposited Balance in Broker Account">
+              <span class="metric-mini-label">BAL</span>
+              <span class="metric-mini-val font-mono">{formatCurrency(account().balance || 0.0)}</span>
+            </div>
 
-          <div class="metric-mini-group" title="Net Real-Time Equity">
-            <span class="metric-mini-label">EQ</span>
-            <span class="metric-mini-val font-mono">{formatCurrency(account().equity || 0.0)}</span>
-          </div>
+            <div class="metric-mini-group" title="Net Real-Time Equity">
+              <span class="metric-mini-label">EQ</span>
+              <span class="metric-mini-val font-mono">{formatCurrency(account().equity || 0.0)}</span>
+            </div>
 
-          <div class="metric-mini-group" title="Floating Profit / Loss">
-            <span class="metric-mini-label">P&L</span>
-            <span
-              class="metric-mini-val font-mono"
-              classList={{
-                'text-profit': floatingProfit() > 0,
-                'text-loss': floatingProfit() < 0,
-              }}
+            <div class="metric-mini-group" title="Floating Profit / Loss">
+              <span class="metric-mini-label">P&L</span>
+              <span
+                class="metric-mini-val font-mono"
+                classList={{
+                  'text-profit': floatingProfit() > 0,
+                  'text-loss': floatingProfit() < 0,
+                  'text-neutral': floatingProfit() === 0,
+                }}
+              >
+                {floatingProfit() > 0
+                  ? `+${formatCurrency(floatingProfit())}`
+                  : floatingProfit() < 0
+                  ? formatCurrency(floatingProfit())
+                  : '$0.00'}
+              </span>
+            </div>
+
+            <button
+              type="button"
+              class="btn-account-info"
+              classList={{ active: isAccountInfoOpen() }}
+              onClick={() => setIsAccountInfoOpen(!isAccountInfoOpen())}
+              title="Click to view full MT5 Account Info (Leverage, Server, Margin Health, Login)"
             >
-              {floatingProfit() >= 0 ? `+${formatCurrency(floatingProfit())}` : formatCurrency(floatingProfit())}
-            </span>
+              <span class="account-info-icon">ℹ️</span>
+            </button>
           </div>
 
-          <div class="metric-mini-group" title="Account Leverage">
-            <span class="metric-mini-label">LEV</span>
-            <span class="metric-mini-val font-mono">1:{account().leverage || 300}</span>
-          </div>
+          {/* Floating Account Details Popover */}
+          <Show when={isAccountInfoOpen()}>
+            <div class="account-info-popover">
+              <div class="acc-popover-header">
+                <div class="acc-popover-title-group">
+                  <span class="acc-popover-icon">👤</span>
+                  <span class="acc-popover-title">MT5 ACCOUNT TELEMETRY</span>
+                </div>
+                <span class="acc-popover-badge" classList={{ 'badge-live': isConnected() }}>
+                  {isConnected() ? 'MT5 LIVE' : 'OFFLINE'}
+                </span>
+              </div>
+
+              <div class="acc-popover-grid">
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Login / ID</span>
+                  <span class="acc-popover-val font-mono">#{account().login || '—'}</span>
+                </div>
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Account Name</span>
+                  <span class="acc-popover-val">{account().name || 'MT5 Trader'}</span>
+                </div>
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Server / Broker</span>
+                  <span class="acc-popover-val font-mono">{account().server || 'MetaQuotes'}</span>
+                </div>
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Account Type</span>
+                  <span class="acc-popover-val">{account().account_type || 'Hedge'}</span>
+                </div>
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Base Currency</span>
+                  <span class="acc-popover-val font-mono">{account().currency || 'USD'}</span>
+                </div>
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Leverage</span>
+                  <span class="acc-popover-val font-mono text-accent">1:{account().leverage || 2000}</span>
+                </div>
+              </div>
+            </div>
+          </Show>
         </div>
 
         {/* Interactive Configuration Capsule Pills */}

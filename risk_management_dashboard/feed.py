@@ -276,7 +276,11 @@ class MT5RiskFeed:
         if any(idx in s for idx in index_keywords) or "INDEX" in p or "INDICES" in p:
             return "Indices"
 
-        # 6. Forex Minors / Crosses
+        # 6. Equities / Stocks (e.g. AMD.O, AAPL.O, TSLA.O, NVDA.O, MSFT.O or STOCK/EQUITY paths)
+        if any(ext in s for ext in [".O", ".N", ".US", ".UK", ".DE", "AMD", "AAPL", "TSLA", "NVDA", "MSFT", "AMZN", "GOOG", "META"]) or any(k in p for k in ["STOCK", "EQUITY", "EQUITIES", "SHARES"]):
+            return "Stocks"
+
+        # 7. Forex Minors / Crosses
         if len(s) >= 6 and any(s.startswith(cur) or cur in s for cur in ["EUR", "GBP", "USD", "AUD", "CAD", "CHF", "NZD", "JPY"]):
             return "Forex Minors"
 
@@ -466,10 +470,26 @@ class MT5RiskFeed:
                             pip_multiplier = 10.0 if digits in (3, 5) else 1.0
                             pip_size = point * pip_multiplier if point > 0 else 0.0001
                             
+                            category = self._determine_category(info.name, info.path)
+                            acc = mt5.account_info() if self.is_live else None
+                            lev = float(acc.leverage) if (acc and acc.leverage > 0) else 2000.0
+                            default_rate = 0.04 if category == "Stocks" else (1.0 / lev)
+                            base_margin_rate = default_rate
+                            try:
+                                tick = mt5.symbol_info_tick(symbol)
+                                init_price = float(tick.ask) if tick and tick.ask else 1.0
+                                raw_m = mt5.order_calc_margin(mt5.ORDER_TYPE_BUY, symbol, 1.0, init_price)
+                                if raw_m is not None and raw_m > 0:
+                                    n_1lot = float(info.trade_contract_size) * init_price
+                                    if n_1lot > 0:
+                                        base_margin_rate = round(float(raw_m) / n_1lot, 6)
+                            except Exception:
+                                pass
+
                             # Cache base static specs
                             self._specs_cache[symbol] = {
                                 "symbol": info.name,
-                                "category": self._determine_category(info.name, info.path),
+                                "category": category,
                                 "digits": digits,
                                 "point": point,
                                 "pip_size": pip_size,
@@ -482,7 +502,8 @@ class MT5RiskFeed:
                                 "volume_step": float(info.volume_step) if info.volume_step > 0 else 0.01,
                                 "currency_base": info.currency_base,
                                 "currency_profit": info.currency_profit,
-                                "currency_margin": info.currency_margin
+                                "currency_margin": info.currency_margin,
+                                "margin_rate": base_margin_rate
                             }
                             # Calculate ADR/ATR
                             self._calculate_adr_and_atr(symbol, point, digits)
@@ -507,7 +528,8 @@ class MT5RiskFeed:
                             "volume_step": item["volume_step"],
                             "currency_base": symbol[:3] if len(symbol) == 6 else "USD",
                             "currency_profit": symbol[3:6] if len(symbol) == 6 else "USD",
-                            "currency_margin": symbol[:3] if len(symbol) == 6 else "USD"
+                            "currency_margin": symbol[:3] if len(symbol) == 6 else "USD",
+                            "margin_rate": 0.04 if item["category"] == "Stocks" else 0.0005
                         }
                         self._volatility_cache[symbol] = {
                             "adr_14_pips": item["adr_14_pips"],
@@ -517,7 +539,7 @@ class MT5RiskFeed:
 
     def get_symbol_specs(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
-        Fetches detailed specifications for a single symbol.
+        Retrieves real-time symbol specifications, tick prices, spread, and ADR/ATR.
         Optimized with fast tick lookups and cached volatility/specifications.
         """
         if self.is_live:
@@ -534,9 +556,24 @@ class MT5RiskFeed:
                             point = info.point
                             pip_multiplier = 10.0 if digits in (3, 5) else 1.0
                             pip_size = point * pip_multiplier if point > 0 else 0.0001
+                            category = self._determine_category(info.name, info.path)
+                            acc = mt5.account_info() if self.is_live else None
+                            lev = float(acc.leverage) if (acc and acc.leverage > 0) else 2000.0
+                            default_rate = 0.04 if category == "Stocks" else (1.0 / lev)
+                            base_margin_rate = default_rate
+                            try:
+                                init_price = float(tick.ask) if tick and tick.ask else 1.0
+                                raw_m = mt5.order_calc_margin(mt5.ORDER_TYPE_BUY, symbol, 1.0, init_price)
+                                if raw_m is not None and raw_m > 0:
+                                    n_1lot = float(info.trade_contract_size) * init_price
+                                    if n_1lot > 0:
+                                        base_margin_rate = round(float(raw_m) / n_1lot, 6)
+                            except Exception:
+                                pass
+
                             base_spec = {
                                 "symbol": info.name,
-                                "category": self._determine_category(info.name, info.path),
+                                "category": category,
                                 "digits": digits,
                                 "point": point,
                                 "pip_size": pip_size,
@@ -549,7 +586,8 @@ class MT5RiskFeed:
                                 "volume_step": float(info.volume_step) if info.volume_step > 0 else 0.01,
                                 "currency_base": info.currency_base,
                                 "currency_profit": info.currency_profit,
-                                "currency_margin": info.currency_margin
+                                "currency_margin": info.currency_margin,
+                                "margin_rate": base_margin_rate
                             }
                             self._specs_cache[symbol] = base_spec
 
@@ -580,6 +618,12 @@ class MT5RiskFeed:
                             stops_level=stops_level
                         )
 
+                        contract_size = base_spec["trade_contract_size"]
+                        m_price = float(ask) if ask else 1.0
+                        notional_1lot = contract_size * m_price
+                        margin_rate = base_spec.get("margin_rate", 0.04 if base_spec["category"] == "Stocks" else 0.0005)
+                        margin_per_lot = round(notional_1lot * margin_rate, 4)
+
                         return {
                             **base_spec,
                             "bid": float(bid) if bid else 1.0,
@@ -588,7 +632,9 @@ class MT5RiskFeed:
                             "spread_pips": spread_pips,
                             "adr_14_pips": adr_pips,
                             "atr_14_pips": atr_pips,
-                            "step_rule": step_rule
+                            "step_rule": step_rule,
+                            "margin_per_lot": margin_per_lot,
+                            "margin_rate": margin_rate
                         }
                 except Exception as e:
                     logger.error(f"Error fetching live symbol specs for {symbol}: {e}")
@@ -613,6 +659,12 @@ class MT5RiskFeed:
                     stops_level=0
                 )
 
+                contract_size = item["trade_contract_size"]
+                m_price = item["ask"]
+                notional_1lot = contract_size * m_price
+                margin_per_lot = round(notional_1lot * 0.04 if item["category"] == "Stocks" else notional_1lot / 300.0, 4)
+                margin_rate = round(margin_per_lot / notional_1lot, 6) if notional_1lot > 0 else 0.0033
+
                 return {
                     **item,
                     "pip_value_per_lot": round(pip_val, 4),
@@ -622,7 +674,9 @@ class MT5RiskFeed:
                     "currency_base": symbol[:3] if len(symbol) == 6 else "USD",
                     "currency_profit": symbol[3:6] if len(symbol) == 6 else "USD",
                     "currency_margin": symbol[:3] if len(symbol) == 6 else "USD",
-                    "step_rule": step_rule
+                    "step_rule": step_rule,
+                    "margin_per_lot": margin_per_lot,
+                    "margin_rate": margin_rate
                 }
         return None
 
@@ -676,7 +730,11 @@ class MT5RiskFeed:
                     acc_leverage = float(acc.leverage) if (acc and acc.leverage > 0) else 300.0
                     raw_margin = mt5.order_calc_margin(mt5.ORDER_TYPE_BUY, symbol, lots, price)
                     if raw_margin is not None and raw_margin > 0:
-                        scale = (acc_leverage / leverage) if leverage > 0 else 1.0
+                        info = mt5.symbol_info(symbol)
+                        is_fixed_margin = info and (getattr(info, "trade_calc_mode", 0) in (2, 32) or info.trade_contract_size <= 10.0)
+                        if is_fixed_margin:
+                            return round(float(raw_margin), 2)
+                        scale = (acc_leverage / leverage) if (leverage > 0 and abs(acc_leverage - leverage) > 0.1) else 1.0
                         return round(float(raw_margin) * scale, 2)
                 except Exception as e:
                     logger.debug(f"order_calc_margin error for {symbol}: {e}")

@@ -45,17 +45,17 @@ export function computeLocalRiskForResult(
   if (riskMethod === 'fractional') {
     targetRiskPct = Math.max(0.01, customRiskPct || 1.0);
   } else if (riskMethod === 'kelly_full') {
-    targetRiskPct = (tradeStats.kelly_full || 0.05) * 100.0;
+    targetRiskPct = (tradeStats.kelly_full ?? 0) * 100.0;
   } else if (riskMethod === 'kelly_half') {
-    targetRiskPct = (tradeStats.kelly_half || 0.025) * 100.0;
+    targetRiskPct = (tradeStats.kelly_half ?? 0) * 100.0;
   } else if (riskMethod === 'kelly_quarter') {
-    targetRiskPct = (tradeStats.kelly_quarter || 0.0125) * 100.0;
+    targetRiskPct = (tradeStats.kelly_quarter ?? 0) * 100.0;
   } else if (riskMethod === 'optimal_f_full') {
-    targetRiskPct = (tradeStats.optimal_f || 0.05) * 100.0;
+    targetRiskPct = (tradeStats.optimal_f ?? 0) * 100.0;
   } else if (riskMethod === 'optimal_f_half') {
-    targetRiskPct = (tradeStats.optimal_f_half || 0.025) * 100.0;
+    targetRiskPct = (tradeStats.optimal_f_half ?? 0) * 100.0;
   } else if (riskMethod === 'optimal_f_quarter') {
-    targetRiskPct = (tradeStats.optimal_f_quarter || 0.0125) * 100.0;
+    targetRiskPct = (tradeStats.optimal_f_quarter ?? 0) * 100.0;
   }
 
   const workingCap = workingCapital || 100.0;
@@ -76,7 +76,9 @@ export function computeLocalRiskForResult(
   let isClampedMin = false;
   let isClampedMax = false;
 
-  if (steppedLot < volumeMin) {
+  if (targetRiskPct <= 0 || exactLot <= 0) {
+    executableLot = 0.0;
+  } else if (steppedLot < volumeMin) {
     executableLot = volumeMin;
     isClampedMin = true;
   } else if (steppedLot > volumeMax) {
@@ -97,19 +99,40 @@ export function computeLocalRiskForResult(
   const marketPrice = bid > 0 ? bid : ask > 0 ? ask : 1.0;
   const symUpper = symbol.toUpperCase();
 
-  let requiredMargin = 0.0;
-  if (symUpper.includes('JP225') || symUpper.includes('JPN225') || symUpper.includes('NIKKEI')) {
-    const notionalJpy = executableLot * contractSize * marketPrice;
-    requiredMargin = notionalJpy / 159.5;
-  } else if (symUpper.includes('DE40') || symUpper.includes('GER40') || symUpper.includes('DAX')) {
-    const notionalEur = executableLot * contractSize * marketPrice;
-    requiredMargin = (notionalEur * 1.16) / (lev / 30.0);
-  } else if (spec.currency_base === 'USD' || symUpper.startsWith('USD')) {
-    requiredMargin = (executableLot * contractSize) / lev;
-  } else {
-    requiredMargin = (executableLot * contractSize * marketPrice) / lev;
-  }
-  requiredMargin = Math.round(requiredMargin * 100) / 100;
+  const computeMargin = (lots: number): number => {
+    let m = 0.0;
+    if (spec.margin_per_lot && spec.margin_per_lot > 0) {
+      const refPrice = spec.ask > 0 ? spec.ask : marketPrice;
+      const priceRatio = refPrice > 0 ? marketPrice / refPrice : 1.0;
+      m = lots * spec.margin_per_lot * priceRatio;
+    } else if (symUpper.includes('JP225') || symUpper.includes('JPN225') || symUpper.includes('NIKKEI')) {
+      const notionalJpy = lots * contractSize * marketPrice;
+      m = notionalJpy / 159.5;
+    } else if (symUpper.includes('DE40') || symUpper.includes('GER40') || symUpper.includes('DAX')) {
+      const notionalEur = lots * contractSize * marketPrice;
+      m = (notionalEur * 1.16) / (lev / 30.0);
+    } else if (
+      spec.category === 'Stocks' ||
+      symUpper.includes('.O') ||
+      symUpper.includes('.N') ||
+      contractSize <= 10.0
+    ) {
+      // Equities / Single-Stock CFDs: 4% regulatory CFD margin (1:25 leverage)
+      const notionalUsd = lots * contractSize * marketPrice;
+      const stockMarginRate = spec.margin_rate && spec.margin_rate > 0 && spec.margin_rate < 1.0 ? spec.margin_rate : 0.04;
+      m = notionalUsd * stockMarginRate;
+    } else if (
+      spec.category === 'Forex Majors' ||
+      (symUpper.length === 6 && symUpper.startsWith('USD') && contractSize >= 10000)
+    ) {
+      m = (lots * contractSize) / lev;
+    } else {
+      m = (lots * contractSize * marketPrice) / lev;
+    }
+    return Math.round(m * 100) / 100;
+  };
+
+  const requiredMargin = computeMargin(executableLot);
 
   const depCash = depositedCash > 0 ? depositedCash : 20.0;
   const marginUtilPct = depCash > 0 ? (requiredMargin / depCash) * 100.0 : 0.0;
@@ -121,26 +144,20 @@ export function computeLocalRiskForResult(
     const tAmt = workingCap * (riskPct / 100.0);
     const exLot = riskPerLot > 0 ? tAmt / riskPerLot : 0.0;
     const st = Math.round(exLot / volumeStep) * volumeStep;
-    const cl = Math.max(volumeMin, Math.min(volumeMax, st));
+    const cl = exLot <= 0 ? 0 : Math.max(volumeMin, Math.min(volumeMax, st));
     const cLot = parseFloat(cl.toFixed(decimals));
-    let m = 0;
-    if (spec.currency_base === 'USD' || symUpper.startsWith('USD')) {
-      m = (cLot * contractSize) / lev;
-    } else {
-      m = (cLot * contractSize * marketPrice) / lev;
-    }
     return {
       lot: cLot,
       risk_pct: riskPct,
       risk_amount: cLot * slPips * pipValPerLot,
-      margin: Math.round(m * 100) / 100,
+      margin: computeMargin(cLot),
     };
   };
 
   const comparison = {
     fractional_1pct: calcCompare(1.0),
-    half_kelly: calcCompare(Math.max(0.1, (tradeStats.kelly_half || 0.025) * 100)),
-    half_optimal_f: calcCompare(Math.max(0.1, (tradeStats.optimal_f_half || 0.025) * 100)),
+    half_kelly: calcCompare((tradeStats.kelly_half ?? 0) * 100),
+    half_optimal_f: calcCompare((tradeStats.optimal_f_half ?? 0) * 100),
   };
 
   const specFormatted: SymbolSpec = {

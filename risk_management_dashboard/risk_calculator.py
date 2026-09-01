@@ -288,7 +288,10 @@ def calculate_trade_statistics(
         kelly_quarter = kelly_full / 4.0
         
         # Approximate optimal f
-        opt_f = min(0.35, max(0.02, kelly_half))
+        if kelly_full <= 0:
+            opt_f = 0.0
+        else:
+            opt_f = min(0.35, max(0.01, kelly_half))
         opt_f_half = opt_f / 2.0
         opt_f_quarter = opt_f / 4.0
         
@@ -375,35 +378,46 @@ def calculate_required_margin(
     currency_base: Optional[str] = None,
     currency_profit: Optional[str] = None,
     currency_margin: Optional[str] = None,
-    symbol: str = ""
+    symbol: str = "",
+    margin_per_lot: Optional[float] = None
 ) -> float:
     """
     Calculates broker margin required for a position in account deposit currency (USD):
-    - For USDxxx (USDJPY, USDCAD, USDCHF): Margin = (Lots * Contract_Size) / Leverage (~$3.33)
-    - For xxxUSD (EURUSD, GBPUSD, AUDUSD): Margin = (Lots * Contract_Size * Market_Price) / Leverage
+    - Prioritizes exact margin_per_lot if provided by MT5 terminal.
+    - For Stocks/Equities (AMD.O, AAPL.O): Margin = Lots * Contract_Size * Market_Price * 4% regulatory CFD rate.
+    - For USDxxx Forex (USDJPY, USDCAD, USDCHF): Margin = (Lots * Contract_Size) / Leverage (~$3.33)
+    - For xxxUSD Forex (EURUSD, GBPUSD, AUDUSD): Margin = (Lots * Contract_Size * Market_Price) / Leverage
     - For JPY Indices (JP225): Margin in USD (~$4.16)
     """
+    if margin_per_lot is not None and margin_per_lot > 0:
+        return round(float(lots * margin_per_lot), 2)
+
     if leverage <= 0:
         leverage = 100.0
     if contract_size <= 0:
         contract_size = 100000.0
     if market_price <= 0:
         market_price = 1.0
-    if margin_rate <= 0:
-        margin_rate = 1.0
 
     sym_upper = symbol.upper()
 
     # Specialized index handling for non-USD-denominated CFDs
     if "JP225" in sym_upper or "JPN225" in sym_upper or "NIKKEI" in sym_upper:
-        # Nikkei 225: Price in JPY (~66,000 JPY), contract size 1.0 -> ~$4.16
         notional_jpy = lots * contract_size * market_price
         margin = (notional_jpy / 159.5)
         return round(float(margin), 2)
     elif "DE40" in sym_upper or "GER40" in sym_upper or "DAX" in sym_upper:
-        # DAX index: Price in EUR (~26,400 EUR), 0.01 lot -> ~$3.06
         notional_eur = lots * contract_size * market_price
         margin = (notional_eur * 1.16) / (leverage / 30.0) if leverage > 0 else 3.06
+        return round(float(margin), 2)
+
+    # Equities / Single-Stock CFDs (e.g. AMD.O, AAPL.O, TSLA.O, contract_size ~ 1.0)
+    # Regulatory stock CFD margin rate is 4% to 5% (1:20 to 1:25 leverage)
+    is_stock = any(ext in sym_upper for ext in [".O", ".N", ".US", "AMD", "AAPL", "TSLA", "NVDA", "MSFT", "AMZN", "GOOG", "META"]) or contract_size <= 10.0
+    if is_stock:
+        notional_usd = lots * contract_size * market_price
+        stock_margin_rate = margin_rate if (0 < margin_rate < 1.0) else 0.04
+        margin = notional_usd * stock_margin_rate
         return round(float(margin), 2)
 
     # Auto-infer currency_base from symbol if not explicitly provided
@@ -413,14 +427,17 @@ def calculate_required_margin(
         else:
             currency_base = "EUR" if "EUR" in sym_upper else "USD"
 
-    # If base currency is USD (e.g. USDJPY, USDCAD, USDCHF)
-    if currency_base == "USD" or sym_upper.startswith("USD"):
+    # If base currency is USD for standard Forex pairs (e.g. USDJPY, USDCAD, USDCHF)
+    is_forex_usd_base = len(sym_upper) == 6 and sym_upper.isalpha() and (sym_upper.startswith("USD") or currency_base == "USD") and contract_size >= 10000
+    if is_forex_usd_base:
         notional_usd = lots * contract_size
-        margin = (notional_usd * margin_rate) / leverage
+        effective_rate = margin_rate if (0 < margin_rate < 1.0) else (1.0 / leverage)
+        margin = notional_usd * effective_rate
     else:
-        # Default currency_base != USD (EURUSD, GBPUSD, XAUUSD, BTCUSD)
+        # Default non-USD base (EURUSD, GBPUSD, XAUUSD, BTCUSD)
         notional_usd = lots * contract_size * market_price
-        margin = (notional_usd * margin_rate) / leverage
+        effective_rate = margin_rate if (0 < margin_rate < 1.0) else (1.0 / leverage)
+        margin = notional_usd * effective_rate
 
     return round(float(margin), 2)
 
@@ -443,7 +460,8 @@ def calculate_lot_for_symbol(
     currency_base: str = "USD",
     currency_profit: str = "USD",
     currency_margin: str = "USD",
-    exact_broker_margin: Optional[float] = None
+    exact_broker_margin: Optional[float] = None,
+    margin_per_lot: Optional[float] = None
 ) -> LotCalculationResult:
     """
     Performs full risk budgeting, exact lot sizing, broker step clamping,
@@ -517,7 +535,8 @@ def calculate_lot_for_symbol(
             currency_base=currency_base,
             currency_profit=currency_profit,
             currency_margin=currency_margin,
-            symbol=symbol
+            symbol=symbol,
+            margin_per_lot=margin_per_lot
         )
 
     margin_utilization_pct = (required_margin / deposited_cash) * 100.0 if deposited_cash > 0 else 999.0

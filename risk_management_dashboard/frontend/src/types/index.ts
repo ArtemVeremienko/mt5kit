@@ -2,14 +2,17 @@ export interface AccountSummary {
   balance: number;
   equity: number;
   margin: number;
-  free_margin: number;
+  free_margin?: number;
+  margin_free?: number;
   margin_level: number;
   leverage: number;
-  profit: number;
+  profit?: number;
   currency: string;
   server: string;
   name: string;
   login: number;
+  account_type?: string;
+  is_live?: boolean;
 }
 
 export interface StepRule {
@@ -49,6 +52,8 @@ export interface SymbolSpec {
   adr_display?: string;
   atr_display?: string;
   step_rule?: StepRule;
+  margin_per_lot?: number;
+  margin_rate?: number;
 }
 
 export interface ModelComparison {

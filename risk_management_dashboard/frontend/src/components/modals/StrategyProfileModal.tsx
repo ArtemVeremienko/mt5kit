@@ -69,40 +69,40 @@ export const StrategyProfileModal: Component<Props> = (props) => {
               <div class="stat-mini-card">
                 <div class="stat-mini-label">WIN RATE & ACCURACY</div>
                 <div class="stat-mini-val">
-                  {((tradeStats().win_rate || 0.55) * 100).toFixed(1)}%
+                  {((tradeStats().win_rate ?? 0.55) * 100).toFixed(1)}%
                 </div>
                 <div class="stat-mini-sub">
-                  Sample Size: <strong>{tradeStats().total_trades || 120} Closed Trades</strong>
+                  Sample Size: <strong>{tradeStats().total_trades ?? 0} Closed Trades</strong>
                 </div>
               </div>
 
               <div class="stat-mini-card">
                 <div class="stat-mini-label">PAYOFF & PROFIT FACTOR</div>
                 <div class="stat-mini-val">
-                  {(tradeStats().payoff_ratio || 1.5).toFixed(2)} R/R
+                  {(tradeStats().payoff_ratio ?? 0).toFixed(2)} R/R
                 </div>
                 <div class="stat-mini-sub">
-                  Profit Factor: <strong>{(tradeStats().profit_factor || 1.83).toFixed(2)}</strong> | Avg Win/Loss: ${tradeStats().avg_win?.toFixed(2) || '60.00'}/${tradeStats().avg_loss?.toFixed(2) || '40.00'}
+                  Profit Factor: <strong>{(tradeStats().profit_factor ?? 0).toFixed(2)}</strong> | Avg Win/Loss: ${tradeStats().avg_win?.toFixed(2) ?? '0.00'}/${tradeStats().avg_loss?.toFixed(2) ?? '0.00'}
                 </div>
               </div>
 
               <div class="stat-mini-card">
                 <div class="stat-mini-label">KELLY CRITERION (f*)</div>
                 <div class="stat-mini-val text-accent">
-                  {((tradeStats().kelly_full || 0.25) * 100).toFixed(1)}%
+                  {((tradeStats().kelly_full ?? 0) * 100).toFixed(1)}%
                 </div>
                 <div class="stat-mini-sub">
-                  Half: {((tradeStats().kelly_half || 0.125) * 100).toFixed(1)}% | Quarter: {((tradeStats().kelly_quarter || 0.0625) * 100).toFixed(1)}%
+                  Half: {((tradeStats().kelly_half ?? 0) * 100).toFixed(1)}% | Quarter: {((tradeStats().kelly_quarter ?? 0) * 100).toFixed(1)}%
                 </div>
               </div>
 
               <div class="stat-mini-card">
                 <div class="stat-mini-label">OPTIMAL f (RALPH VINCE)</div>
                 <div class="stat-mini-val text-accent">
-                  {((tradeStats().optimal_f || 0.12) * 100).toFixed(1)}%
+                  {((tradeStats().optimal_f ?? 0) * 100).toFixed(1)}%
                 </div>
                 <div class="stat-mini-sub">
-                  Worst Loss: ${tradeStats().worst_loss?.toFixed(2) || '100.00'} | Half: {((tradeStats().optimal_f_half || 0.06) * 100).toFixed(1)}%
+                  Worst Loss: ${tradeStats().worst_loss?.toFixed(2) ?? '0.00'} | Half: {((tradeStats().optimal_f_half ?? 0) * 100).toFixed(1)}%
                 </div>
               </div>
             </div>

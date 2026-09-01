@@ -478,11 +478,33 @@ def test_positions_api_endpoints():
     # 4. POST /api/position/close-all
     resp = client.post("/api/position/close-all")
     assert resp.status_code == 200
-    res_data = resp.json()
-    assert "results" in res_data
+    assert "results" in resp.json()
 
 
+def test_stock_cfd_margin_calculation():
+    """Verify that stock CFDs (e.g. AMD.O, AAPL.O) calculate margin using share price and CFD margin rate."""
+    from risk_management_dashboard.risk_calculator import calculate_required_margin
+    # AMD.O: 21.07 lots @ $455.00 per share, contract size 1.0
+    # Expected notional = 21.07 * 1.0 * 455.0 = $9,586.85
+    # Stock 4% CFD margin = $9,586.85 * 0.04 = $383.47
+    m = calculate_required_margin(
+        lots=21.07,
+        contract_size=1.0,
+        market_price=455.0,
+        leverage=2000.0,
+        symbol="AMD.O"
+    )
+    assert 350.0 < m < 400.0, f"Expected margin > $350, got ${m}"
 
-
+    # Verify broker exact margin_per_lot override
+    m_exact = calculate_required_margin(
+        lots=21.07,
+        contract_size=1.0,
+        market_price=455.0,
+        leverage=2000.0,
+        symbol="AMD.O",
+        margin_per_lot=18.21
+    )
+    assert m_exact == 383.68
 
 

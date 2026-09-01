@@ -190,6 +190,11 @@ body {
   flex-wrap: wrap;
 }
 
+.account-inline-metrics-container {
+  position: relative;
+  display: inline-flex;
+}
+
 .account-inline-metrics {
   display: flex;
   align-items: center;
@@ -197,7 +202,7 @@ body {
   border: 1px solid var(--bg-border-subtle);
   border-radius: var(--radius-md);
   padding: 4px 10px;
-  gap: 14px;
+  gap: 12px;
 }
 
 .metric-mini-group {
@@ -217,6 +222,116 @@ body {
   font-size: 13px;
   font-weight: 700;
   color: #ffffff;
+}
+
+.btn-account-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  font-size: 10px;
+  transition: all 0.15s ease;
+  margin-left: 2px;
+}
+
+.btn-account-info:hover,
+.btn-account-info.active {
+  background: rgba(41, 98, 255, 0.2);
+  border-color: var(--accent-blue);
+  color: #ffffff;
+  box-shadow: 0 0 8px rgba(41, 98, 255, 0.35);
+}
+
+.account-info-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 1000;
+  min-width: 280px;
+  background: #141824;
+  border: 1px solid var(--accent-blue);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.9);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.acc-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.acc-popover-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.acc-popover-icon {
+  font-size: 13px;
+}
+
+.acc-popover-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+}
+
+.acc-popover-badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: rgba(242, 54, 69, 0.2);
+  color: var(--accent-red);
+}
+
+.acc-popover-badge.badge-live {
+  background: rgba(8, 153, 129, 0.2);
+  color: var(--accent-green);
+}
+
+.acc-popover-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+}
+
+.acc-popover-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.acc-popover-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.acc-popover-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.acc-popover-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .header-capsules-group {

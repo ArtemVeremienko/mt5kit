@@ -12,12 +12,12 @@ export const RiskControlsBar: Component = () => {
     const stats = tradeStats();
 
     if (method === 'fractional') return `${customPct.toFixed(1)}%`;
-    if (method === 'kelly_full') return `${((stats.kelly_full || 0) * 100).toFixed(1)}%`;
-    if (method === 'kelly_half') return `${((stats.kelly_half || 0) * 100).toFixed(1)}%`;
-    if (method === 'kelly_quarter') return `${((stats.kelly_quarter || 0) * 100).toFixed(1)}%`;
-    if (method === 'optimal_f_full') return `${((stats.optimal_f || 0) * 100).toFixed(1)}%`;
-    if (method === 'optimal_f_half') return `${((stats.optimal_f_half || 0) * 100).toFixed(1)}%`;
-    if (method === 'optimal_f_quarter') return `${((stats.optimal_f_quarter || 0) * 100).toFixed(1)}%`;
+    if (method === 'kelly_full') return `${((stats.kelly_full ?? 0) * 100).toFixed(1)}%`;
+    if (method === 'kelly_half') return `${((stats.kelly_half ?? 0) * 100).toFixed(1)}%`;
+    if (method === 'kelly_quarter') return `${((stats.kelly_quarter ?? 0) * 100).toFixed(1)}%`;
+    if (method === 'optimal_f_full') return `${((stats.optimal_f ?? 0) * 100).toFixed(1)}%`;
+    if (method === 'optimal_f_half') return `${((stats.optimal_f_half ?? 0) * 100).toFixed(1)}%`;
+    if (method === 'optimal_f_quarter') return `${((stats.optimal_f_quarter ?? 0) * 100).toFixed(1)}%`;
     return '1.0%';
   });
 
