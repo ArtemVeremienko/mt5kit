@@ -15,6 +15,7 @@ export const SymbolRow: Component<Props> = (props) => {
   const isPinned = () => preferencesStore.isPinned(props.symbol);
   const isDragging = () => marketStore.draggedSymbol() === props.symbol;
   const isDragOver = () => marketStore.dragOverSymbol() === props.symbol;
+  const isCustomSL = () => preferencesStore.slOverrides()[props.symbol] !== undefined;
 
   const activeSL = createMemo<number>(() => {
     const override = preferencesStore.slOverrides()[props.symbol];
@@ -42,6 +43,15 @@ export const SymbolRow: Component<Props> = (props) => {
     }
   };
 
+  // Smart risk alert: only warn if broker lot clamping caused risk to overshoot/undershoot by > 10%
+  const isRiskDeviated = createMemo(() => {
+    const d = item();
+    if (!d) return false;
+    const target = d.calc.target_risk_pct || 1.0;
+    const effective = d.calc.effective_risk_pct || 1.0;
+    return Math.abs(effective - target) / target > 0.10;
+  });
+
   return (
     <Show when={item()}>
       {(data) => (
@@ -53,6 +63,8 @@ export const SymbolRow: Component<Props> = (props) => {
             'drag-over': isDragOver(),
           }}
           draggable={true}
+          onDblClick={() => props.onOpenDeepDive(data())}
+          title="Double-click row to open Deep Dive calculation"
           onDragStart={(e) => {
             marketStore.setDraggedSymbol(props.symbol);
             e.dataTransfer?.setData('text/plain', props.symbol);
@@ -77,6 +89,7 @@ export const SymbolRow: Component<Props> = (props) => {
             marketStore.setDragOverSymbol(null);
           }}
         >
+          {/* Col 1: Symbol (with drag handle, pin) */}
           <td>
             <div class="symbol-cell">
               <span class="drag-handle" title="Drag to reorder symbol">
@@ -85,37 +98,43 @@ export const SymbolRow: Component<Props> = (props) => {
               <button
                 class="pin-btn"
                 classList={{ pinned: isPinned() }}
-                onClick={() => preferencesStore.togglePin(props.symbol)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  preferencesStore.togglePin(props.symbol);
+                }}
                 title={isPinned() ? 'Pinned to top (Click to unpin)' : 'Pin symbol to top'}
               >
                 📌
               </button>
               <span class="symbol-name">{data().spec.symbol}</span>
-              <span class="category-pill">{data().spec.category}</span>
             </div>
           </td>
 
-          <td>
-            <div class="price-cell">
-              <span class="price-bid">{data().spec.bid_display}</span>
-              <span class="price-sep">/</span>
-              <span class="price-ask">{data().spec.ask_display}</span>
+          {/* Col 2: Market Price & Spread (Stacked) */}
+          <td class="text-right">
+            <div class="price-stacked">
+              <div class="price-bid-row">
+                <span class="price-bid tabular-num">{data().spec.bid_display}</span>
+                <span class="spread-pill-mini">{data().spec.spread_display}p</span>
+              </div>
+              <div class="price-ask-row">
+                <span class="price-ask tabular-num">{data().spec.ask_display}</span>
+              </div>
             </div>
           </td>
 
-          <td>
-            <span class="spread-val">{data().spec.spread_display} p</span>
+          {/* Col 3: 14D ADR */}
+          <td class="text-right">
+            <span class="adr-val tabular-num">{data().spec.adr_display} p</span>
           </td>
 
-          <td>
-            <strong class="adr-val">{data().spec.adr_display} p</strong>
-          </td>
-
-          <td>
+          {/* Col 4: Stop Loss (Clean numeric input with custom reset button) */}
+          <td class="text-center">
             <div class="sl-input-cell">
               <input
                 type="number"
-                class="sl-input"
+                class="sl-input tabular-num"
+                classList={{ 'sl-input-custom': isCustomSL() }}
                 step="1"
                 min="1"
                 value={localVal()}
@@ -135,93 +154,79 @@ export const SymbolRow: Component<Props> = (props) => {
                   }
                 }}
               />
-              <Show
-                when={preferencesStore.slOverrides()[props.symbol] !== undefined}
-                fallback={
-                  <span class="text-xs text-muted" title="Active Stop Loss calculation model">
-                    ({preferencesStore.slMode()})
-                  </span>
-                }
-              >
+              <Show when={isCustomSL()}>
                 <button
-                  class="quick-sl-btn"
-                  onClick={() => {
+                  class="quick-sl-reset-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
                     preferencesStore.resetSymbolSL(props.symbol);
                     setLocalVal(activeSL().toString());
                   }}
-                  title="Reset to global Stop Loss preset"
+                  title="Custom SL active — click to reset to global preset"
                 >
-                  ↺ Reset
+                  ↺
                 </button>
               </Show>
             </div>
           </td>
 
-          <td>
-            <span class="pip-val">${data().calc.pip_val_display}</span>
+          {/* Col 5: Lot Size */}
+          <td class="text-right">
+            <div class="lot-cell-wrapper" title={`Exact calculation: ${data().calc.exact_lot_display} Lot`}>
+              <span class="executable-lot-val tabular-num">{data().calc.lot_display} Lot</span>
+              <Show when={isRiskDeviated()}>
+                <span
+                  class="risk-alert-icon"
+                  title={`Risk deviation warning: Min/Max broker lot clamp caused effective risk to deviate (${data().calc.risk_display})`}
+                >
+                  ⚠️
+                </span>
+              </Show>
+            </div>
           </td>
 
-          <td>
-            <div class="lot-display">
-              <div class="executable-lot-row">
-                <span class="executable-lot-val">{data().calc.lot_display}</span>
-                <Show when={data().calc.executable_lot !== data().calc.exact_lot}>
-                  <span
-                    class="tooltip-trigger"
-                    title={`Broker Clamped (Exact math: ${data().calc.exact_lot_display} Lot)`}
-                  >
-                    ⚠️
-                  </span>
-                </Show>
+          {/* Col 6: Effective Risk & Required Margin (Stacked) */}
+          <td class="text-right">
+            <div
+              class="risk-stacked-cell"
+              onClick={() => props.onOpenDeepDive(data())}
+              title="Click to view deep dive analysis"
+            >
+              <div class="risk-main-row">
+                <span
+                  class="risk-amount-tag tabular-num"
+                  classList={{
+                    'risk-elevated': isRiskDeviated(),
+                  }}
+                >
+                  {data().calc.risk_display}
+                </span>
               </div>
-              <span class="exact-lot-sub">({data().calc.exact_lot_display} Lot)</span>
+              <div class="margin-sub-row">
+                <span class="margin-sub-text">Margin: ${data().calc.required_margin_display}</span>
+              </div>
             </div>
           </td>
 
-          <td>
-            <div class="risk-cell-wrapper">
-              <span
-                class="risk-amount-tag"
-                classList={{
-                  'risk-elevated': data().calc.effective_risk_pct > data().calc.target_risk_pct * 1.05,
-                }}
-              >
-                {data().calc.risk_display}
-              </span>
-              <button
-                class="btn-icon"
-                onClick={() => props.onOpenDeepDive(data())}
-                title="Deep-dive calculation breakdown & multi-model comparison"
-              >
-                🔍
-              </button>
-            </div>
-          </td>
-
-          <td>
-            <div class="margin-cell-wrapper">
-              <span class="margin-val">${data().calc.required_margin_display}</span>
-              <span
-                class={`margin-status-pill margin-${data().calc.margin_health}`}
-                title={`Margin utilization: ${data().calc.margin_utilization_display}%`}
-              >
-                {data().calc.margin_utilization_display}%
-              </span>
-            </div>
-          </td>
-
+          {/* Col 7: Execution Buttons */}
           <td class="text-center">
             <div class="trade-btn-group">
               <button
                 class="btn-trade btn-buy"
-                onClick={() => props.onTradeClick(data(), 'BUY')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onTradeClick(data(), 'BUY');
+                }}
                 title={`Instant BUY ${data().calc.lot_display} Lot ${data().spec.symbol}`}
               >
                 BUY
               </button>
               <button
                 class="btn-trade btn-sell"
-                onClick={() => props.onTradeClick(data(), 'SELL')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onTradeClick(data(), 'SELL');
+                }}
                 title={`Instant SELL ${data().calc.lot_display} Lot ${data().spec.symbol}`}
               >
                 SELL

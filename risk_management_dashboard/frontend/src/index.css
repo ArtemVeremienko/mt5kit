@@ -762,6 +762,20 @@ tr.drag-over {
   border-top: 2px solid var(--accent-blue);
 }
 
+/* Table Utilities & Alignment */
+.tabular-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.text-right {
+  text-align: right !important;
+}
+
+.text-center {
+  text-align: center !important;
+}
+
 /* Cells */
 .symbol-cell {
   display: flex;
@@ -793,52 +807,66 @@ tr.drag-over {
   font-weight: 700;
   font-size: 14px;
   color: #ffffff;
+  letter-spacing: 0.3px;
 }
 
-.category-pill {
-  font-size: 10px;
-  background: var(--bg-input);
-  color: var(--text-muted);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
+/* Stacked Market Price & Spread */
+.price-stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
 }
 
-.price-cell {
-  font-family: var(--font-mono);
-  font-size: 13px;
+.price-bid-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .price-bid {
   color: #ffffff;
+  font-weight: 700;
+  font-size: 13px;
 }
 
-.price-sep {
+.spread-pill-mini {
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--accent-cyan);
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 242, 254, 0.2);
+}
+
+.price-ask-row {
+  font-size: 11px;
   color: var(--text-muted);
-  margin: 0 4px;
 }
 
 .price-ask {
   color: var(--text-secondary);
 }
 
-.spread-val,
-.adr-val,
-.pip-val {
-  font-family: var(--font-mono);
-}
-
 .adr-val {
+  font-family: var(--font-mono);
   color: #ffffff;
+  font-size: 13px;
 }
 
+/* Stop Loss Input */
 .sl-input-cell {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 4px;
 }
 
 .sl-input {
-  width: 60px;
+  width: 58px;
+  text-align: center;
   background: var(--bg-input);
   border: 1px solid var(--bg-border);
   color: #ffffff;
@@ -846,63 +874,86 @@ tr.drag-over {
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: 12px;
-}
-
-.quick-sl-btn {
-  background: var(--bg-input);
-  border: 1px solid var(--bg-border);
-  color: var(--text-secondary);
-  font-size: 10px;
   font-weight: 600;
-  padding: 4px 6px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
 }
 
-.quick-sl-btn:hover {
-  color: #ffffff;
+.sl-input:focus {
   border-color: var(--accent-blue);
+  outline: none;
 }
 
-.lot-display {
-  display: flex;
-  flex-direction: column;
+.sl-input-custom {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
 }
 
-.executable-lot-row {
+.quick-sl-reset-btn {
+  background: var(--bg-input);
+  border: 1px solid var(--accent-cyan);
+  color: var(--accent-cyan);
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quick-sl-reset-btn:hover {
+  background: rgba(0, 242, 254, 0.15);
+}
+
+/* Lot Size Cell */
+.lot-cell-wrapper {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
+  cursor: default;
 }
 
 .executable-lot-val {
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
   color: #ffffff;
-  font-family: var(--font-mono);
 }
 
-.exact-lot-sub {
-  font-size: 10px;
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-}
-
-.tooltip-trigger {
-  cursor: help;
+.risk-alert-icon {
   font-size: 12px;
+  cursor: help;
 }
 
-.risk-cell-wrapper {
+/* Stacked Risk & Required Margin */
+.risk-stacked-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease;
+}
+
+.risk-stacked-cell:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.risk-stacked-cell:hover .risk-amount-tag {
+  color: var(--accent-cyan);
+}
+
+.risk-main-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
 }
 
 .risk-amount-tag {
   font-weight: 700;
-  font-family: var(--font-mono);
+  font-size: 13px;
   color: #ffffff;
 }
 
@@ -910,22 +961,15 @@ tr.drag-over {
   color: var(--accent-amber);
 }
 
-.margin-cell-wrapper {
+.margin-sub-row {
   display: flex;
   align-items: center;
-  gap: 8px;
 }
 
-.margin-val {
-  font-family: var(--font-mono);
-  color: #ffffff;
-}
-
-.margin-status-pill {
+.margin-sub-text {
   font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
 .margin-status-pill.margin-healthy {

@@ -1,4 +1,4 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, createMemo } from 'solid-js';
 import { marketStore } from '../../stores/marketStore';
 import { preferencesStore } from '../../stores/preferencesStore';
 import { SymbolRow } from './SymbolRow';
@@ -14,6 +14,11 @@ export const RiskMatrixTable: Component<Props> = (props) => {
   const categories = marketStore.categories;
   const counts = marketStore.categoryCounts;
 
+  // Filter out category tabs that have 0 symbols (keep 'All' and non-empty categories)
+  const visibleCategories = createMemo(() =>
+    categories.filter((cat) => cat === 'All' || (counts()[cat] || 0) > 0)
+  );
+
   const isCustomStateActive = () =>
     preferencesStore.customOrder().length > 0 ||
     preferencesStore.pinnedSymbols().length > 0 ||
@@ -23,7 +28,7 @@ export const RiskMatrixTable: Component<Props> = (props) => {
     <div class="matrix-section">
       <div class="matrix-toolbar">
         <div class="category-tabs">
-          <For each={categories}>
+          <For each={visibleCategories()}>
             {(cat) => (
               <button
                 class="category-tab-btn"
@@ -56,7 +61,7 @@ export const RiskMatrixTable: Component<Props> = (props) => {
             <input
               type="text"
               class="search-input"
-              placeholder="Search symbol..."
+              placeholder="Search symbol... (/)"
               value={marketStore.searchQuery()}
               onInput={(e) => marketStore.setSearchQuery(e.currentTarget.value)}
             />
@@ -69,30 +74,25 @@ export const RiskMatrixTable: Component<Props> = (props) => {
           <table class="risk-matrix-table">
             <thead>
               <tr>
-                <th onClick={() => marketStore.toggleSort('symbol')} class="cursor-pointer">
+                <th onClick={() => marketStore.toggleSort('symbol')} class="cursor-pointer" style={{ width: '170px' }}>
                   Symbol <span class="sort-icon">{marketStore.sortIcon('symbol')}</span>
                 </th>
-                <th onClick={() => marketStore.toggleSort('bid')} class="cursor-pointer">
-                  Market Price <span class="sort-icon">{marketStore.sortIcon('bid')}</span>
+                <th onClick={() => marketStore.toggleSort('bid')} class="cursor-pointer text-right" style={{ width: '150px' }}>
+                  Market Price (Spread) <span class="sort-icon">{marketStore.sortIcon('bid')}</span>
                 </th>
-                <th onClick={() => marketStore.toggleSort('spread')} class="cursor-pointer">
-                  Spread <span class="sort-icon">{marketStore.sortIcon('spread')}</span>
-                </th>
-                <th onClick={() => marketStore.toggleSort('adr')} class="cursor-pointer">
+                <th onClick={() => marketStore.toggleSort('adr')} class="cursor-pointer text-right" style={{ width: '110px' }}>
                   14D ADR <span class="sort-icon">{marketStore.sortIcon('adr')}</span>
                 </th>
-                <th>Stop Loss (Pips)</th>
-                <th>Pip Value ($)</th>
-                <th onClick={() => marketStore.toggleSort('lot')} class="cursor-pointer">
-                  Executable Lot <span class="sort-icon">{marketStore.sortIcon('lot')}</span>
+                <th class="text-center" style={{ width: '110px' }}>
+                  Stop Loss
                 </th>
-                <th onClick={() => marketStore.toggleSort('risk_pct')} class="cursor-pointer">
-                  Effective Risk <span class="sort-icon">{marketStore.sortIcon('risk_pct')}</span>
+                <th onClick={() => marketStore.toggleSort('lot')} class="cursor-pointer text-right" style={{ width: '130px' }}>
+                  Lot Size <span class="sort-icon">{marketStore.sortIcon('lot')}</span>
                 </th>
-                <th onClick={() => marketStore.toggleSort('margin')} class="cursor-pointer">
-                  Req. Margin / Health <span class="sort-icon">{marketStore.sortIcon('margin')}</span>
+                <th onClick={() => marketStore.toggleSort('risk_pct')} class="cursor-pointer text-right" style={{ width: '160px' }}>
+                  Effective Risk (Margin) <span class="sort-icon">{marketStore.sortIcon('risk_pct')}</span>
                 </th>
-                <th class="text-center" style={{ 'min-width': '120px' }}>
+                <th class="text-center" style={{ width: '130px' }}>
                   Execute
                 </th>
               </tr>
@@ -102,7 +102,7 @@ export const RiskMatrixTable: Component<Props> = (props) => {
                 when={symbols().length > 0}
                 fallback={
                   <tr>
-                    <td colspan="10" class="empty-table-msg">
+                    <td colspan="7" class="empty-table-msg">
                       No matching symbols found in Market Watch.
                     </td>
                   </tr>
