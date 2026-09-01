@@ -15,14 +15,31 @@ export const SymbolRow: Component<Props> = (props) => {
   const isPinned = () => preferencesStore.isPinned(props.symbol);
   const isDragging = () => marketStore.draggedSymbol() === props.symbol;
   const isDragOver = () => marketStore.dragOverSymbol() === props.symbol;
-  const isCustomSL = () => preferencesStore.slOverrides()[props.symbol] !== undefined;
+  const defaultSL = createMemo<number>(() => {
+    const d = item();
+    if (!d) return 20.0;
+    const adr14 = d.spec.adr_14_pips || 65.0;
+    const atr14 = d.spec.atr_14_pips || adr14 * 1.05;
+    const slMode = preferencesStore.slMode();
+    if (slMode === '1/4 ADR') return Math.max(1.0, Math.round(adr14 * 0.25 * 10) / 10);
+    if (slMode === '1/3 ADR') return Math.max(1.0, Math.round(adr14 * (1.0 / 3.0) * 10) / 10);
+    if (slMode === '1/2 ADR') return Math.max(1.0, Math.round(adr14 * 0.5 * 10) / 10);
+    if (slMode === '1 ADR') return Math.max(1.0, Math.round(adr14 * 10) / 10);
+    if (slMode === '1 ATR') return Math.max(1.0, Math.round(atr14 * 10) / 10);
+    return 20.0;
+  });
 
   const activeSL = createMemo<number>(() => {
     const override = preferencesStore.slOverrides()[props.symbol];
     if (override !== undefined && !isNaN(override) && override > 0) {
       return override;
     }
-    return item()?.calc.sl_pips || 20.0;
+    return defaultSL();
+  });
+
+  const isCustomSL = createMemo<boolean>(() => {
+    const override = preferencesStore.slOverrides()[props.symbol];
+    return override !== undefined && !isNaN(override) && Math.abs(override - defaultSL()) >= 0.0001;
   });
 
   const [isFocused, setIsFocused] = createSignal(false);
@@ -38,7 +55,11 @@ export const SymbolRow: Component<Props> = (props) => {
 
   const handleSlCommit = (inputStr: string) => {
     const val = parseFloat(inputStr);
-    if (!isNaN(val) && val > 0) {
+    const def = defaultSL();
+    if (isNaN(val) || val <= 0 || Math.abs(val - def) < 0.0001) {
+      preferencesStore.resetSymbolSL(props.symbol);
+      setLocalVal(def.toString());
+    } else {
       preferencesStore.setSymbolSL(props.symbol, val);
     }
   };

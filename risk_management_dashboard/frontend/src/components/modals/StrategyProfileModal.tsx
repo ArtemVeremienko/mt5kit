@@ -1,5 +1,7 @@
-import { Component, Show } from 'solid-js';
+import { Component, Show, createSignal } from 'solid-js';
 import { marketStore } from '../../stores/marketStore';
+import { api } from '../../services/api';
+import { toastStore } from '../../stores/toastStore';
 
 interface Props {
   isOpen: boolean;
@@ -11,6 +13,29 @@ interface Props {
 export const StrategyProfileModal: Component<Props> = (props) => {
   const tradeStats = marketStore.tradeStats;
   const sampleInfo = marketStore.sampleInfo;
+  const [isResetting, setIsResetting] = createSignal<boolean>(false);
+
+  const handleResetToMT5 = async () => {
+    try {
+      setIsResetting(true);
+      const res = await api.fetchTradeHistory();
+      if (res && res.stats) {
+        marketStore.setTradeStats(res.stats);
+        if (res.sample_info) {
+          marketStore.setSampleInfo(res.sample_info);
+        }
+        toastStore.addToast(
+          'Strategy Profile Reset',
+          `Synchronized ${res.stats.total_trades || 0} closed deals from live MT5 history`,
+          'success'
+        );
+      }
+    } catch (e: any) {
+      toastStore.addToast('Reset Failed', e.message || 'Failed to fetch MT5 trade history', 'error');
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   return (
     <Show when={props.isOpen}>
@@ -84,6 +109,14 @@ export const StrategyProfileModal: Component<Props> = (props) => {
 
             {/* Action Bar inside Modal */}
             <div class="strategy-modal-actions">
+              <button
+                class="btn-ghost"
+                onClick={handleResetToMT5}
+                disabled={isResetting()}
+                title="Fetch closed deals from live MT5 account and recalculate empirical parameters"
+              >
+                {isResetting() ? '↻ Fetching MT5...' : '↺ Reset to Live MT5 History'}
+              </button>
               <button
                 class="btn-ghost"
                 onClick={() => {

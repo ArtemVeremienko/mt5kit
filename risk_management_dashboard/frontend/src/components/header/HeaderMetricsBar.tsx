@@ -65,12 +65,11 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
 
   // Compact Strategy summary string
   const strategySummaryText = createMemo(() => {
-    const trades = tradeStats().total_trades || 120;
-    const wr = ((tradeStats().win_rate || 0.55) * 100).toFixed(0);
-    const pf = (tradeStats().profit_factor || 1.83).toFixed(2);
-    const tierName = sampleInfo()?.tier || 'info';
+    const trades = tradeStats().total_trades || 0;
+    const wr = ((tradeStats().win_rate || 0) * 100).toFixed(0);
+    const pf = (tradeStats().profit_factor || 0).toFixed(2);
 
-    return `${trades} Tr (${tierName}) · ${wr}% WR · PF ${pf}`;
+    return `${trades} Trades · ${wr}% WR · PF ${pf}`;
   });
 
   return (
@@ -177,7 +176,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
               'border-left-color': sampleInfo()?.badge_color || 'var(--accent-blue)',
             }}
             onClick={props.onOpenStrategyModal}
-            title="Click to view Strategy Sample Profile, Ralph Vince Optimal f, and Kelly math"
+            title={`Sample Tier: ${sampleInfo()?.tier || 'Informational'} (${sampleInfo()?.total_trades || 0} trades). Click to view Strategy Sample Profile, Ralph Vince Optimal f, and Kelly math`}
           >
             <span class="capsule-icon">📊</span>
             <span class="capsule-text">{strategySummaryText()}</span>

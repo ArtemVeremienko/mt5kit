@@ -27,6 +27,17 @@ export const api = {
     return res.json();
   },
 
+  async fetchTradeHistory(): Promise<{
+    stats: TradeStats;
+    sample_info: SampleSizeInfo;
+    twr_curve?: Array<{ f: number; twr: number }>;
+    recent_trades?: any[];
+  }> {
+    const res = await fetch('/api/trade-history');
+    if (!res.ok) throw new Error('Failed to fetch trade history from MT5');
+    return res.json();
+  },
+
   async fetchInitialCalculate(payload: CalculateApiPayload): Promise<{
     results: Array<{ spec: SymbolSpec }>;
     trade_stats: TradeStats;

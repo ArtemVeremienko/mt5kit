@@ -16,6 +16,34 @@ export const ManualStatsModal: Component<Props> = (props) => {
   const [totalTrades, setTotalTrades] = createSignal<number>(tradeStats().total_trades || 250);
   const [worstLoss, setWorstLoss] = createSignal<number>(tradeStats().worst_loss || 100.0);
   const [isSubmitting, setIsSubmitting] = createSignal<boolean>(false);
+  const [isResetting, setIsResetting] = createSignal<boolean>(false);
+
+  const handleResetToMT5 = async () => {
+    try {
+      setIsResetting(true);
+      const res = await api.fetchTradeHistory();
+      if (res && res.stats) {
+        marketStore.setTradeStats(res.stats);
+        if (res.sample_info) {
+          marketStore.setSampleInfo(res.sample_info);
+        }
+        setWinRate((res.stats.win_rate || 0.55) * 100);
+        setPayoffRatio(res.stats.payoff_ratio || 1.5);
+        setTotalTrades(res.stats.total_trades || 100);
+        setWorstLoss(res.stats.worst_loss || 100.0);
+        toastStore.addToast(
+          'Reset to Live MT5 History',
+          `Synchronized ${res.stats.total_trades || 0} closed deals from live MT5 account`,
+          'success'
+        );
+        props.onClose();
+      }
+    } catch (err: any) {
+      toastStore.addToast('Reset Failed', err.message || 'Failed to fetch MT5 trade history', 'error');
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   const handleSubmit = async (e: Event) => {
     e.preventDefault();
@@ -118,13 +146,24 @@ export const ManualStatsModal: Component<Props> = (props) => {
             </div>
           </div>
 
-          <div class="modal-footer">
-            <button type="button" class="btn-ghost" onClick={props.onClose}>
-              Cancel
+          <div class="modal-footer modal-footer-split">
+            <button
+              type="button"
+              class="btn-ghost"
+              onClick={handleResetToMT5}
+              disabled={isResetting() || isSubmitting()}
+              title="Reset parameters to empirical values from live MT5 account history"
+            >
+              {isResetting() ? '↻ Resetting...' : '↺ Reset to MT5 History'}
             </button>
-            <button type="submit" class="btn-primary" disabled={isSubmitting()}>
-              {isSubmitting() ? 'Applying...' : 'Apply Parameters'}
-            </button>
+            <div class="modal-footer-right">
+              <button type="button" class="btn-ghost" onClick={props.onClose}>
+                Cancel
+              </button>
+              <button type="submit" class="btn-primary" disabled={isSubmitting() || isResetting()}>
+                {isSubmitting() ? 'Applying...' : 'Apply Parameters'}
+              </button>
+            </div>
           </div>
         </form>
       </div>

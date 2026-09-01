@@ -93,8 +93,8 @@ export const OrderManagementPanel: Component = () => {
                   </tr>
                 }
               >
-                <For each={positions()}>
-                  {(pos) => <PositionRow position={pos} />}
+                <For each={positionsStore.positionTickets()}>
+                  {(ticket) => <PositionRow ticket={ticket} />}
                 </For>
               </Show>
             </tbody>

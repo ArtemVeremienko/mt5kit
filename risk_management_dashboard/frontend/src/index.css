@@ -1393,6 +1393,17 @@ tr.drag-over {
   gap: 10px;
 }
 
+.modal-footer-split {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-footer-right {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .deep-dive-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
