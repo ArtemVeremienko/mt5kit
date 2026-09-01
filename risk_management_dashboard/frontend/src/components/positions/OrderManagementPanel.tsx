@@ -1,13 +1,12 @@
 import { Component, For, Show } from 'solid-js';
 import { positionsStore } from '../../stores/positionsStore';
+import { preferencesStore } from '../../stores/preferencesStore';
 import { PositionRow } from './PositionRow';
 import { api } from '../../services/api';
 import { toastStore } from '../../stores/toastStore';
-import { formatCurrency } from '../../utils/formatters';
 
 export const OrderManagementPanel: Component = () => {
   const positions = positionsStore.positions;
-  const totalProfit = positionsStore.totalFloatingProfit;
   const count = positionsStore.totalPositionsCount;
 
   const handleCloseAll = async () => {
@@ -32,53 +31,34 @@ export const OrderManagementPanel: Component = () => {
 
   return (
     <div class="positions-section">
-      <div class="positions-header">
-        <div class="positions-title-group">
-          <span class="panel-icon">💼</span>
-          <h2 class="panel-title">LIVE OPEN POSITIONS</h2>
-          <span class="pos-count-badge">{count()} Active</span>
-          <Show when={count() > 0}>
-            <span
-              class="pos-total-pnl-pill"
-              classList={{
-                'text-profit': totalProfit() > 0,
-                'text-loss': totalProfit() < 0,
-              }}
-            >
-              Total P&L: {totalProfit() >= 0 ? `+${formatCurrency(totalProfit())}` : formatCurrency(totalProfit())}
-            </span>
-          </Show>
-        </div>
-
-        <div class="positions-actions">
-          <Show when={count() > 0}>
-            <button
-              class="btn-emergency-close"
-              onClick={handleCloseAll}
-              disabled={positionsStore.isActionInProgress()}
-              title="Parallel emergency liquidation of all open trades"
-            >
-              🛑 Emergency Close All ({count()})
-            </button>
-          </Show>
-        </div>
-      </div>
-
       <div class="table-card">
         <div class="table-responsive">
           <table class="positions-table">
             <thead>
               <tr>
-                <th class="text-left">Ticket</th>
-                <th class="text-left">Symbol / Type</th>
-                <th class="text-right">Volume</th>
-                <th class="text-right">Open Price</th>
-                <th class="text-right">Current Price</th>
-                <th class="text-right">Floating P&L</th>
-                <th class="text-center">R-Multiple</th>
-                <th class="text-center" style={{ 'min-width': '140px' }}>Stop Loss / Take Profit</th>
-                <th class="text-right" style={{ 'min-width': '180px' }}>
-                  Position Actions
+                <th class="text-left" style={{ width: '100px' }}>Ticket</th>
+                <th class="text-left" style={{ width: '160px' }}>Symbol / Type</th>
+                <th class="text-right" style={{ width: '120px' }}>Volume</th>
+                <th class="text-right" style={{ width: '110px' }}>Open Price</th>
+                <th class="text-right" style={{ width: '110px' }}>Current Price</th>
+                <th class="text-right" style={{ 'min-width': '175px' }}>Floating P&L</th>
+                <th class="text-center" style={{ width: '115px' }}>R-Multiple</th>
+                <th class="text-center" style={{ 'min-width': '160px' }}>Stop Loss / Take Profit</th>
+                <th class="text-right" style={{ 'min-width': '170px' }}>
+                  <div class="th-actions-header">
+                    <span>Actions</span>
+                    <Show when={count() > 0}>
+                      <button
+                        type="button"
+                        class="btn-emergency-close-compact"
+                        onClick={handleCloseAll}
+                        disabled={positionsStore.isActionInProgress()}
+                        title="Parallel emergency liquidation of all open trades"
+                      >
+                        🛑 Close All ({count()})
+                      </button>
+                    </Show>
+                  </div>
                 </th>
               </tr>
             </thead>
@@ -87,8 +67,21 @@ export const OrderManagementPanel: Component = () => {
                 when={positions().length > 0}
                 fallback={
                   <tr>
-                    <td colspan="9" class="empty-table-msg">
-                      No open positions currently active in MT5 terminal.
+                    <td colspan="9" class="empty-table-cell">
+                      <div class="empty-state-card">
+                        <span class="empty-state-icon">💼</span>
+                        <div class="empty-state-title">No Open Positions Active</div>
+                        <div class="empty-state-desc">
+                          Your MT5 account currently has zero open market exposure. Use the Market Screener to size and execute a position.
+                        </div>
+                        <button
+                          type="button"
+                          class="btn-reset-filters-hero"
+                          onClick={() => preferencesStore.setActiveView('matrix')}
+                        >
+                          🎯 Switch to Risk Screener (Hotkey: 1)
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 }

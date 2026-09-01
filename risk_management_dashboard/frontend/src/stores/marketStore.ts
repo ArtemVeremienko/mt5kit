@@ -11,6 +11,7 @@ function createMarketStore() {
   const [rawSymbols, setRawSymbols] = createSignal<SymbolSpec[]>([]);
   const [tradeStats, setTradeStats] = createSignal<Partial<TradeStats>>({});
   const [sampleInfo, setSampleInfo] = createSignal<SampleSizeInfo | undefined>(undefined);
+  const [selectedCategories, setSelectedCategories] = createSignal<string[]>([]);
   const [activeCategory, setActiveCategory] = createSignal<string>('All');
   const [searchQuery, setSearchQuery] = createSignal<string>('');
   const [sortCol, setSortCol] = createSignal<SortColumn>(null);
@@ -19,7 +20,7 @@ function createMarketStore() {
   const [draggedSymbol, setDraggedSymbol] = createSignal<string | null>(null);
   const [dragOverSymbol, setDragOverSymbol] = createSignal<string | null>(null);
 
-  const categories = ['All', 'Forex Majors', 'Forex Minors', 'Metals', 'Energies', 'Indices', 'Crypto'];
+  const categories = ['All', 'Forex Majors', 'Forex Minors', 'Metals', 'Energies', 'Indices', 'Stocks', 'Crypto'];
 
   // Map of symbol -> CalculatedSymbolResult
   const calculatedResultsMap = createMemo<Map<string, CalculatedSymbolResult>>(() => {
@@ -54,15 +55,65 @@ function createMarketStore() {
     return counts;
   });
 
+  const isCategorySelected = (cat: string) => {
+    const selected = selectedCategories();
+    if (selected.length === 0) return true;
+    if (selected.includes('__NONE__')) return false;
+    return selected.includes(cat);
+  };
+
+  const toggleCategory = (cat: string) => {
+    const allNonEmpty = Object.keys(categoryCounts()).filter((c) => c !== 'All' && (categoryCounts()[c] || 0) > 0);
+    const current =
+      selectedCategories().length === 0
+        ? [...allNonEmpty]
+        : selectedCategories().filter((c) => c !== '__NONE__');
+
+    if (current.includes(cat)) {
+      const next = current.filter((c) => c !== cat);
+      setSelectedCategories(next.length === 0 ? ['__NONE__'] : next);
+    } else {
+      const next = [...current, cat];
+      if (next.length >= allNonEmpty.length) {
+        setSelectedCategories([]); // all
+      } else {
+        setSelectedCategories(next);
+      }
+    }
+  };
+
+  const selectAllCategories = (selectAll: boolean) => {
+    if (selectAll) {
+      setSelectedCategories([]);
+    } else {
+      setSelectedCategories(['__NONE__']);
+    }
+  };
+
+  const isAllCategoriesSelected = () => {
+    const selected = selectedCategories();
+    return selected.length === 0;
+  };
+
+  const isFilteringActive = createMemo(() => {
+    return searchQuery().trim().length > 0 || selectedCategories().length > 0;
+  });
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setSelectedCategories([]);
+    setActiveCategory('All');
+  };
+
   // Filtered and Sorted stable list of symbol strings
   const filteredSymbols = createMemo<string[]>(() => {
     const map = calculatedResultsMap();
     const query = searchQuery().toUpperCase();
-    const cat = activeCategory();
 
     const matching: CalculatedSymbolResult[] = [];
     for (const res of map.values()) {
-      const matchCat = cat === 'All' || res.spec.category === cat;
+      const cat = res.spec.category || 'Other';
+      const matchCat = isCategorySelected(cat);
       const matchSearch = !query || res.spec.symbol.toUpperCase().includes(query);
       if (matchCat && matchSearch) {
         matching.push(res);
@@ -202,6 +253,14 @@ function createMarketStore() {
     calculatedResultsMap,
     getCalculatedResult,
     categoryCounts,
+    selectedCategories,
+    setSelectedCategories,
+    isCategorySelected,
+    toggleCategory,
+    selectAllCategories,
+    isAllCategoriesSelected,
+    isFilteringActive,
+    resetFilters,
     filteredSymbols,
     handleDrop,
   };

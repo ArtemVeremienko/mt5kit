@@ -475,15 +475,17 @@ export const PositionRow: Component<Props> = (props) => {
                     {/* Action buttons */}
                     <div class="sltp-hub-actions">
                       <button
-                        class="btn-xs btn-primary btn-sltp-save"
+                        type="button"
+                        class="btn-sltp-save"
                         onClick={handleSaveSltp}
                         disabled={isSubmitting()}
                         title="Commit SL/TP modifications to MT5 (Enter)"
                       >
-                        Save
+                        ✓
                       </button>
                       <button
-                        class="btn-xs btn-ghost btn-sltp-cancel"
+                        type="button"
+                        class="btn-sltp-cancel"
                         onClick={cancelEditing}
                         title="Cancel (Escape)"
                       >

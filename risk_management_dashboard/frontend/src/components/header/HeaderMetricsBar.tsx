@@ -102,13 +102,10 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
 
   return (
     <header class="dashboard-header">
-      {/* Left Zone: Brand Logo & Segmented Workspace Navigation */}
+      {/* Left Zone: Brand Glyph & Workspace Switcher */}
       <div class="header-left-zone">
-        <div class="brand-logo" title="MetaTrader 5 Risk Management Engine">
-          <span class="logo-icon">⚡</span>
-          <div class="brand-title-group">
-            <span class="brand-title">MT5 RISK</span>
-          </div>
+        <div class="brand-logo-compact" title="MetaTrader 5 Institutional Risk Engine">
+          <span class="logo-icon-compact">⚡</span>
         </div>
 
         <div class="header-workspace-switcher">
@@ -138,23 +135,12 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
             <span class="btn-badge" classList={{ 'badge-active': posCount() > 0 }}>
               {posCount()}
             </span>
-            <Show when={posCount() > 0}>
-              <span
-                class="header-pnl-tag"
-                classList={{
-                  'text-profit': floatingProfit() > 0,
-                  'text-loss': floatingProfit() < 0,
-                }}
-              >
-                {floatingProfit() >= 0 ? `+${formatCurrency(floatingProfit())}` : formatCurrency(floatingProfit())}
-              </span>
-            </Show>
             <kbd class="btn-kbd">2</kbd>
           </button>
         </div>
       </div>
 
-      {/* Center Zone: Account Telemetry + Interactive Summary Pills */}
+      {/* Center Zone: Account Telemetry + 2-Row Stacked Capsules */}
       <div class="header-center-zone">
         <div class="account-inline-metrics-container" ref={accountInfoRef}>
           <div class="account-inline-metrics">
@@ -191,7 +177,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
               class="btn-account-info"
               classList={{ active: isAccountInfoOpen() }}
               onClick={() => setIsAccountInfoOpen(!isAccountInfoOpen())}
-              title="Click to view full MT5 Account Info (Leverage, Server, Margin Health, Login)"
+              title="Click to view full MT5 Account Info (Leverage, Server, Login)"
             >
               <span class="account-info-icon">ℹ️</span>
             </button>
@@ -240,10 +226,10 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
           </Show>
         </div>
 
-        {/* Interactive Configuration Capsule Pills */}
-        <div class="header-capsules-group">
+        {/* 2-Row Stacked Capsule Cluster */}
+        <div class="header-capsules-stacked">
           <button
-            class="header-capsule-pill"
+            class="stacked-capsule-row"
             onClick={props.onOpenRiskModal}
             title="Click to configure Working Capital, Risk Model, SL Presets, and R:R Ratio"
           >
@@ -253,12 +239,12 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
           </button>
 
           <button
-            class="header-capsule-pill"
+            class="stacked-capsule-row"
             style={{
               'border-left-color': sampleInfo()?.badge_color || 'var(--accent-blue)',
             }}
             onClick={props.onOpenStrategyModal}
-            title={`Sample Tier: ${sampleInfo()?.tier || 'Informational'} (${sampleInfo()?.total_trades || 0} trades). Click to view Strategy Sample Profile, Ralph Vince Optimal f, and Kelly math`}
+            title={`Sample Tier: ${sampleInfo()?.tier || 'Informational'} (${sampleInfo()?.total_trades || 0} trades). Click to view Strategy Profile, Optimal f, and Kelly math`}
           >
             <span class="capsule-icon">📊</span>
             <span class="capsule-text">{strategySummaryText()}</span>
@@ -267,35 +253,36 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
         </div>
       </div>
 
-      {/* Right Zone: System Toggles & Connection Status */}
+      {/* Right Zone: Compact Toggles & Pulsing Connection Indicator */}
       <div class="header-right-zone">
         <button
-          class="btn-toggle"
+          class="btn-toggle-compact"
           classList={{ active: preferencesStore.turboMode() }}
           onClick={handleTurboToggle}
-          title="Toggle 500ms Turbo streaming rate"
+          title={preferencesStore.turboMode() ? 'Turbo Mode (500ms streaming)' : 'Standard Mode (2.0s streaming)'}
         >
           <span class="toggle-indicator"></span>
-          <span>{preferencesStore.turboMode() ? '⚡ Turbo (500ms)' : '🐢 Std (2s)'}</span>
+          <span class="toggle-text">{preferencesStore.turboMode() ? '⚡ 500ms' : '🐢 2s'}</span>
         </button>
 
         <button
-          class="btn-toggle"
+          class="btn-toggle-compact"
           classList={{ active: preferencesStore.oneClickEnabled() }}
           onClick={handleOneClickToggle}
-          title="Toggle instant One-Click order execution"
+          title={preferencesStore.oneClickEnabled() ? '1-Click Execution: ON' : '1-Click Execution: OFF'}
         >
           <span class="toggle-indicator"></span>
-          <span>{preferencesStore.oneClickEnabled() ? '⚡ 1-Click: ON' : '🛡️ 1-Click: OFF'}</span>
+          <span class="toggle-text">{preferencesStore.oneClickEnabled() ? '⚡ 1-Click' : '🛡️ 1-Click'}</span>
         </button>
 
+        {/* Pulsing Status Beacon */}
         <div
-          class="connection-badge"
+          class="connection-dot-beacon"
           classList={{ connected: isConnected() }}
-          title={isConnected() ? 'Connected to MT5 Live Feed' : 'Connecting to MT5 Live Feed...'}
+          title={isConnected() ? `Connected: ${account().server || 'MT5 Live Feed'}` : 'Disconnected from MT5'}
         >
-          <span class="status-dot"></span>
-          <span>{isConnected() ? 'MT5 LIVE' : 'OFFLINE'}</span>
+          <span class="beacon-pulse"></span>
+          <span class="beacon-core"></span>
         </div>
       </div>
     </header>
