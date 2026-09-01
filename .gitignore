@@ -11,19 +11,34 @@ __pycache__/
 .coverage
 htmlcov/
 
-# Jupyter Notebook Checkpoints
-.ipynb_checkpoints/
-
+# Node & Frontend Workspaces
 # Generated Reports & Analyzer Outputs
 *.html
 !**/static/**
 !**/templates/**
+!**/frontend/index.html
 **/output/
 **/reports/
 *.log
+
+# Node & Build Outputs
+node_modules/
+.pnpm-store/
+dist/
+**/static/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment & local overrides
+*.local
+.env.local
+.env.*.local
 
 # IDE & OS Specific
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+*.swp

@@ -15,6 +15,9 @@ A comprehensive suite of production-grade Python analytics engines, high-perform
   - [5. Best Working Hours & Volatility Analyzer (`best_working_hours_analyzer/`)](#5-best-working-hours--volatility-analyzer-best_working_hours_analyzer)
   - [6. Data Feed Quality Analyzer (`feed_quality_analyzer/`)](#6-data-feed-quality-analyzer-feed_quality_analyzer)
   - [7. Multi-Timeframe History Viewer (`history_viewer/`)](#7-multi-timeframe-history-viewer-history_viewer)
+  - [8. Asset Behavior Profiler & Exit Recommender (`regime_exit_recommender/`)](#8-asset-behavior-profiler--exit-recommender-regime_exit_recommender)
+  - [9. Macro Market Regime Analyzer (`macro_regime_analyzer/`)](#9-macro-market-regime-analyzer-macro_regime_analyzer)
+  - [10. MT5 Risk Management & Position Sizing Engine (`risk_management_dashboard/`)](#10-mt5-risk-management--position-sizing-engine-risk_management_dashboard)
 - [Jupyter Notebooks](#-jupyter-notebooks)
   - [Market Microstructure & Spreads](#market-microstructure--spreads)
   - [Interactive Price & Tick Charting](#interactive-price--tick-charting)
@@ -166,6 +169,60 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 * **Quick Run:**
   ```powershell
   uv run python history_viewer/history_viewer.py --symbol EURUSD --date 2026-05-15 --chart-type candlesticks
+  ```
+
+---
+
+### 8. Asset Behavior Profiler & Exit Recommender (`regime_exit_recommender/`)
+* **Location:** [`regime_exit_recommender/`](file:///d:/projects/metatrader5/regime_exit_recommender/README.md)
+* **Purpose:** Multi-month historical behavior profiling and empirical exit strategy calibration engine for MetaTrader 5 instruments. Decomposes individual trading days into 4 canonical day regimes (Range, Semi-Trend, V-Shape Reversal, Strong Trend) to compute empirical quantiles and recommend optimal position management rules (Fixed Target, Split Exit, Trailing Stop).
+* **Key Features:**
+  - **4-Regime Market Taxonomy**: Range Day (Flat / Sideways), Semi-Trending Day (Swing / Channel), V-Shape Reversal Day (Two-Way Expansion), Strong Trend Day (Unidirectional Momentum).
+  - **Empirical Quantile Calibration**: Calculates $p_{25}, p_{50}, p_{75}, p_{90}$ daily ranges and maximum adverse intraday pullbacks.
+  - **60 FPS Hardware-Accelerated Charts**: Synchronized 3-pane Lightweight Charts viewer for H1 and D1 POC analysis.
+  - **Master Portfolio Overview Dashboard**: High-level comparison table across all assets saved to [`output/portfolio_overview.html`](file:///d:/projects/metatrader5/regime_exit_recommender/output/portfolio_overview.html).
+* **Quick Run:**
+  ```powershell
+  uv run python -m regime_exit_recommender.main --symbols EURUSD,GBPUSD,USDJPY,XAUUSD --days 365
+  ```
+
+---
+
+### 9. Macro Market Regime Analyzer (`macro_regime_analyzer/`)
+* **Location:** [`macro_regime_analyzer/`](file:///d:/projects/metatrader5/macro_regime_analyzer/README.md)
+* **Purpose:** Multi-year / temporal market cycle analyzer that segments asset history into continuous multi-day macro regimes (Bull Trend, Bear Trend, Trading Range, Volatile Chop) using a hybrid quantitative & market structure model.
+* **Key Features:**
+  - **Solves Day-by-Day Isolation Bias**: Detects when alternating up/down days form a stationary horizontal trading range vs a persistent trend.
+  - **Hybrid Detection Model**: Combines Multi-Day Rolling Kaufman Efficiency ($\text{KER}_{10}$), Bar Overlap Ratio ($\text{ROR}_5$), Range Expansion Index ($\text{REI}_5$), and H4/D1 Swing Pivots.
+  - **4-State Macro Taxonomy**: Bull Trend (Mark-Up), Bear Trend (Mark-Down), Trading Range (Consolidation), and Volatile Chop (Whipsaw).
+  - **Interactive Visualizations**: Standalone Lightweight Charts with continuous colored regime spans and a Master Portfolio Macro Screener Dashboard.
+* **Quick Run:**
+  ```powershell
+  uv run python -m macro_regime_analyzer.main --symbols EURUSD,GBPUSD,USDJPY,XAUUSD,BRENT,.US500Cash --days 730
+  ```
+
+---
+
+### 10. MT5 Risk Management & Position Sizing Engine (`risk_management_dashboard/`)
+* **Location:** [`risk_management_dashboard/`](file:///d:/projects/metatrader5/risk_management_dashboard/README.md)
+* **Purpose:** Real-time multi-model position sizing screener and live order management dashboard for MetaTrader 5, powered by a fine-grained reactive **Solid.js + TypeScript** frontend and high-performance **FastAPI** backend.
+* **Key Features:**
+  - **Fine-Grained Reactivity (Solid.js)**: Zero Virtual DOM overhead; 500ms streaming ticks directly patch exact DOM text nodes (`node.data = newPrice`).
+  - **Multi-Model Sizing**: Fixed Fractional (0.1%–10%), Kelly Criterion ($f^*$, Half, Quarter), and Ralph Vince Optimal $f$.
+  - **Order Management Panel**: Real-time open positions tracking with 1-Click Close, Move to Break-Even (BE), 50% Partial Close, Inline SL/TP modifier, and Emergency Close All.
+  - **Custom Screener UX**: 3-State column sorting (`▲` / `▼` / `↕`), Symbol Pinning (`📌`), and Drag & Drop reordering (`⠿`) with `localStorage` persistence.
+  - **Sub-Second Turbo Mode**: 500ms streaming tick rate with 15-minute in-memory ADR/ATR TTL caching.
+* **Quick Run (Production)**:
+  ```powershell
+  uv run python -m risk_management_dashboard.run
+  ```
+* **Frontend Dev Mode (Vite HMR)**:
+  ```powershell
+  cd risk_management_dashboard/frontend && pnpm install && pnpm dev
+  ```
+* **Frontend Build**:
+  ```powershell
+  cd risk_management_dashboard/frontend && pnpm build
   ```
 
 ---
