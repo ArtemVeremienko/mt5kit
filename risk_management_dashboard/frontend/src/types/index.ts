@@ -77,18 +77,28 @@ export interface LotCalculation {
   exact_lot: number;
   exact_lot_display: string;
   executable_lot: number;
-  executable_lot_display: string;
+  executable_lot_display?: string;
+  lot_display?: string;
   effective_risk_amount: number;
   effective_risk_pct: number;
-  clamped_by_min: boolean;
-  clamped_by_max: boolean;
-  clamped_by_step: boolean;
+  effective_risk_pct_display?: string;
+  risk_display?: string;
+  is_clamped_to_min?: boolean;
+  is_clamped_to_max?: boolean;
+  min_volume?: number;
+  max_volume?: number;
+  volume_step?: number;
+  contract_size?: number;
+  market_price?: number;
+  clamped_by_min?: boolean;
+  clamped_by_max?: boolean;
+  clamped_by_step?: boolean;
   required_margin: number;
   required_margin_display: string;
   margin_utilization_pct: number;
-  margin_utilization_display: string;
-  is_margin_exceeded: boolean;
-  margin_status: 'healthy' | 'warning' | 'exceeded';
+  margin_utilization_display?: string;
+  is_margin_exceeded?: boolean;
+  margin_status?: 'healthy' | 'warning' | 'exceeded';
 }
 
 export interface CalculatedSymbolResult {

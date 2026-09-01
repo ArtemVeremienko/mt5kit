@@ -176,6 +176,37 @@ export const RiskConfigModal: Component<Props> = (props) => {
                 Multiplier applied to Stop Loss pips (e.g. 1:1.5 creates a 30 pip TP for a 20 pip SL). Set 0 for no TP.
               </span>
             </div>
+
+            <div class="modal-section-divider" />
+
+            {/* SL/TP Popover Editor Preferences */}
+            <div class="form-group">
+              <label class="form-label" for="modal-sltp-focus">
+                SL/TP EDITOR DEFAULT FOCUS FIELD:
+              </label>
+              <select
+                id="modal-sltp-focus"
+                class="control-select"
+                value={preferencesStore.defaultSltpFocusField()}
+                onInput={(e) =>
+                  preferencesStore.setDefaultSltpFocusField(
+                    e.currentTarget.value as 'price' | 'pips' | 'cash'
+                  )
+                }
+                onChange={(e) =>
+                  preferencesStore.setDefaultSltpFocusField(
+                    e.currentTarget.value as 'price' | 'pips' | 'cash'
+                  )
+                }
+              >
+                <option value="price">Price Level (e.g. 1.15945)</option>
+                <option value="pips">Pip Distance (e.g. 25.0 pips)</option>
+                <option value="cash">Profit / Loss $ (e.g. -$50.00)</option>
+              </select>
+              <span class="form-help-text">
+                Field automatically focused and selected when opening the in-place SL/TP editor.
+              </span>
+            </div>
           </div>
 
           <div class="modal-footer">

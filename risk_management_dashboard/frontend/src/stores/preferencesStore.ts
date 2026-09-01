@@ -74,7 +74,15 @@ function createPreferences() {
   const [customOrder, setCustomOrderSignal] = createSignal<string[]>(
     JSON.parse(localStorage.getItem('mt5_custom_symbol_order') || '[]')
   );
+  const [defaultSltpFocusField, setDefaultSltpFocusFieldSignal] = createSignal<'price' | 'pips' | 'cash'>(
+    (localStorage.getItem('mt5_sltp_default_focus') as 'price' | 'pips' | 'cash') || 'price'
+  );
   const [slOverrides, setSlOverridesSignal] = createSignal<Record<string, number>>({});
+
+  const setDefaultSltpFocusField = (val: 'price' | 'pips' | 'cash') => {
+    setDefaultSltpFocusFieldSignal(val);
+    localStorage.setItem('mt5_sltp_default_focus', val);
+  };
 
   const setRiskMethod = (val: string) => {
     setRiskMethodSignal(val);
@@ -180,6 +188,8 @@ function createPreferences() {
     customOrder,
     setCustomOrder,
     resetCustomOrder,
+    defaultSltpFocusField,
+    setDefaultSltpFocusField,
     slOverrides,
     setSymbolSL,
     resetSymbolSL,

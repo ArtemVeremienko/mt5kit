@@ -3,8 +3,13 @@ import { api } from '../../services/api';
 import { toastStore } from '../../stores/toastStore';
 import { positionsStore } from '../../stores/positionsStore';
 import { marketStore } from '../../stores/marketStore';
+import { preferencesStore } from '../../stores/preferencesStore';
 import { formatCurrency } from '../../utils/formatters';
 import { getAssetStepRule, stepPrice } from '../../utils/stepperEngine';
+import { autofocus } from '../../directives/autofocus';
+
+// Reference directive for compiler JSX recognition
+false && autofocus;
 
 interface Props {
   ticket: number;
@@ -14,11 +19,17 @@ export const PositionRow: Component<Props> = (props) => {
   const position = createMemo(() => positionsStore.getPosition(props.ticket));
 
   let hubRef: HTMLDivElement | undefined;
-  let slInputRef: HTMLInputElement | undefined;
-  let tpInputRef: HTMLInputElement | undefined;
 
-  const [slValue, setSlValue] = createSignal<string>('');
-  const [tpValue, setTpValue] = createSignal<string>('');
+  // 3-Tier State Signals for SL
+  const [slPrice, setSlPrice] = createSignal<string>('');
+  const [slPips, setSlPips] = createSignal<string>('');
+  const [slCash, setSlCash] = createSignal<string>('');
+
+  // 3-Tier State Signals for TP
+  const [tpPrice, setTpPrice] = createSignal<string>('');
+  const [tpPips, setTpPips] = createSignal<string>('');
+  const [tpCash, setTpCash] = createSignal<string>('');
+
   const [isEditing, setIsEditing] = createSignal<boolean>(false);
   const [isSubmitting, setIsSubmitting] = createSignal<boolean>(false);
 
@@ -28,23 +39,188 @@ export const PositionRow: Component<Props> = (props) => {
     return getAssetStepRule(p.symbol, p.digits, p.pip_size, p.step_rule);
   });
 
-  const startEditing = (field: 'SL' | 'TP' = 'SL') => {
+  // Bidirectional SL Calculations
+  const updateSlFromPrice = (priceVal: string | number) => {
+    const p = position();
+    if (!p) return;
+    const rule = stepRule();
+    const num = typeof priceVal === 'string' ? parseFloat(priceVal) : priceVal;
+
+    if (isNaN(num) || num <= 0) {
+      setSlPrice(typeof priceVal === 'string' ? priceVal : '');
+      setSlPips('');
+      setSlCash('');
+      return;
+    }
+
+    const isBuy = p.type === 'BUY';
+    const diff = isBuy ? p.price_open - num : num - p.price_open;
+    const pips = diff / rule.pipSize;
+    const calcResult = marketStore.getCalculatedResult(p.symbol);
+    const pipVal = calcResult?.calc?.pip_value_per_lot || 10.0;
+    const dollar = pips * p.volume * pipVal;
+
+    setSlPrice(typeof priceVal === 'string' ? priceVal : num.toFixed(p.digits));
+    setSlPips(Math.abs(pips).toFixed(1));
+    setSlCash((-Math.abs(dollar)).toFixed(2));
+  };
+
+  const updateSlFromPips = (pipsVal: string | number) => {
+    const p = position();
+    if (!p) return;
+    const rule = stepRule();
+    const num = typeof pipsVal === 'string' ? parseFloat(pipsVal) : pipsVal;
+
+    if (isNaN(num) || num <= 0) {
+      setSlPips(typeof pipsVal === 'string' ? pipsVal : '');
+      setSlPrice('');
+      setSlCash('');
+      return;
+    }
+
+    const isBuy = p.type === 'BUY';
+    const targetPrice = isBuy
+      ? p.price_open - num * rule.pipSize
+      : p.price_open + num * rule.pipSize;
+
+    const calcResult = marketStore.getCalculatedResult(p.symbol);
+    const pipVal = calcResult?.calc?.pip_value_per_lot || 10.0;
+    const dollar = num * p.volume * pipVal;
+
+    setSlPips(typeof pipsVal === 'string' ? pipsVal : num.toFixed(1));
+    setSlPrice(Math.max(0, targetPrice).toFixed(p.digits));
+    setSlCash((-dollar).toFixed(2));
+  };
+
+  const updateSlFromCash = (cashVal: string | number) => {
+    const p = position();
+    if (!p) return;
+    const rule = stepRule();
+    const num = typeof cashVal === 'string' ? parseFloat(cashVal) : cashVal;
+    if (isNaN(num) || num === 0) {
+      setSlCash(typeof cashVal === 'string' ? cashVal : '');
+      setSlPips('');
+      setSlPrice('');
+      return;
+    }
+
+    const absCash = Math.abs(num);
+    const calcResult = marketStore.getCalculatedResult(p.symbol);
+    const pipVal = calcResult?.calc?.pip_value_per_lot || 10.0;
+    const pips = absCash / (p.volume * pipVal);
+    const isBuy = p.type === 'BUY';
+    const targetPrice = isBuy
+      ? p.price_open - pips * rule.pipSize
+      : p.price_open + pips * rule.pipSize;
+
+    setSlCash(typeof cashVal === 'string' ? cashVal : (-absCash).toFixed(2));
+    setSlPips(pips.toFixed(1));
+    setSlPrice(Math.max(0, targetPrice).toFixed(p.digits));
+  };
+
+  // Bidirectional TP Calculations
+  const updateTpFromPrice = (priceVal: string | number) => {
+    const p = position();
+    if (!p) return;
+    const rule = stepRule();
+    const num = typeof priceVal === 'string' ? parseFloat(priceVal) : priceVal;
+
+    if (isNaN(num) || num <= 0) {
+      setTpPrice(typeof priceVal === 'string' ? priceVal : '');
+      setTpPips('');
+      setTpCash('');
+      return;
+    }
+
+    const isBuy = p.type === 'BUY';
+    const diff = isBuy ? num - p.price_open : p.price_open - num;
+    const pips = diff / rule.pipSize;
+    const calcResult = marketStore.getCalculatedResult(p.symbol);
+    const pipVal = calcResult?.calc?.pip_value_per_lot || 10.0;
+    const dollar = pips * p.volume * pipVal;
+
+    setTpPrice(typeof priceVal === 'string' ? priceVal : num.toFixed(p.digits));
+    setTpPips(Math.abs(pips).toFixed(1));
+    setTpCash((+Math.abs(dollar)).toFixed(2));
+  };
+
+  const updateTpFromPips = (pipsVal: string | number) => {
+    const p = position();
+    if (!p) return;
+    const rule = stepRule();
+    const num = typeof pipsVal === 'string' ? parseFloat(pipsVal) : pipsVal;
+
+    if (isNaN(num) || num <= 0) {
+      setTpPips(typeof pipsVal === 'string' ? pipsVal : '');
+      setTpPrice('');
+      setTpCash('');
+      return;
+    }
+
+    const isBuy = p.type === 'BUY';
+    const targetPrice = isBuy
+      ? p.price_open + num * rule.pipSize
+      : p.price_open - num * rule.pipSize;
+
+    const calcResult = marketStore.getCalculatedResult(p.symbol);
+    const pipVal = calcResult?.calc?.pip_value_per_lot || 10.0;
+    const dollar = num * p.volume * pipVal;
+
+    setTpPips(typeof pipsVal === 'string' ? pipsVal : num.toFixed(1));
+    setTpPrice(Math.max(0, targetPrice).toFixed(p.digits));
+    setTpCash((+dollar).toFixed(2));
+  };
+
+  const updateTpFromCash = (cashVal: string | number) => {
+    const p = position();
+    if (!p) return;
+    const rule = stepRule();
+    const num = typeof cashVal === 'string' ? parseFloat(cashVal) : cashVal;
+    if (isNaN(num) || num === 0) {
+      setTpCash(typeof cashVal === 'string' ? cashVal : '');
+      setTpPips('');
+      setTpPrice('');
+      return;
+    }
+
+    const absCash = Math.abs(num);
+    const calcResult = marketStore.getCalculatedResult(p.symbol);
+    const pipVal = calcResult?.calc?.pip_value_per_lot || 10.0;
+    const pips = absCash / (p.volume * pipVal);
+    const isBuy = p.type === 'BUY';
+    const targetPrice = isBuy
+      ? p.price_open + pips * rule.pipSize
+      : p.price_open - pips * rule.pipSize;
+
+    setTpCash(typeof cashVal === 'string' ? cashVal : (+absCash).toFixed(2));
+    setTpPips(pips.toFixed(1));
+    setTpPrice(Math.max(0, targetPrice).toFixed(p.digits));
+  };
+
+  const [editingSide, setEditingSide] = createSignal<'SL' | 'TP'>('SL');
+
+  // Start Editing with User Focus Preference
+  const startEditing = (columnSide: 'SL' | 'TP' = 'SL') => {
     const p = position();
     if (p) {
-      setSlValue(p.sl ? p.sl.toFixed(p.digits) : '');
-      setTpValue(p.tp ? p.tp.toFixed(p.digits) : '');
-      setIsEditing(true);
+      if (p.sl && p.sl > 0) {
+        updateSlFromPrice(p.sl);
+      } else {
+        setSlPrice('');
+        setSlPips('');
+        setSlCash('');
+      }
 
-      // Auto-focus requested field with selection
-      setTimeout(() => {
-        if (field === 'SL' && slInputRef) {
-          slInputRef.focus();
-          slInputRef.select();
-        } else if (field === 'TP' && tpInputRef) {
-          tpInputRef.focus();
-          tpInputRef.select();
-        }
-      }, 50);
+      if (p.tp && p.tp > 0) {
+        updateTpFromPrice(p.tp);
+      } else {
+        setTpPrice('');
+        setTpPips('');
+        setTpCash('');
+      }
+
+      setEditingSide(columnSide);
+      setIsEditing(true);
     }
   };
 
@@ -52,7 +228,7 @@ export const PositionRow: Component<Props> = (props) => {
     setIsEditing(false);
   };
 
-  // Global Escape key, Enter key, and click-outside dismissal
+  // Global Escape, Enter, Click Outside Listener
   createEffect(() => {
     if (!isEditing()) return;
 
@@ -62,7 +238,6 @@ export const PositionRow: Component<Props> = (props) => {
         e.stopPropagation();
         cancelEditing();
       } else if (e.key === 'Enter') {
-        // If Enter is pressed while inside popover, commit changes instead of triggering focused buttons
         e.preventDefault();
         e.stopPropagation();
         handleSaveSltp();
@@ -87,74 +262,98 @@ export const PositionRow: Component<Props> = (props) => {
     });
   });
 
-  const stepSl = (direction: 'UP' | 'DOWN', e?: KeyboardEvent | MouseEvent) => {
+  // Stepper Handlers for SL
+  const stepSlPriceHandler = (direction: 'UP' | 'DOWN', e?: KeyboardEvent | MouseEvent) => {
     const p = position();
     if (!p) return;
     const rule = stepRule();
-    const currentVal = slValue().trim() ? parseFloat(slValue()) : (p.sl || p.price_open);
+    const currentVal = slPrice().trim() ? parseFloat(slPrice()) : (p.sl || p.price_open);
     const newVal = stepPrice(currentVal, direction, rule, e);
-    setSlValue(newVal > 0 ? newVal.toFixed(p.digits) : '');
+    updateSlFromPrice(newVal);
   };
 
-  const stepTp = (direction: 'UP' | 'DOWN', e?: KeyboardEvent | MouseEvent) => {
+  const stepSlPipsHandler = (direction: 'UP' | 'DOWN', e?: KeyboardEvent | MouseEvent) => {
+    const current = slPips().trim() ? parseFloat(slPips()) : 20.0;
+    let step = 1.0;
+    if (e) {
+      if (e.shiftKey) step = 10.0;
+      else if (e.altKey) step = 0.1;
+    }
+    const next = direction === 'UP' ? current + step : Math.max(0.1, current - step);
+    updateSlFromPips(next);
+  };
+
+  const stepSlCashHandler = (direction: 'UP' | 'DOWN', e?: KeyboardEvent | MouseEvent) => {
+    const current = slCash().trim() ? Math.abs(parseFloat(slCash())) : 50.0;
+    let step = 10.0;
+    if (e) {
+      if (e.shiftKey) step = 50.0;
+      else if (e.altKey) step = 1.0;
+    }
+    const next = direction === 'UP' ? current + step : Math.max(1.0, current - step);
+    updateSlFromCash(-next);
+  };
+
+  // Stepper Handlers for TP
+  const stepTpPriceHandler = (direction: 'UP' | 'DOWN', e?: KeyboardEvent | MouseEvent) => {
     const p = position();
     if (!p) return;
     const rule = stepRule();
-    const currentVal = tpValue().trim() ? parseFloat(tpValue()) : (p.tp || p.price_open);
+    const currentVal = tpPrice().trim() ? parseFloat(tpPrice()) : (p.tp || p.price_open);
     const newVal = stepPrice(currentVal, direction, rule, e);
-    setTpValue(newVal > 0 ? newVal.toFixed(p.digits) : '');
+    updateTpFromPrice(newVal);
   };
 
-  // Real-time live distance telemetry with explicit sign calculation
-  const slTelemetry = createMemo(() => {
+  const stepTpPipsHandler = (direction: 'UP' | 'DOWN', e?: KeyboardEvent | MouseEvent) => {
+    const current = tpPips().trim() ? parseFloat(tpPips()) : 30.0;
+    let step = 1.0;
+    if (e) {
+      if (e.shiftKey) step = 10.0;
+      else if (e.altKey) step = 0.1;
+    }
+    const next = direction === 'UP' ? current + step : Math.max(0.1, current - step);
+    updateTpFromPips(next);
+  };
+
+  const stepTpCashHandler = (direction: 'UP' | 'DOWN', e?: KeyboardEvent | MouseEvent) => {
+    const current = tpCash().trim() ? Math.abs(parseFloat(tpCash())) : 100.0;
+    let step = 10.0;
+    if (e) {
+      if (e.shiftKey) step = 50.0;
+      else if (e.altKey) step = 1.0;
+    }
+    const next = direction === 'UP' ? current + step : Math.max(1.0, current - step);
+    updateTpFromCash(next);
+  };
+
+  // Preset Handlers
+  const applyBreakEvenSnap = () => {
     const p = position();
-    if (!p) return null;
-    const val = slValue().trim() ? parseFloat(slValue()) : p.sl;
-    if (!val || val <= 0) return null;
-
-    const rule = stepRule();
-    const isBuy = p.type === 'BUY';
-    const diff = isBuy ? p.price_open - val : val - p.price_open;
-    const pips = diff / rule.pipSize;
-    const isRisk = pips >= 0;
-    const absPips = Math.abs(pips);
+    if (!p) return;
     const calcResult = marketStore.getCalculatedResult(p.symbol);
-    const pipVal = calcResult?.calc?.pip_value_per_lot || 10.0;
-    const dollarAmount = absPips * p.volume * pipVal;
+    const spreadPips = calcResult?.spec?.spread_pips || 0.5;
+    const bufferPips = spreadPips + 0.5;
+    updateSlFromPips(bufferPips);
+  };
 
-    return {
-      absPips: absPips.toFixed(1),
-      isRisk,
-      dollarText: dollarAmount.toFixed(2),
-      unit: rule.unitLabel,
-    };
-  });
-
-  const tpTelemetry = createMemo(() => {
+  const applyAdrSlSnap = (fraction: number) => {
     const p = position();
-    if (!p) return null;
-    const val = tpValue().trim() ? parseFloat(tpValue()) : p.tp;
-    if (!val || val <= 0) return null;
-
-    const rule = stepRule();
-    const isBuy = p.type === 'BUY';
-    const diff = isBuy ? val - p.price_open : p.price_open - val;
-    const pips = diff / rule.pipSize;
-    const isGain = diff >= 0;
-    const absPips = Math.abs(pips);
+    if (!p) return;
     const calcResult = marketStore.getCalculatedResult(p.symbol);
-    const pipVal = calcResult?.calc?.pip_value_per_lot || 10.0;
-    const dollarAmount = absPips * p.volume * pipVal;
+    const adrPips = calcResult?.spec?.adr_14_pips || 0;
+    const slDistPips = adrPips > 0 ? adrPips * fraction : 15.0;
+    updateSlFromPips(slDistPips);
+  };
 
-    return {
-      absPips: absPips.toFixed(1),
-      isGain,
-      dollarText: dollarAmount.toFixed(2),
-      unit: rule.unitLabel,
-    };
-  });
+  const applyRrSnap = (ratio: number) => {
+    const p = position();
+    if (!p) return;
+    const currentSlPip = slPips().trim() ? parseFloat(slPips()) : 15.0;
+    const tpDist = currentSlPip * ratio;
+    updateTpFromPips(tpDist);
+  };
 
-  // Display telemetry for row cells (when not editing)
+  // Row Displays
   const currentSlRowInfo = createMemo(() => {
     const p = position();
     if (!p || !p.sl || p.sl <= 0) return null;
@@ -196,54 +395,6 @@ export const PositionRow: Component<Props> = (props) => {
       isGain,
     };
   });
-
-  // Quick Presets
-  const applyBreakEvenSnap = () => {
-    const p = position();
-    if (!p) return;
-    const rule = stepRule();
-    const calcResult = marketStore.getCalculatedResult(p.symbol);
-    const spreadPips = calcResult?.spec?.spread_pips || 0.5;
-    const bufferPips = spreadPips + 0.5;
-    const bufferDist = bufferPips * rule.pipSize;
-
-    const bePrice = p.type === 'BUY'
-      ? p.price_open + bufferDist
-      : p.price_open - bufferDist;
-
-    setSlValue(bePrice.toFixed(p.digits));
-  };
-
-  const applyAdrSlSnap = (fraction: number) => {
-    const p = position();
-    if (!p) return;
-    const rule = stepRule();
-    const calcResult = marketStore.getCalculatedResult(p.symbol);
-    const adrPips = calcResult?.spec?.adr_14_pips || 0;
-    const slDistPips = adrPips > 0 ? adrPips * fraction : 15.0;
-    const slDist = slDistPips * rule.pipSize;
-
-    const adrPrice = p.type === 'BUY'
-      ? p.price_open - slDist
-      : p.price_open + slDist;
-
-    setSlValue(adrPrice.toFixed(p.digits));
-  };
-
-  const applyRrSnap = (ratio: number) => {
-    const p = position();
-    if (!p) return;
-    const rule = stepRule();
-    const currentSl = slValue().trim() ? parseFloat(slValue()) : p.sl;
-    const slDist = currentSl > 0 ? Math.abs(p.price_open - currentSl) : 15 * rule.pipSize;
-    const tpDist = slDist * ratio;
-
-    const tpPrice = p.type === 'BUY'
-      ? p.price_open + tpDist
-      : p.price_open - tpDist;
-
-    setTpValue(tpPrice.toFixed(p.digits));
-  };
 
   const handleClosePosition = async (volume?: number) => {
     const p = position();
@@ -304,8 +455,8 @@ export const PositionRow: Component<Props> = (props) => {
     if (!p || isSubmitting()) return;
     try {
       setIsSubmitting(true);
-      const slNum = slValue().trim() ? parseFloat(slValue()) : 0;
-      const tpNum = tpValue().trim() ? parseFloat(tpValue()) : 0;
+      const slNum = slPrice().trim() ? parseFloat(slPrice()) : 0;
+      const tpNum = tpPrice().trim() ? parseFloat(tpPrice()) : 0;
       const res = await api.modifyPosition(p.ticket, slNum, tpNum);
       if (res.success) {
         setIsEditing(false);
@@ -366,7 +517,11 @@ export const PositionRow: Component<Props> = (props) => {
           </td>
 
           {/* 6. Stop Loss (Dedicated Column) */}
-          <td class="text-center pos-cell-sl" onClick={() => startEditing('SL')}>
+          <td
+            class="text-center pos-cell-sl"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => startEditing('SL')}
+          >
             <div class="sltp-col-cell sl-col-cell">
               <Show
                 when={currentSlRowInfo()}
@@ -398,7 +553,11 @@ export const PositionRow: Component<Props> = (props) => {
           </td>
 
           {/* 7. Take Profit (Dedicated Column) */}
-          <td class="text-center pos-cell-tp" onClick={() => startEditing('TP')}>
+          <td
+            class="text-center pos-cell-tp"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => startEditing('TP')}
+          >
             <div class="sltp-col-cell tp-col-cell">
               <Show
                 when={currentTpRowInfo()}
@@ -430,7 +589,12 @@ export const PositionRow: Component<Props> = (props) => {
 
             {/* Contextual SL/TP Edit Popover Anchored to the Risk Columns */}
             <Show when={isEditing()}>
-              <div class="sltp-edit-hub" ref={hubRef} onClick={(e) => e.stopPropagation()}>
+              <div
+                class="sltp-edit-hub"
+                ref={hubRef}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
                 <div class="sltp-hub-header">
                   <span class="sltp-hub-title">
                     Modify SL/TP · <strong>{pos().symbol}</strong> (#{pos().ticket})
@@ -446,65 +610,162 @@ export const PositionRow: Component<Props> = (props) => {
                   </button>
                 </div>
 
-                <div class="sltp-hub-body">
-                  {/* Left Column: Stop Loss Field & Presets */}
+                {/* CSS Grid Body: 2 Columns (SL and TP) */}
+                <div class="sltp-hub-grid">
+                  {/* Left Column: Stop Loss Stacked Tier */}
                   <div class="sltp-hub-column sl-column">
                     <div class="sltp-column-header">
                       <label class="sltp-field-label sl-label">Stop Loss</label>
-                      <Show when={slTelemetry()}>
-                        {(tel) => (
-                          <span
-                            class="sltp-telemetry-badge sl-telemetry tabular-num"
-                            classList={{
-                              'text-risk': tel().isRisk,
-                              'text-profit': !tel().isRisk,
-                            }}
-                          >
-                            {tel().isRisk ? '-' : '+'}{tel().absPips} {tel().unit} ({tel().isRisk ? `-$${tel().dollarText}` : `+$${tel().dollarText}`})
-                          </span>
-                        )}
-                      </Show>
+                      <span class="sltp-sub-hint">Risk Ceiling</span>
                     </div>
 
-                    <div class="sltp-stepper-box">
-                      <button
-                        type="button"
-                        class="btn-stepper-touch"
-                        onClick={(e) => stepSl('DOWN', e)}
-                        title={`-1 ${stepRule().unitLabel} (Shift: -10, Alt: -0.1)`}
-                        tabindex="-1"
-                      >
-                        −
-                      </button>
-                      <input
-                        ref={slInputRef}
-                        type="number"
-                        class="sltp-input-main tabular-num"
-                        placeholder="SL Price"
-                        min="0"
-                        step={stepRule().normalStep}
-                        value={slValue()}
-                        onFocus={(e) => e.currentTarget.select()}
-                        onInput={(e) => setSlValue(e.currentTarget.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'ArrowUp') {
-                            e.preventDefault();
-                            stepSl('UP', e);
-                          } else if (e.key === 'ArrowDown') {
-                            e.preventDefault();
-                            stepSl('DOWN', e);
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        class="btn-stepper-touch"
-                        onClick={(e) => stepSl('UP', e)}
-                        title={`+1 ${stepRule().unitLabel} (Shift: +10, Alt: +0.1)`}
-                        tabindex="-1"
-                      >
-                        +
-                      </button>
+                    <div class="sltp-tier-stack">
+                      {/* Tier 1: Price */}
+                      <div class="sltp-tier-row">
+                        <span class="sltp-tier-label">Price</span>
+                        <div class="sltp-stepper-box">
+                          <button
+                            type="button"
+                            class="btn-stepper-touch"
+                            onClick={(e) => stepSlPriceHandler('DOWN', e)}
+                            title={`-1 ${stepRule().unitLabel} (Shift: -10, Alt: -0.1)`}
+                            tabindex="-1"
+                          >
+                            −
+                          </button>
+                          <input
+                            use:autofocus={editingSide() === 'SL' && preferencesStore.defaultSltpFocusField() === 'price'}
+                            type="number"
+                            class="sltp-input-main tabular-num"
+                            placeholder="SL Price"
+                            min="0"
+                            step={stepRule().normalStep}
+                            value={slPrice()}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onBlur={() => {
+                              const num = parseFloat(slPrice());
+                              const p = position();
+                              if (!isNaN(num) && num > 0 && p) setSlPrice(num.toFixed(p.digits));
+                            }}
+                            onInput={(e) => updateSlFromPrice(e.currentTarget.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                stepSlPriceHandler('UP', e);
+                              } else if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                stepSlPriceHandler('DOWN', e);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            class="btn-stepper-touch"
+                            onClick={(e) => stepSlPriceHandler('UP', e)}
+                            title={`+1 ${stepRule().unitLabel} (Shift: +10, Alt: +0.1)`}
+                            tabindex="-1"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Tier 2: Pips */}
+                      <div class="sltp-tier-row">
+                        <span class="sltp-tier-label">Pips</span>
+                        <div class="sltp-stepper-box">
+                          <button
+                            type="button"
+                            class="btn-stepper-touch"
+                            onClick={(e) => stepSlPipsHandler('DOWN', e)}
+                            title="-1.0 pip (Shift: -10, Alt: -0.1)"
+                            tabindex="-1"
+                          >
+                            −
+                          </button>
+                          <input
+                            use:autofocus={editingSide() === 'SL' && preferencesStore.defaultSltpFocusField() === 'pips'}
+                            type="number"
+                            class="sltp-input-main tabular-num"
+                            placeholder="Pips"
+                            min="0"
+                            step="0.1"
+                            value={slPips()}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onBlur={() => {
+                              const num = parseFloat(slPips());
+                              if (!isNaN(num) && num > 0) setSlPips(num.toFixed(1));
+                            }}
+                            onInput={(e) => updateSlFromPips(e.currentTarget.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                stepSlPipsHandler('UP', e);
+                              } else if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                stepSlPipsHandler('DOWN', e);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            class="btn-stepper-touch"
+                            onClick={(e) => stepSlPipsHandler('UP', e)}
+                            title="+1.0 pip (Shift: +10, Alt: +0.1)"
+                            tabindex="-1"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Tier 3: Cash Loss $ */}
+                      <div class="sltp-tier-row">
+                        <span class="sltp-tier-label">Loss $</span>
+                        <div class="sltp-stepper-box">
+                          <button
+                            type="button"
+                            class="btn-stepper-touch"
+                            onClick={(e) => stepSlCashHandler('DOWN', e)}
+                            title="-$10.00 (Shift: -$50, Alt: -$1)"
+                            tabindex="-1"
+                          >
+                            −
+                          </button>
+                          <input
+                            use:autofocus={editingSide() === 'SL' && preferencesStore.defaultSltpFocusField() === 'cash'}
+                            type="number"
+                            class="sltp-input-main text-risk tabular-num"
+                            placeholder="-$ Loss"
+                            step="1"
+                            value={slCash()}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onBlur={() => {
+                              const num = parseFloat(slCash());
+                              if (!isNaN(num) && num !== 0) setSlCash((-Math.abs(num)).toFixed(2));
+                            }}
+                            onInput={(e) => updateSlFromCash(e.currentTarget.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                stepSlCashHandler('UP', e);
+                              } else if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                stepSlCashHandler('DOWN', e);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            class="btn-stepper-touch"
+                            onClick={(e) => stepSlCashHandler('UP', e)}
+                            title="+$10.00 (Shift: +$50, Alt: +$1)"
+                            tabindex="-1"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div class="sltp-presets-group">
@@ -541,66 +802,160 @@ export const PositionRow: Component<Props> = (props) => {
                     </div>
                   </div>
 
-                  <div class="sltp-hub-divider" />
-
-                  {/* Right Column: Take Profit Field & Presets */}
+                  {/* Right Column: Take Profit Stacked Tier */}
                   <div class="sltp-hub-column tp-column">
                     <div class="sltp-column-header">
                       <label class="sltp-field-label tp-label">Take Profit</label>
-                      <Show when={tpTelemetry()}>
-                        {(tel) => (
-                          <span
-                            class="sltp-telemetry-badge tp-telemetry tabular-num"
-                            classList={{
-                              'text-profit': tel().isGain,
-                              'text-risk': !tel().isGain,
-                            }}
-                          >
-                            {tel().isGain ? '+' : '-'}{tel().absPips} {tel().unit} ({tel().isGain ? `+$${tel().dollarText}` : `-$${tel().dollarText}`})
-                          </span>
-                        )}
-                      </Show>
+                      <span class="sltp-sub-hint">Target Objective</span>
                     </div>
 
-                    <div class="sltp-stepper-box">
-                      <button
-                        type="button"
-                        class="btn-stepper-touch"
-                        onClick={(e) => stepTp('DOWN', e)}
-                        title={`-1 ${stepRule().unitLabel} (Shift: -10, Alt: -0.1)`}
-                        tabindex="-1"
-                      >
-                        −
-                      </button>
-                      <input
-                        ref={tpInputRef}
-                        type="number"
-                        class="sltp-input-main tabular-num"
-                        placeholder="TP Price"
-                        min="0"
-                        step={stepRule().normalStep}
-                        value={tpValue()}
-                        onFocus={(e) => e.currentTarget.select()}
-                        onInput={(e) => setTpValue(e.currentTarget.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'ArrowUp') {
-                            e.preventDefault();
-                            stepTp('UP', e);
-                          } else if (e.key === 'ArrowDown') {
-                            e.preventDefault();
-                            stepTp('DOWN', e);
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        class="btn-stepper-touch"
-                        onClick={(e) => stepTp('UP', e)}
-                        title={`+1 ${stepRule().unitLabel} (Shift: +10, Alt: +0.1)`}
-                        tabindex="-1"
-                      >
-                        +
-                      </button>
+                    <div class="sltp-tier-stack">
+                      {/* Tier 1: Price */}
+                      <div class="sltp-tier-row">
+                        <span class="sltp-tier-label">Price</span>
+                        <div class="sltp-stepper-box">
+                          <button
+                            type="button"
+                            class="btn-stepper-touch"
+                            onClick={(e) => stepTpPriceHandler('DOWN', e)}
+                            title={`-1 ${stepRule().unitLabel} (Shift: -10, Alt: -0.1)`}
+                            tabindex="-1"
+                          >
+                            −
+                          </button>
+                          <input
+                            use:autofocus={editingSide() === 'TP' && preferencesStore.defaultSltpFocusField() === 'price'}
+                            type="number"
+                            class="sltp-input-main tabular-num"
+                            placeholder="TP Price"
+                            min="0"
+                            step={stepRule().normalStep}
+                            value={tpPrice()}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onBlur={() => {
+                              const num = parseFloat(tpPrice());
+                              const p = position();
+                              if (!isNaN(num) && num > 0 && p) setTpPrice(num.toFixed(p.digits));
+                            }}
+                            onInput={(e) => updateTpFromPrice(e.currentTarget.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                stepTpPriceHandler('UP', e);
+                              } else if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                stepTpPriceHandler('DOWN', e);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            class="btn-stepper-touch"
+                            onClick={(e) => stepTpPriceHandler('UP', e)}
+                            title={`+1 ${stepRule().unitLabel} (Shift: +10, Alt: +0.1)`}
+                            tabindex="-1"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Tier 2: Pips */}
+                      <div class="sltp-tier-row">
+                        <span class="sltp-tier-label">Pips</span>
+                        <div class="sltp-stepper-box">
+                          <button
+                            type="button"
+                            class="btn-stepper-touch"
+                            onClick={(e) => stepTpPipsHandler('DOWN', e)}
+                            title="-1.0 pip (Shift: -10, Alt: -0.1)"
+                            tabindex="-1"
+                          >
+                            −
+                          </button>
+                          <input
+                            use:autofocus={editingSide() === 'TP' && preferencesStore.defaultSltpFocusField() === 'pips'}
+                            type="number"
+                            class="sltp-input-main tabular-num"
+                            placeholder="Pips"
+                            min="0"
+                            step="0.1"
+                            value={tpPips()}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onBlur={() => {
+                              const num = parseFloat(tpPips());
+                              if (!isNaN(num) && num > 0) setTpPips(num.toFixed(1));
+                            }}
+                            onInput={(e) => updateTpFromPips(e.currentTarget.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                stepTpPipsHandler('UP', e);
+                              } else if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                stepTpPipsHandler('DOWN', e);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            class="btn-stepper-touch"
+                            onClick={(e) => stepTpPipsHandler('UP', e)}
+                            title="+1.0 pip (Shift: +10, Alt: +0.1)"
+                            tabindex="-1"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Tier 3: Cash Gain $ */}
+                      <div class="sltp-tier-row">
+                        <span class="sltp-tier-label">Profit $</span>
+                        <div class="sltp-stepper-box">
+                          <button
+                            type="button"
+                            class="btn-stepper-touch"
+                            onClick={(e) => stepTpCashHandler('DOWN', e)}
+                            title="-$10.00 (Shift: -$50, Alt: -$1)"
+                            tabindex="-1"
+                          >
+                            −
+                          </button>
+                          <input
+                            use:autofocus={editingSide() === 'TP' && preferencesStore.defaultSltpFocusField() === 'cash'}
+                            type="number"
+                            class="sltp-input-main text-profit tabular-num"
+                            placeholder="+$ Profit"
+                            step="1"
+                            value={tpCash()}
+                            onFocus={(e) => e.currentTarget.select()}
+                            onBlur={() => {
+                              const num = parseFloat(tpCash());
+                              if (!isNaN(num) && num !== 0) setTpCash((+Math.abs(num)).toFixed(2));
+                            }}
+                            onInput={(e) => updateTpFromCash(e.currentTarget.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                stepTpCashHandler('UP', e);
+                              } else if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                stepTpCashHandler('DOWN', e);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            class="btn-stepper-touch"
+                            onClick={(e) => stepTpCashHandler('UP', e)}
+                            title="+$10.00 (Shift: +$50, Alt: +$1)"
+                            tabindex="-1"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     <div class="sltp-presets-group">

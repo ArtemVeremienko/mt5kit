@@ -244,7 +244,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
               'border-left-color': sampleInfo()?.badge_color || 'var(--accent-blue)',
             }}
             onClick={props.onOpenStrategyModal}
-            title={`Sample Tier: ${sampleInfo()?.tier || 'Informational'} (${sampleInfo()?.total_trades || 0} trades). Click to view Strategy Profile, Optimal f, and Kelly math`}
+            title={`Sample Tier: ${sampleInfo()?.tier || 'Informational'} (${sampleInfo()?.count || 0} trades). Click to view Strategy Profile, Optimal f, and Kelly math`}
           >
             <span class="capsule-icon">📊</span>
             <span class="capsule-text">{strategySummaryText()}</span>
@@ -273,6 +273,14 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
         >
           <span class="toggle-indicator"></span>
           <span class="toggle-text">{preferencesStore.oneClickEnabled() ? '⚡ 1-Click' : '🛡️ 1-Click'}</span>
+        </button>
+
+        <button
+          class="btn-toggle-compact btn-header-settings"
+          onClick={props.onOpenRiskModal}
+          title="Terminal Settings & Risk Configuration"
+        >
+          <span class="toggle-text">⚙️ Settings</span>
         </button>
 
         {/* Pulsing Status Beacon */}

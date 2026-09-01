@@ -1705,30 +1705,32 @@ tr.drag-over {
 /* Contextual SL/TP Hub Modal */
 .sltp-edit-hub {
   position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 1000;
-  min-width: 440px;
-  background: #141824;
+  top: 100%;
+  left: 0;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  width: 550px;
+  background: var(--bg-card);
   border: 1px solid var(--accent-cyan);
   border-radius: var(--radius-md);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(0, 242, 254, 0.2);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(0, 240, 255, 0.2);
+  padding: 12px;
+  z-index: 1000;
   display: flex;
   flex-direction: column;
-  padding: 12px 14px;
   gap: 10px;
-  cursor: default;
-  animation: fadeInPop 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: sltpPopIn 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
 }
 
-@keyframes fadeInPop {
+@keyframes sltpPopIn {
   from {
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translate(-50%, -6px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translate(-50%, 0);
   }
 }
 
@@ -1766,21 +1768,21 @@ tr.drag-over {
   color: #ffffff;
 }
 
-.sltp-hub-body {
-  display: flex;
-  gap: 12px;
+/* CSS Grid 2-Column Body */
+.sltp-hub-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
 }
 
 .sltp-hub-column {
-  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.sltp-hub-divider {
-  width: 1px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.15);
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .sltp-column-header {
@@ -1788,6 +1790,8 @@ tr.drag-over {
   align-items: baseline;
   justify-content: space-between;
   gap: 4px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .sltp-field-label {
@@ -1805,25 +1809,40 @@ tr.drag-over {
   color: #3fb950;
 }
 
-.sltp-telemetry-badge {
-  font-family: var(--font-mono);
+.sltp-sub-hint {
   font-size: 9.5px;
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
-.sltp-telemetry-badge.sl-telemetry {
-  color: #ff7b72;
+/* CSS Grid 3-Tier Stack */
+.sltp-tier-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.sltp-telemetry-badge.tp-telemetry {
-  color: #3fb950;
+.sltp-tier-row {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  align-items: center;
+  gap: 6px;
 }
 
-/* Stepper Box - 32px Touch Targets */
+.sltp-tier-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+/* Stepper Box - 28px Height Compact Targets */
 .sltp-stepper-box {
   display: flex;
   align-items: center;
-  height: 32px;
+  height: 28px;
   border: 1px solid var(--bg-border);
   border-radius: var(--radius-sm);
   background: var(--bg-input);
@@ -1840,10 +1859,10 @@ tr.drag-over {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1867,7 +1886,7 @@ tr.drag-over {
   border: none;
   color: #ffffff;
   padding: 2px 4px;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 700;
   font-family: var(--font-mono);
   text-align: center;
@@ -1884,11 +1903,12 @@ tr.drag-over {
 .sltp-presets-group {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
+  margin-top: 2px;
 }
 
 .preset-group-title {
-  font-size: 9.5px;
+  font-size: 9px;
   font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -1905,9 +1925,9 @@ tr.drag-over {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 600;
-  padding: 3px 6px;
+  padding: 2px 5px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all 0.15s ease;
