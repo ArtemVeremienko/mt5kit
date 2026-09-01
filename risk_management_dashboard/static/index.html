@@ -249,9 +249,37 @@
             height: 38px;
         }
 
-        /* Strategy & Sample Size Banner */
+        /* Strategy & Sample Size Banner & Collapsible Trigger */
+        .stats-collapse-container {
+            margin: 12px 24px 4px 24px;
+        }
+
+        .stats-collapsed-bar {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+
+        .stats-collapsed-bar:hover {
+            border-color: var(--accent-blue);
+            background-color: var(--bg-hover);
+        }
+
+        .collapse-icon {
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
         .stats-banner {
-            margin: 16px 24px 8px 24px;
+            margin: 8px 0 0 0;
             background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
             border: 1px solid var(--border-color);
             border-radius: 10px;
@@ -497,6 +525,78 @@
 
         tr:hover td {
             background-color: var(--bg-hover);
+        }
+
+        .drag-handle {
+            cursor: grab;
+            color: var(--text-muted);
+            font-size: 13px;
+            padding: 0 3px;
+            user-select: none;
+            transition: color 0.15s ease;
+            opacity: 0.4;
+        }
+
+        .drag-handle:hover, .drag-handle:active {
+            color: var(--accent-cyan);
+            opacity: 1;
+            cursor: grabbing;
+        }
+
+        .pin-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            padding: 1px 3px;
+            border-radius: 4px;
+            opacity: 0.3;
+            transition: all 0.15s ease;
+            line-height: 1;
+        }
+
+        .pin-btn:hover {
+            opacity: 0.9;
+            transform: scale(1.15);
+        }
+
+        .pin-btn.pinned {
+            opacity: 1.0;
+            filter: drop-shadow(0 0 4px rgba(255, 215, 0, 0.6));
+        }
+
+        tr.is-pinned {
+            background-color: rgba(41, 98, 255, 0.04);
+            border-left: 2px solid var(--accent-cyan);
+        }
+
+        tr.drag-over {
+            border-top: 2px solid var(--accent-cyan) !important;
+            background-color: rgba(0, 229, 255, 0.08) !important;
+        }
+
+        tr.is-dragging {
+            opacity: 0.35;
+        }
+
+        .reset-order-btn {
+            background-color: transparent;
+            border: 1px dashed var(--border-color);
+            color: var(--text-muted);
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.15s ease;
+        }
+
+        .reset-order-btn:hover {
+            border-color: var(--accent-amber);
+            color: var(--accent-amber);
         }
 
         .symbol-cell {
@@ -745,6 +845,39 @@
         .math-step-highlight {
             color: #fff;
             font-weight: bold;
+        }
+
+        /* Turbo Mode Header Toggle */
+        .turbo-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            border: 1px solid var(--border-color);
+            background-color: rgba(255,255,255,0.05);
+            color: var(--text-muted);
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .turbo-toggle:hover {
+            border-color: var(--accent-cyan);
+            color: #fff;
+        }
+
+        .turbo-toggle.active {
+            background-color: rgba(0, 188, 212, 0.15);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            box-shadow: 0 0 12px rgba(0, 188, 212, 0.35);
+        }
+
+        .turbo-icon {
+            font-size: 13px;
         }
 
         /* One-Click Header Toggle */
@@ -1015,8 +1148,12 @@
         </div>
 
         <div class="account-badge-group">
+            <div class="turbo-toggle" :class="{ 'active': turboMode }" @click="toggleTurboMode()" title="Turbo Mode streams live tick updates every 500ms instead of 2.0s with zero IPC latency.">
+                <span class="turbo-icon">⚡</span>
+                <span x-text="turboMode ? '⚡ Turbo [ 500ms ]' : 'Standard [ 2.0s ]'"></span>
+            </div>
             <div class="one-click-toggle" :class="{ 'active': oneClickEnabled }" @click="toggleOneClick()" title="When ON, clicking BUY or SELL sends order immediately. When OFF, a confirmation dialog appears.">
-                <span class="one-click-icon">⚡</span>
+                <span class="one-click-icon">🎯</span>
                 <span x-text="oneClickEnabled ? 'One-Click: ON' : 'One-Click: OFF'"></span>
             </div>
             <div class="live-pill">
@@ -1092,61 +1229,78 @@
         </div>
     </div>
 
-    <!-- Strategy Performance & Sample Size Confidence Banner -->
-    <div class="stats-banner" x-show="tradeStats">
-        <div class="stats-banner-header">
-            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                <div :class="`tier-badge tier-${sampleInfo.tier || 'exploratory'}`">
+    <!-- Collapsible Strategy Performance Bar -->
+    <div class="stats-collapse-container" x-show="tradeStats && tradeStats.total_trades > 0">
+        <div class="stats-collapsed-bar" @click="toggleStatsBanner()">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <span style="font-size: 14px;">📊</span>
+                <span style="font-weight: 700; font-size: 12px; color: var(--text-primary);">Strategy Sample Stats</span>
+                <span class="category-pill" style="color: var(--accent-cyan); font-weight: 600;" x-text="`${tradeStats.total_trades || 0} Trades • ${((tradeStats.win_rate || 0) * 100).toFixed(0)}% WR • ${(tradeStats.payoff_ratio || 0).toFixed(2)} R/R`"></span>
+                <div :class="`tier-badge tier-${sampleInfo.tier || 'exploratory'}`" style="padding: 2px 8px; font-size: 10px;">
                     <span x-text="sampleInfo.tier === 'robust' ? '🟢' : (sampleInfo.tier === 'moderate' ? '🔵' : (sampleInfo.tier === 'exploratory' ? '🟡' : '🔴'))"></span>
                     <span x-text="sampleInfo.label || 'Sample Tier'"></span>
                 </div>
-                <div style="font-size: 13px; color: var(--text-secondary);">
-                    Based on <strong style="color: #fff;" x-text="tradeStats.total_trades || 0"></strong> closed deals in history
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="collapse-icon" x-text="showStatsBanner ? '▲ Collapse' : '▼ Expand'"></span>
+            </div>
+        </div>
+
+        <div class="stats-banner" x-show="showStatsBanner" x-transition>
+            <div class="stats-banner-header">
+                <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <div :class="`tier-badge tier-${sampleInfo.tier || 'exploratory'}`">
+                        <span x-text="sampleInfo.tier === 'robust' ? '🟢' : (sampleInfo.tier === 'moderate' ? '🔵' : (sampleInfo.tier === 'exploratory' ? '🟡' : '🔴'))"></span>
+                        <span x-text="sampleInfo.label || 'Sample Tier'"></span>
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-secondary);">
+                        Based on <strong style="color: #fff;" x-text="tradeStats.total_trades || 0"></strong> closed deals in history
+                    </div>
+                </div>
+
+                <div class="banner-btn-group">
+                    <button class="btn" @click="modals.csv = true">📂 Import Trade CSV</button>
+                    <button class="btn" @click="openManualStats()">⚙️ Strategy Override</button>
+                    <button class="btn" @click="openTWRModal()">📈 Vince TWR Curve</button>
                 </div>
             </div>
 
-            <div class="banner-btn-group">
-                <button class="btn" @click="modals.csv = true">📂 Import Trade CSV</button>
-                <button class="btn" @click="openManualStats()">⚙️ Strategy Override</button>
-                <button class="btn" @click="openTWRModal()">📈 Vince TWR Curve</button>
+            <div class="stats-banner-metrics">
+                <div class="stat-card">
+                    <div class="stat-card-title">Win Rate</div>
+                    <div class="stat-card-value" x-text="`${((tradeStats.win_rate || 0) * 100).toFixed(1)}%`"></div>
+                    <div class="stat-card-sub" x-text="`${tradeStats.winning_trades || 0}W / ${tradeStats.losing_trades || 0}L`"></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">Payoff Ratio (b)</div>
+                    <div class="stat-card-value" x-text="(tradeStats.payoff_ratio || 0).toFixed(2)"></div>
+                    <div class="stat-card-sub">Avg Win / Avg Loss</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">Profit Factor</div>
+                    <div class="stat-card-value" x-text="(tradeStats.profit_factor || 0).toFixed(2)"></div>
+                    <div class="stat-card-sub" x-text="`Net: ${tradeStats.net_profit >= 0 ? '+' : ''}$${(tradeStats.net_profit || 0).toFixed(0)}`"></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">Worst Loss</div>
+                    <div class="stat-card-value" style="color: var(--accent-red);" x-text="`-$${(tradeStats.worst_loss || 0).toFixed(2)}`"></div>
+                    <div class="stat-card-sub">Max single loss</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">Quarter Kelly (f*/4)</div>
+                    <div class="stat-card-value" style="color: var(--accent-cyan);" x-text="`${((tradeStats.kelly_quarter || 0) * 100).toFixed(1)}%`"></div>
+                    <div class="stat-card-sub" x-text="`Full f*: ${((tradeStats.kelly_full || 0) * 100).toFixed(1)}%`"></div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-title">Optimal f (Vince)</div>
+                    <div class="stat-card-value" style="color: var(--accent-purple);" x-text="`${((tradeStats.optimal_f_half || 0) * 100).toFixed(1)}% (Half)`"></div>
+                    <div class="stat-card-sub" x-text="`Full: ${((tradeStats.optimal_f || 0) * 100).toFixed(1)}%`"></div>
+                </div>
             </div>
-        </div>
 
-        <div class="stats-banner-metrics">
-            <div class="stat-card">
-                <div class="stat-card-title">Win Rate</div>
-                <div class="stat-card-value" x-text="`${((tradeStats.win_rate || 0) * 100).toFixed(1)}%`"></div>
-                <div class="stat-card-sub" x-text="`${tradeStats.winning_trades || 0}W / ${tradeStats.losing_trades || 0}L`"></div>
+            <div class="stats-alert-msg" x-show="sampleInfo.message">
+                <span x-text="`${sampleInfo.message} Recommendation: ${sampleInfo.recommendation}`"></span>
             </div>
-            <div class="stat-card">
-                <div class="stat-card-title">Payoff Ratio (b)</div>
-                <div class="stat-card-value" x-text="(tradeStats.payoff_ratio || 0).toFixed(2)"></div>
-                <div class="stat-card-sub">Avg Win / Avg Loss</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-card-title">Profit Factor</div>
-                <div class="stat-card-value" x-text="(tradeStats.profit_factor || 0).toFixed(2)"></div>
-                <div class="stat-card-sub" x-text="`Net: ${tradeStats.net_profit >= 0 ? '+' : ''}$${(tradeStats.net_profit || 0).toFixed(0)}`"></div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-card-title">Worst Loss</div>
-                <div class="stat-card-value" style="color: var(--accent-red);" x-text="`-$${(tradeStats.worst_loss || 0).toFixed(2)}`"></div>
-                <div class="stat-card-sub">Max single loss</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-card-title">Quarter Kelly (f*/4)</div>
-                <div class="stat-card-value" style="color: var(--accent-cyan);" x-text="`${((tradeStats.kelly_quarter || 0) * 100).toFixed(1)}%`"></div>
-                <div class="stat-card-sub" x-text="`Full f*: ${((tradeStats.kelly_full || 0) * 100).toFixed(1)}%`"></div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-card-title">Optimal f (Vince)</div>
-                <div class="stat-card-value" style="color: var(--accent-purple);" x-text="`${((tradeStats.optimal_f_half || 0) * 100).toFixed(1)}% (Half)`"></div>
-                <div class="stat-card-sub" x-text="`Full: ${((tradeStats.optimal_f || 0) * 100).toFixed(1)}%`"></div>
-            </div>
-        </div>
-
-        <div class="stats-alert-msg" x-show="sampleInfo.message">
-            <span x-text="`${sampleInfo.message} Recommendation: ${sampleInfo.recommendation}`"></span>
         </div>
     </div>
 
@@ -1161,9 +1315,17 @@
                 </template>
             </div>
 
-            <div class="search-wrapper">
-                <span class="search-icon">🔍</span>
-                <input type="text" x-model="searchQuery" class="search-input" placeholder="Search symbol...">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <button class="reset-order-btn" 
+                        x-show="customOrder.length > 0 || pinnedSymbols.length > 0 || sortCol !== null"
+                        @click="resetCustomOrder()"
+                        title="Reset custom drag order, unpin all symbols, and return to default Market Watch order">
+                    <span>↺ Reset Order</span>
+                </button>
+                <div class="search-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" x-model="searchQuery" class="search-input" placeholder="Search symbol...">
+                </div>
             </div>
         </div>
 
@@ -1185,21 +1347,32 @@
                 </thead>
                 <tbody>
                     <template x-for="item in filteredResults" :key="item.spec.symbol">
-                        <tr>
+                        <tr :class="{ 'is-pinned': isPinned(item.spec.symbol), 'drag-over': dragOverSymbol === item.spec.symbol, 'is-dragging': draggedSymbol === item.spec.symbol }"
+                            draggable="true"
+                            @dragstart="onDragStart($event, item.spec.symbol)"
+                            @dragover.prevent="onDragOver($event, item.spec.symbol)"
+                            @dragleave="onDragLeave($event)"
+                            @drop="onDrop($event, item.spec.symbol)"
+                            @dragend="onDragEnd()">
                             <td>
                                 <div class="symbol-cell">
+                                    <span class="drag-handle" title="Drag to reorder">⠿</span>
+                                    <button class="pin-btn" 
+                                            :class="{ 'pinned': isPinned(item.spec.symbol) }" 
+                                            @click.stop="togglePin(item.spec.symbol)" 
+                                            :title="isPinned(item.spec.symbol) ? 'Pinned to top (Click to unpin)' : 'Pin symbol to top'">📌</button>
                                     <span x-text="item.spec.symbol"></span>
                                     <span class="category-pill" x-text="item.spec.category"></span>
                                 </div>
                             </td>
                             <td>
                                 <div style="font-family: monospace; font-size: 13px;">
-                                    <span x-text="item.spec.bid.toFixed(item.spec.digits)"></span> /
-                                    <span style="color: var(--text-muted);" x-text="item.spec.ask.toFixed(item.spec.digits)"></span>
+                                    <span x-text="item.spec.bid_display"></span> /
+                                    <span style="color: var(--text-muted);" x-text="item.spec.ask_display"></span>
                                 </div>
                             </td>
-                            <td><span x-text="item.spec.spread_pips"></span> p</td>
-                            <td><strong x-text="item.spec.adr_14_pips"></strong> p</td>
+                            <td><span x-text="item.spec.spread_display"></span> p</td>
+                            <td><strong x-text="item.spec.adr_display"></strong> p</td>
                             <td>
                                 <div class="sl-input-cell">
                                     <input type="number" class="sl-input" 
@@ -1210,48 +1383,48 @@
                                     <button class="quick-sl-btn" :title="`Reset to active preset (${slMode})`" @click="resetSymbolSL(item.spec.symbol)" x-text="slMode"></button>
                                 </div>
                             </td>
-                            <td x-text="`$${item.calc.pip_value_per_lot.toFixed(2)}`"></td>
+                            <td x-text="`$${item.calc.pip_val_display}`"></td>
                             <td>
                                 <div class="lot-display">
                                     <div class="executable-lot-row">
-                                        <span class="executable-lot-val" x-text="item.calc.executable_lot"></span>
+                                        <span class="executable-lot-val" x-text="item.calc.lot_display"></span>
                                         <template x-if="item.calc.is_clamped_to_min">
                                             <!-- Modern HTML Tooltip trigger -->
                                             <span class="tooltip-trigger" 
-                                                  :data-tooltip="`Theoretical lot (${item.calc.exact_lot.toFixed(4)}) is below broker min volume (${item.calc.min_volume}). Clamped to ${item.calc.executable_lot} lot, raising effective risk to ${item.calc.effective_risk_pct.toFixed(2)}% (Target: ${item.calc.target_risk_pct.toFixed(2)}%).`"
-                                                  :title="`Theoretical: ${item.calc.exact_lot.toFixed(4)} | Min: ${item.calc.min_volume} | Effective Risk: ${item.calc.effective_risk_pct.toFixed(2)}%`">
+                                                  :data-tooltip="`Theoretical lot (${item.calc.exact_lot_display}) is below broker min volume (${item.calc.min_volume}). Clamped to ${item.calc.lot_display} lot, raising effective risk to ${item.calc.effective_risk_pct_display}% (Target: ${item.calc.target_risk_pct.toFixed(2)}%).`"
+                                                  :title="`Theoretical: ${item.calc.exact_lot_display} | Min: ${item.calc.min_volume} | Effective Risk: ${item.calc.effective_risk_pct_display}%`">
                                                 ⚠️
                                             </span>
                                         </template>
                                     </div>
-                                    <div class="exact-lot-sub" x-text="`Exact: ${item.calc.exact_lot.toFixed(4)}`"></div>
+                                    <div class="exact-lot-sub" x-text="`Exact: ${item.calc.exact_lot_display}`"></div>
                                 </div>
                             </td>
                             <td>
                                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
                                     <div style="font-weight: 700; font-size: 13px;"
                                          :style="item.calc.effective_risk_pct > item.calc.target_risk_pct * 1.2 ? 'color: var(--accent-amber);' : 'color: #fff;'"
-                                         x-text="`$${item.calc.effective_risk_amount.toFixed(2)} (${item.calc.effective_risk_pct.toFixed(2)}%)`"></div>
+                                         x-text="item.calc.risk_display"></div>
                                     <button class="btn-icon" @click="openDeepDive(item)" title="Deep Dive Math & Multi-Model Sizing Comparison">🔍</button>
                                 </div>
                             </td>
                             <td>
                                 <div style="display: flex; align-items: center; gap: 8px;">
-                                    <strong style="color: #fff; font-size: 13px;" x-text="`$${item.calc.required_margin.toFixed(2)}`"></strong>
+                                    <strong style="color: #fff; font-size: 13px;" x-text="`$${item.calc.required_margin_display}`"></strong>
                                     <span :class="`margin-status-pill ${item.calc.is_margin_exceeded ? 'margin-exceeded' : (item.calc.margin_status === 'warning' ? 'margin-warning' : 'margin-healthy')}`"
-                                          x-text="item.calc.is_margin_exceeded ? '🚨 Exceeded' : `${item.calc.margin_utilization_pct.toFixed(0)}%`"></span>
+                                          x-text="item.calc.is_margin_exceeded ? '🚨 Exceeded' : `${item.calc.margin_utilization_display}%`"></span>
                                 </div>
                             </td>
                             <td style="text-align: center;">
                                 <div class="trade-btn-group">
                                     <button class="btn-trade btn-buy" 
                                             @click="handleTradeClick(item, 'BUY')" 
-                                            :title="`BUY ${item.calc.executable_lot} lot @ Ask ${item.spec.ask.toFixed(item.spec.digits)}`">
+                                            :title="`BUY ${item.calc.lot_display} lot @ Ask ${item.spec.ask_display}`">
                                         <span>BUY</span>
                                     </button>
                                     <button class="btn-trade btn-sell" 
                                             @click="handleTradeClick(item, 'SELL')" 
-                                            :title="`SELL ${item.calc.executable_lot} lot @ Bid ${item.spec.bid.toFixed(item.spec.digits)}`">
+                                            :title="`SELL ${item.calc.lot_display} lot @ Bid ${item.spec.bid_display}`">
                                         <span>SELL</span>
                                     </button>
                                 </div>
@@ -1507,8 +1680,12 @@
                 slOverrides: {},
                 activeCategory: "All",
                 searchQuery: "",
-                sortCol: "symbol",
-                sortAsc: true,
+                sortCol: null,
+                sortDirection: "none",
+                pinnedSymbols: JSON.parse(localStorage.getItem('mt5_pinned_symbols') || '[]'),
+                customOrder: JSON.parse(localStorage.getItem('mt5_custom_symbol_order') || '[]'),
+                draggedSymbol: null,
+                dragOverSymbol: null,
                 results: [],
                 tradeStats: {},
                 sampleInfo: {},
@@ -1516,8 +1693,11 @@
                 selectedItem: null,
                 twrChartInstance: null,
                 categories: ["All", "Forex Majors", "Forex Minors", "Metals", "Energies", "Indices", "Crypto"],
+                turboMode: localStorage.getItem('mt5_turbo_mode') === 'true',
+                showStatsBanner: localStorage.getItem('mt5_show_stats_banner') === 'true',
                 oneClickEnabled: localStorage.getItem('mt5_risk_one_click') === 'true',
                 rrRatio: parseFloat(localStorage.getItem('mt5_risk_rr_ratio')) || 1.5,
+                wsInstance: null,
                 toasts: [],
                 toastSeq: 0,
                 pendingTrade: null,
@@ -1534,6 +1714,31 @@
                     payoff_ratio: 1.5,
                     total_trades: 250,
                     worst_loss: 100.0
+                },
+
+                toggleStatsBanner() {
+                    this.showStatsBanner = !this.showStatsBanner;
+                    localStorage.setItem('mt5_show_stats_banner', this.showStatsBanner ? 'true' : 'false');
+                },
+
+                toggleTurboMode() {
+                    this.turboMode = !this.turboMode;
+                    localStorage.setItem('mt5_turbo_mode', this.turboMode ? 'true' : 'false');
+                    this.sendWsRate();
+                    this.addToast(
+                        this.turboMode ? "⚡ Turbo Mode Activated" : "Standard Mode",
+                        this.turboMode ? "Streaming ticks every 500ms with zero IPC latency" : "Streaming ticks every 2.0s",
+                        "success"
+                    );
+                },
+
+                sendWsRate() {
+                    if (this.wsInstance && this.wsInstance.readyState === WebSocket.OPEN) {
+                        this.wsInstance.send(JSON.stringify({
+                            action: "set_rate",
+                            interval_ms: this.turboMode ? 500 : 2000
+                        }));
+                    }
                 },
 
                 get activeRiskPctLabel() {
@@ -1563,7 +1768,29 @@
                         return matchCat && matchSearch;
                     });
 
+                    const isPinned = (sym) => this.pinnedSymbols.includes(sym);
+                    const getCustomIndex = (sym) => {
+                        const idx = this.customOrder.indexOf(sym);
+                        return idx !== -1 ? idx : 999999;
+                    };
+
                     return list.sort((a, b) => {
+                        const pinnedA = isPinned(a.spec.symbol);
+                        const pinnedB = isPinned(b.spec.symbol);
+
+                        // Pinned symbols always come first
+                        if (pinnedA && !pinnedB) return -1;
+                        if (!pinnedA && pinnedB) return 1;
+
+                        // If no column sort is active (sortDirection === 'none' or sortCol === null)
+                        if (!this.sortCol || this.sortDirection === 'none') {
+                            const idxA = getCustomIndex(a.spec.symbol);
+                            const idxB = getCustomIndex(b.spec.symbol);
+                            if (idxA !== idxB) return idxA - idxB;
+                            return 0; // Natural MT5 broker feed sequence
+                        }
+
+                        // Active column sorting
                         let valA, valB;
                         if (this.sortCol === "symbol") { valA = a.spec.symbol; valB = b.spec.symbol; }
                         else if (this.sortCol === "bid") { valA = a.spec.bid; valB = b.spec.bid; }
@@ -1573,15 +1800,209 @@
                         else if (this.sortCol === "risk_pct") { valA = a.calc.effective_risk_pct; valB = b.calc.effective_risk_pct; }
                         else if (this.sortCol === "margin") { valA = a.calc.required_margin; valB = b.calc.required_margin; }
                         
-                        if (valA < valB) return this.sortAsc ? -1 : 1;
-                        if (valA > valB) return this.sortAsc ? 1 : -1;
+                        if (valA < valB) return this.sortDirection === "asc" ? -1 : 1;
+                        if (valA > valB) return this.sortDirection === "asc" ? 1 : -1;
                         return 0;
                     });
                 },
 
+                rawSymbols: [],
+
+                computeLocalRiskForResult(spec) {
+                    const symbol = spec.symbol;
+                    const digits = spec.digits !== undefined ? spec.digits : 5;
+                    const point = spec.point || 0.00001;
+                    const pipMultiplier = (digits === 3 || digits === 5) ? 10.0 : 1.0;
+                    const pipSize = spec.pip_size || (point * pipMultiplier);
+                    const bid = spec.bid || 0;
+                    const ask = spec.ask || 0;
+                    const spreadPips = spec.spread_pips !== undefined ? spec.spread_pips : ((ask - bid) / (pipSize || 0.0001));
+                    const adr14 = spec.adr_14_pips || 65.0;
+                    const atr14 = spec.atr_14_pips || (adr14 * 1.05);
+
+                    // 1. SL Pips determination
+                    let slPips;
+                    if (this.slOverrides && this.slOverrides[symbol] !== undefined && !isNaN(parseFloat(this.slOverrides[symbol]))) {
+                        slPips = Math.max(1.0, parseFloat(this.slOverrides[symbol]));
+                    } else if (this.slMode === "1/4 ADR") {
+                        slPips = Math.max(1.0, Math.round(adr14 * 0.25 * 10) / 10);
+                    } else if (this.slMode === "1/3 ADR") {
+                        slPips = Math.max(1.0, Math.round(adr14 * (1.0 / 3.0) * 10) / 10);
+                    } else if (this.slMode === "1/2 ADR") {
+                        slPips = Math.max(1.0, Math.round(adr14 * 0.5 * 10) / 10);
+                    } else if (this.slMode === "1 ADR") {
+                        slPips = Math.max(1.0, Math.round(adr14 * 10) / 10);
+                    } else if (this.slMode === "1 ATR") {
+                        slPips = Math.max(1.0, Math.round(atr14 * 10) / 10);
+                    } else {
+                        slPips = 20.0;
+                    }
+
+                    // 2. Target Risk %
+                    let targetRiskPct = 1.0;
+                    if (this.riskMethod === "fractional") {
+                        targetRiskPct = Math.max(0.01, this.customRiskPct || 1.0);
+                    } else if (this.riskMethod === "kelly_full") {
+                        targetRiskPct = (this.tradeStats.kelly_full || 0.05) * 100.0;
+                    } else if (this.riskMethod === "kelly_half") {
+                        targetRiskPct = (this.tradeStats.kelly_half || 0.025) * 100.0;
+                    } else if (this.riskMethod === "kelly_quarter") {
+                        targetRiskPct = (this.tradeStats.kelly_quarter || 0.0125) * 100.0;
+                    } else if (this.riskMethod === "optimal_f_full") {
+                        targetRiskPct = (this.tradeStats.optimal_f || 0.05) * 100.0;
+                    } else if (this.riskMethod === "optimal_f_half") {
+                        targetRiskPct = (this.tradeStats.optimal_f_half || 0.025) * 100.0;
+                    } else if (this.riskMethod === "optimal_f_quarter") {
+                        targetRiskPct = (this.tradeStats.optimal_f_quarter || 0.0125) * 100.0;
+                    }
+
+                    const workingCap = this.workingCapital || 100.0;
+                    const targetRiskAmount = workingCap * (targetRiskPct / 100.0);
+                    const pipValPerLot = spec.pip_value_per_lot > 0 ? spec.pip_value_per_lot : 10.0;
+                    const riskPerLot = slPips * pipValPerLot;
+                    const exactLot = riskPerLot > 0 ? targetRiskAmount / riskPerLot : 0.0;
+
+                    // 3. Broker Volume Clamping
+                    const volumeMin = spec.volume_min || 0.01;
+                    const volumeMax = spec.volume_max || 100.0;
+                    const volumeStep = spec.volume_step || 0.01;
+
+                    const steps = Math.round(exactLot / volumeStep);
+                    const steppedLot = Math.round(steps * volumeStep * 1000000) / 1000000;
+
+                    let executableLot = steppedLot;
+                    let isClampedMin = false;
+                    let isClampedMax = false;
+
+                    if (steppedLot < volumeMin) {
+                        executableLot = volumeMin;
+                        isClampedMin = true;
+                    } else if (steppedLot > volumeMax) {
+                        executableLot = volumeMax;
+                        isClampedMax = true;
+                    }
+
+                    const decimals = volumeStep < 1 ? Math.max(0, Math.ceil(-Math.log10(volumeStep))) : 2;
+                    executableLot = parseFloat(executableLot.toFixed(decimals));
+
+                    // 4. Effective Risk
+                    const effectiveRiskAmount = executableLot * slPips * pipValPerLot;
+                    const effectiveRiskPct = workingCap > 0 ? (effectiveRiskAmount / workingCap) * 100.0 : 0.0;
+
+                    // 5. Margin Calculation
+                    const contractSize = spec.trade_contract_size || 100000.0;
+                    const lev = (this.account.leverage || this.leverage || 300.0);
+                    const marketPrice = bid > 0 ? bid : (ask > 0 ? ask : 1.0);
+                    const symUpper = symbol.toUpperCase();
+
+                    let requiredMargin = 0.0;
+                    if (symUpper.includes("JP225") || symUpper.includes("JPN225") || symUpper.includes("NIKKEI")) {
+                        const notionalJpy = executableLot * contractSize * marketPrice;
+                        requiredMargin = notionalJpy / 159.5;
+                    } else if (symUpper.includes("DE40") || symUpper.includes("GER40") || symUpper.includes("DAX")) {
+                        const notionalEur = executableLot * contractSize * marketPrice;
+                        requiredMargin = (notionalEur * 1.16) / (lev / 30.0);
+                    } else if (spec.currency_base === "USD" || symUpper.startsWith("USD")) {
+                        requiredMargin = (executableLot * contractSize) / lev;
+                    } else {
+                        requiredMargin = (executableLot * contractSize * marketPrice) / lev;
+                    }
+                    requiredMargin = Math.round(requiredMargin * 100) / 100;
+
+                    const depCash = (this.account.balance || this.depositedCash || 20.0);
+                    const marginUtilPct = depCash > 0 ? (requiredMargin / depCash) * 100.0 : 0.0;
+                    const isMarginExceeded = marginUtilPct > 100.0;
+                    const marginStatus = isMarginExceeded ? "exceeded" : (marginUtilPct > 70.0 ? "warning" : "healthy");
+
+                    // Pre-calculate multi-model sizing comparison for Deep Dive modal
+                    const calcCompare = (riskPct) => {
+                        const tAmt = workingCap * (riskPct / 100.0);
+                        const exLot = riskPerLot > 0 ? tAmt / riskPerLot : 0.0;
+                        const st = Math.round(exLot / volumeStep) * volumeStep;
+                        const cl = Math.max(volumeMin, Math.min(volumeMax, st));
+                        const cLot = parseFloat(cl.toFixed(decimals));
+                        let m = 0;
+                        if (spec.currency_base === "USD" || symUpper.startsWith("USD")) {
+                            m = (cLot * contractSize) / lev;
+                        } else {
+                            m = (cLot * contractSize * marketPrice) / lev;
+                        }
+                        return {
+                            lot: cLot,
+                            risk_pct: riskPct,
+                            risk_amount: cLot * slPips * pipValPerLot,
+                            margin: Math.round(m * 100) / 100
+                        };
+                    };
+
+                    const comparison = {
+                        fractional_1pct: calcCompare(1.0),
+                        half_kelly: calcCompare(Math.max(0.1, (this.tradeStats.kelly_half || 0.025) * 100)),
+                        half_optimal_f: calcCompare(Math.max(0.1, (this.tradeStats.optimal_f_half || 0.025) * 100))
+                    };
+
+                    // Pre-formatted strings for ultra-fast, zero-overhead DOM rendering
+                    const specFormatted = {
+                        ...spec,
+                        bid_display: bid.toFixed(digits),
+                        ask_display: ask.toFixed(digits),
+                        spread_display: spreadPips.toFixed(1),
+                        adr_display: adr14.toFixed(1),
+                        atr_display: atr14.toFixed(1)
+                    };
+
+                    const calcFormatted = {
+                        symbol: symbol,
+                        working_capital: workingCap,
+                        deposited_cash: depCash,
+                        leverage: lev,
+                        risk_method: this.riskMethod,
+                        target_risk_pct: targetRiskPct,
+                        target_risk_amount: targetRiskAmount,
+                        sl_pips: slPips,
+                        pip_value_per_lot: pipValPerLot,
+                        pip_val_display: pipValPerLot.toFixed(2),
+                        exact_lot: exactLot,
+                        exact_lot_display: exactLot.toFixed(4),
+                        executable_lot: executableLot,
+                        lot_display: executableLot.toFixed(decimals),
+                        effective_risk_amount: effectiveRiskAmount,
+                        effective_risk_pct: effectiveRiskPct,
+                        effective_risk_pct_display: effectiveRiskPct.toFixed(2),
+                        risk_display: `$${effectiveRiskAmount.toFixed(2)} (${effectiveRiskPct.toFixed(2)}%)`,
+                        is_clamped_to_min: isClampedMin,
+                        is_clamped_to_max: isClampedMax,
+                        min_volume: volumeMin,
+                        max_volume: volumeMax,
+                        volume_step: volumeStep,
+                        contract_size: contractSize,
+                        market_price: marketPrice,
+                        required_margin: requiredMargin,
+                        required_margin_display: requiredMargin.toFixed(2),
+                        margin_utilization_pct: marginUtilPct,
+                        margin_utilization_display: marginUtilPct.toFixed(0),
+                        is_margin_exceeded: isMarginExceeded,
+                        margin_status: marginStatus
+                    };
+
+                    return {
+                        spec: specFormatted,
+                        calc: calcFormatted,
+                        comparison: comparison
+                    };
+                },
+
+                recomputeAllLocal() {
+                    if (!this.rawSymbols || this.rawSymbols.length === 0) return;
+                    this.results = this.rawSymbols.map(s => this.computeLocalRiskForResult(s));
+                    if (this.selectedItem) {
+                        this.selectedItem = this.results.find(r => r.spec.symbol === this.selectedItem.spec.symbol) || this.selectedItem;
+                    }
+                },
+
                 async init() {
                     await this.fetchAccount();
-                    await this.recalculate();
+                    await this.fetchInitialData();
                     this.initWebSocket();
                 },
 
@@ -1592,6 +2013,37 @@
                         this.updateAccountInfo(acc, true);
                     } catch (e) {
                         console.warn("Could not fetch account info:", e);
+                    }
+                },
+
+                async fetchInitialData() {
+                    try {
+                        const payload = {
+                            working_capital: this.workingCapital,
+                            deposited_cash: this.account.balance || this.depositedCash || 20.0,
+                            leverage: this.account.leverage || this.leverage || 300.0,
+                            risk_method: this.riskMethod,
+                            custom_risk_pct: this.customRiskPct,
+                            global_sl_mode: this.slMode,
+                            global_sl_pips: 20.0,
+                            symbol_sl_overrides: this.slOverrides
+                        };
+
+                        const res = await fetch("/api/calculate", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload)
+                        });
+
+                        const data = await res.json();
+                        this.tradeStats = data.trade_stats || {};
+                        this.sampleInfo = data.sample_info || {};
+                        if (data.results && data.results.length > 0) {
+                            this.rawSymbols = data.results.map(r => r.spec);
+                            this.recomputeAllLocal();
+                        }
+                    } catch (e) {
+                        console.error("Initial data load error:", e);
                     }
                 },
 
@@ -1612,58 +2064,37 @@
                     if (acc.leverage && acc.leverage > 0) {
                         this.leverage = acc.leverage;
                     }
+                    if (!isInitial) {
+                        this.recomputeAllLocal();
+                    }
                 },
 
                 onWorkingCapitalInput() {
                     if (this.workingCapital !== null && this.workingCapital !== undefined && !isNaN(this.workingCapital) && this.workingCapital > 0) {
                         localStorage.setItem('mt5_risk_working_capital', this.workingCapital.toString());
                     }
-                    this.recalculate();
+                    this.recomputeAllLocal();
                 },
 
                 resetWorkingCapital() {
                     localStorage.removeItem('mt5_risk_working_capital');
                     this.workingCapital = this.account.balance || 27.0;
-                    this.recalculate();
+                    this.recomputeAllLocal();
                 },
 
-                async recalculate() {
-                    try {
-                        const payload = {
-                            working_capital: this.workingCapital,
-                            deposited_cash: this.account.balance || this.depositedCash || 20.0,
-                            leverage: this.account.leverage || this.leverage || 300.0,
-                            risk_method: this.riskMethod,
-                            custom_risk_pct: this.customRiskPct,
-                            global_sl_mode: this.slMode,
-                            global_sl_pips: 20.0,
-                            symbol_sl_overrides: this.slOverrides
-                        };
-
-                        const res = await fetch("/api/calculate", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(payload)
-                        });
-
-                        const data = await res.json();
-                        this.results = data.results;
-                        this.tradeStats = data.trade_stats;
-                        this.sampleInfo = data.sample_info;
-
-                        // Update selected item in modal if open
-                        if (this.selectedItem) {
-                            this.selectedItem = this.results.find(r => r.spec.symbol === this.selectedItem.spec.symbol) || this.selectedItem;
-                        }
-                    } catch (e) {
-                        console.error("Recalculate error:", e);
-                    }
+                recalculate() {
+                    this.recomputeAllLocal();
                 },
 
                 initWebSocket() {
                     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
                     const wsUrl = `${protocol}//${window.location.host}/ws/live`;
                     const ws = new WebSocket(wsUrl);
+                    this.wsInstance = ws;
+
+                    ws.onopen = () => {
+                        this.sendWsRate();
+                    };
 
                     ws.onmessage = (event) => {
                         try {
@@ -1671,8 +2102,9 @@
                             if (data.account) {
                                 this.updateAccountInfo(data.account, false);
                             }
-                            if (data.type === "symbols_update") {
-                                this.recalculate();
+                            if (data.symbols && data.symbols.length > 0) {
+                                this.rawSymbols = data.symbols;
+                                this.recomputeAllLocal();
                             }
                         } catch (e) {
                             console.error("WS error:", e);
@@ -1680,22 +2112,106 @@
                     };
 
                     ws.onclose = () => {
+                        this.wsInstance = null;
                         setTimeout(() => this.initWebSocket(), 4000);
                     };
                 },
 
                 toggleSort(col) {
-                    if (this.sortCol === col) {
-                        this.sortAsc = !this.sortAsc;
-                    } else {
+                    if (this.sortCol !== col) {
                         this.sortCol = col;
-                        this.sortAsc = true;
+                        this.sortDirection = "asc";
+                    } else if (this.sortDirection === "asc") {
+                        this.sortDirection = "desc";
+                    } else {
+                        this.sortCol = null;
+                        this.sortDirection = "none";
                     }
                 },
 
                 sortIcon(col) {
-                    if (this.sortCol !== col) return "↕";
-                    return this.sortAsc ? "▲" : "▼";
+                    if (this.sortCol !== col || this.sortDirection === "none") return "↕";
+                    return this.sortDirection === "asc" ? "▲" : "▼";
+                },
+
+                isPinned(symbol) {
+                    return this.pinnedSymbols.includes(symbol);
+                },
+
+                togglePin(symbol) {
+                    if (this.pinnedSymbols.includes(symbol)) {
+                        this.pinnedSymbols = this.pinnedSymbols.filter(s => s !== symbol);
+                    } else {
+                        this.pinnedSymbols.push(symbol);
+                    }
+                    localStorage.setItem('mt5_pinned_symbols', JSON.stringify(this.pinnedSymbols));
+                },
+
+                resetCustomOrder() {
+                    this.customOrder = [];
+                    this.pinnedSymbols = [];
+                    this.sortCol = null;
+                    this.sortDirection = "none";
+                    localStorage.removeItem('mt5_custom_symbol_order');
+                    localStorage.removeItem('mt5_pinned_symbols');
+                    this.addToast("Order Reset", "Table returned to default Market Watch sequence", "success");
+                },
+
+                onDragStart(event, symbol) {
+                    this.draggedSymbol = symbol;
+                    if (event.dataTransfer) {
+                        event.dataTransfer.effectAllowed = "move";
+                        event.dataTransfer.setData("text/plain", symbol);
+                    }
+                },
+
+                onDragOver(event, symbol) {
+                    if (this.draggedSymbol && this.draggedSymbol !== symbol) {
+                        this.dragOverSymbol = symbol;
+                    }
+                },
+
+                onDragLeave(event) {
+                    // noop
+                },
+
+                onDrop(event, targetSymbol) {
+                    const srcSymbol = this.draggedSymbol || (event.dataTransfer ? event.dataTransfer.getData("text/plain") : null);
+                    if (!srcSymbol || srcSymbol === targetSymbol) {
+                        this.draggedSymbol = null;
+                        this.dragOverSymbol = null;
+                        return;
+                    }
+
+                    // Build complete order list
+                    let currentOrder = [...this.customOrder];
+                    const allSymbols = this.results.map(r => r.spec.symbol);
+                    allSymbols.forEach(sym => {
+                        if (!currentOrder.includes(sym)) {
+                            currentOrder.push(sym);
+                        }
+                    });
+
+                    const srcIndex = currentOrder.indexOf(srcSymbol);
+                    const targetIndex = currentOrder.indexOf(targetSymbol);
+
+                    if (srcIndex !== -1 && targetIndex !== -1) {
+                        currentOrder.splice(srcIndex, 1);
+                        currentOrder.splice(targetIndex, 0, srcSymbol);
+                        this.customOrder = currentOrder;
+                        localStorage.setItem('mt5_custom_symbol_order', JSON.stringify(this.customOrder));
+                        this.sortCol = null;
+                        this.sortDirection = "none";
+                        this.addToast("Reordered", `Moved ${srcSymbol} next to ${targetSymbol}`, "success");
+                    }
+
+                    this.draggedSymbol = null;
+                    this.dragOverSymbol = null;
+                },
+
+                onDragEnd() {
+                    this.draggedSymbol = null;
+                    this.dragOverSymbol = null;
                 },
 
                 setSymbolSL(symbol, value) {
@@ -1791,7 +2307,8 @@
                         });
                         if (res.ok) {
                             this.modals.manual = false;
-                            this.recalculate();
+                            await this.fetchInitialData();
+                            this.addToast("Strategy Updated", "Manual strategy parameters applied", "success");
                         }
                     } catch (e) {
                         alert(`Failed to apply parameters: ${e}`);
@@ -1811,9 +2328,9 @@
                         const res = await fetch("/api/upload-trades", { method: "POST", body: formData });
                         const data = await res.json();
                         if (res.ok) {
-                            alert(data.message);
                             this.modals.csv = false;
-                            this.recalculate();
+                            await this.fetchInitialData();
+                            this.addToast("CSV Imported", data.message || "Trades imported successfully", "success");
                         } else {
                             alert(`Error: ${data.detail || 'Could not parse CSV'}`);
                         }

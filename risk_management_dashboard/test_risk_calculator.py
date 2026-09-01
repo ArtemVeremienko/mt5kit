@@ -378,5 +378,77 @@ def test_execute_order_endpoint(monkeypatch):
     assert data["ticket"] == 12345678
 
 
+def test_volatility_ttl_cache():
+    """Test in-memory ADR/ATR TTL caching and refresh behavior."""
+    import time
+    from risk_management_dashboard.feed import MT5RiskFeed
+    mock_feed = MT5RiskFeed(mock_mode=True)
+    
+    # 1. Populate cache
+    mock_feed.refresh_volatility_cache()
+    assert len(mock_feed._volatility_cache) > 0
+    assert "EURUSD" in mock_feed._volatility_cache
+    
+    entry = mock_feed._volatility_cache["EURUSD"]
+    assert entry["adr_14_pips"] > 0
+    assert entry["atr_14_pips"] > 0
+    assert "timestamp" in entry
+    
+    # 2. Test cached retrieval does not expire immediately
+    adr, atr, pip_size = mock_feed._calculate_adr_and_atr("EURUSD", 0.00001, 5)
+    assert adr == entry["adr_14_pips"]
+    assert atr == entry["atr_14_pips"]
+
+    # 3. Simulate expired cache
+    mock_feed._volatility_cache["EURUSD"]["timestamp"] = time.time() - 1000.0  # > 900s TTL
+    adr_fresh, atr_fresh, _ = mock_feed._calculate_adr_and_atr("EURUSD", 0.00001, 5)
+    assert adr_fresh > 0
+    # Timestamp should be renewed
+    assert time.time() - mock_feed._volatility_cache["EURUSD"]["timestamp"] < 5.0
+
+
+def test_turbo_mode_websocket_rate_update():
+    """Test client-configurable streaming interval adjustment over WebSocket."""
+    import json
+    client = TestClient(app)
+    with client.websocket_connect("/ws/live") as websocket:
+        init_data = websocket.receive_json()
+        assert init_data["type"] == "initial_symbols"
+
+        # Switch to Turbo Mode (500ms)
+        websocket.send_text(json.dumps({"action": "set_rate", "interval_ms": 500}))
+        rate_resp = websocket.receive_json()
+        assert rate_resp["type"] == "rate_updated"
+        assert rate_resp["interval_ms"] == 500.0
+
+        # Switch back to Standard Mode (2000ms)
+        websocket.send_text(json.dumps({"action": "set_rate", "interval_ms": 2000}))
+        rate_resp2 = websocket.receive_json()
+        assert rate_resp2["type"] == "rate_updated"
+        assert rate_resp2["interval_ms"] == 2000.0
+
+
+def test_fast_symbol_polling_performance():
+    """Test sub-millisecond execution of get_market_symbols with cached volatility."""
+    import time
+    from risk_management_dashboard.feed import MT5RiskFeed
+    mock_feed = MT5RiskFeed(mock_mode=True)
+    mock_feed.refresh_volatility_cache()
+
+    start = time.perf_counter()
+    symbols = mock_feed.get_market_symbols()
+    duration_ms = (time.perf_counter() - start) * 1000.0
+
+    assert len(symbols) > 0
+    # Fast in-memory resolution should execute in under 15ms
+    assert duration_ms < 15.0
+    for sym in symbols:
+        assert "adr_14_pips" in sym
+        assert "atr_14_pips" in sym
+        assert "bid" in sym
+        assert "ask" in sym
+
+
+
 
 

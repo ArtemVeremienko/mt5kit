@@ -2,7 +2,7 @@
 FastAPI application for MT5 Risk Management & Dynamic Lot Sizing Dashboard.
 Provides:
 - REST APIs for Account, Symbols, Bulk Risk Calculation, Trade Statistics, CSV Upload, Manual Overrides
-- WebSocket streaming for real-time market updates
+- WebSocket streaming for real-time market updates with client-configurable Turbo Mode (500ms vs 2.0s)
 - Static HTML UI delivery
 """
 
@@ -11,6 +11,7 @@ import asyncio
 import json
 import io
 import csv
+import logging
 from typing import Dict, List, Optional, Any, Set
 from contextlib import asynccontextmanager
 
@@ -29,6 +30,7 @@ from risk_management_dashboard.risk_calculator import (
 )
 from risk_management_dashboard.feed import MT5RiskFeed
 
+logger = logging.getLogger("RiskApp")
 feed = MT5RiskFeed()
 STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 if not os.path.exists(STATIC_DIR):
@@ -55,29 +57,38 @@ class ManualStatsRequest(BaseModel):
 
 
 class LiveConnectionManager:
-    """Manages active WebSocket connections for live price ticks."""
+    """Manages active WebSocket connections and client-configurable streaming intervals."""
     def __init__(self):
-        self.active_connections: Set[WebSocket] = set()
+        self.active_intervals: Dict[WebSocket, float] = {}
         self.lock = asyncio.Lock()
 
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket, initial_interval: float = 2.0):
         await websocket.accept()
         async with self.lock:
-            self.active_connections.add(websocket)
+            self.active_intervals[websocket] = initial_interval
 
     async def disconnect(self, websocket: WebSocket):
         async with self.lock:
-            self.active_connections.discard(websocket)
+            self.active_intervals.pop(websocket, None)
+
+    async def set_interval(self, websocket: WebSocket, interval_seconds: float):
+        async with self.lock:
+            if websocket in self.active_intervals:
+                self.active_intervals[websocket] = max(0.1, interval_seconds)
+
+    def get_interval(self, websocket: WebSocket) -> float:
+        return self.active_intervals.get(websocket, 2.0)
 
     async def broadcast(self, message: Dict[str, Any]):
         async with self.lock:
             to_remove = set()
-            for ws in self.active_connections:
+            for ws in list(self.active_intervals.keys()):
                 try:
                     await ws.send_json(message)
                 except Exception:
                     to_remove.add(ws)
-            self.active_connections -= to_remove
+            for ws in to_remove:
+                self.active_intervals.pop(ws, None)
 
 
 manager = LiveConnectionManager()
@@ -85,28 +96,25 @@ manager = LiveConnectionManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Background streaming task
-    async def price_streaming_task():
+    # 1. Proactive background volatility cache worker (refreshes 14D ADR/ATR every 15 minutes)
+    async def volatility_cache_task():
+        # Initial warm up
+        await asyncio.to_thread(feed.refresh_volatility_cache)
         while True:
-            await asyncio.sleep(2.0)
-            if manager.active_connections:
-                symbols = feed.get_market_symbols()
-                account = feed.get_account_summary()
-                await manager.broadcast({
-                    "type": "symbols_update",
-                    "symbols": symbols,
-                    "account": account,
-                    "timestamp": asyncio.get_event_loop().time()
-                })
+            await asyncio.sleep(900)  # 15 minutes
+            try:
+                await asyncio.to_thread(feed.refresh_volatility_cache)
+            except Exception as e:
+                logger.error(f"Error refreshing volatility cache: {e}")
 
-    task = asyncio.create_task(price_streaming_task())
+    cache_task = asyncio.create_task(volatility_cache_task())
     yield
-    task.cancel()
+    cache_task.cancel()
 
 
 app = FastAPI(
     title="MT5 Risk Management & Lot Sizing Dashboard",
-    description="Dynamic Multi-Model Risk Matrix with Kelly Criterion, Optimal f, Sample Size Reliability & Leverage Monitoring",
+    description="Dynamic Multi-Model Risk Matrix with Kelly Criterion, Optimal f, Turbo Mode & Real-Time Caching",
     lifespan=lifespan
 )
 
@@ -141,19 +149,19 @@ def compute_effective_sl_pips(spec: Dict[str, Any], global_mode: str, global_pip
 @app.get("/api/account")
 async def get_account():
     """Returns live or simulated MT5 account balance, equity, leverage, and margin."""
-    return feed.get_account_summary()
+    return await asyncio.to_thread(feed.get_account_summary)
 
 
 @app.get("/api/symbols")
 async def get_symbols():
     """Returns all available Market Watch symbols with specifications and 14D ADR."""
-    return feed.get_market_symbols()
+    return await asyncio.to_thread(feed.get_market_symbols)
 
 
 @app.get("/api/trade-history")
 async def get_trade_history():
     """Returns trade statistics, Kelly/Optimal f metrics, and sample size tier."""
-    trades_pnl = feed.fetch_closed_deals_history()
+    trades_pnl = await asyncio.to_thread(feed.fetch_closed_deals_history)
     stats = calculate_trade_statistics(trades_pnl)
     return {
         "stats": stats,
@@ -168,10 +176,11 @@ async def calculate_risk_matrix(req: CalculationRequest):
     """
     Computes lot sizing for all symbols under the requested risk model,
     working capital, leverage, and dynamic SL settings.
+    Decoupled from slow IPC queries with fast in-memory execution.
     """
-    trades_pnl = feed.fetch_closed_deals_history()
+    trades_pnl = await asyncio.to_thread(feed.fetch_closed_deals_history)
     trade_stats = calculate_trade_statistics(trades_pnl)
-    symbols_specs = feed.get_market_symbols()
+    symbols_specs = await asyncio.to_thread(feed.get_market_symbols)
     
     if req.symbols:
         requested_set = {s.upper() for s in req.symbols}
@@ -185,8 +194,6 @@ async def calculate_risk_matrix(req: CalculationRequest):
         sym = spec["symbol"]
         sl_pips = compute_effective_sl_pips(spec, req.global_sl_mode, req.global_sl_pips, req.symbol_sl_overrides)
         
-        # Determine exact broker margin using live MT5 order_calc_margin if available
-        # First tentative calculation to know executable lot
         pre_calc = calculate_lot_for_symbol(
             symbol=sym, working_capital=req.working_capital, deposited_cash=req.deposited_cash, leverage=req.leverage,
             sl_pips=sl_pips, pip_value_per_lot=spec["pip_value_per_lot"], market_price=spec["ask"],
@@ -224,7 +231,7 @@ async def calculate_risk_matrix(req: CalculationRequest):
         if calc.is_margin_exceeded:
             margin_exceeded_count += 1
 
-        # Also precompute alternative risk models for quick comparison drawer
+        # Comparison calculations
         alt_frac_pre = calculate_lot_for_symbol(
             symbol=sym, working_capital=req.working_capital, deposited_cash=req.deposited_cash, leverage=req.leverage,
             sl_pips=sl_pips, pip_value_per_lot=spec["pip_value_per_lot"], market_price=spec["ask"],
@@ -318,7 +325,6 @@ async def upload_trades_csv(file: UploadFile = File(...)):
             continue
         for cell in row:
             try:
-                # Remove dollar signs or spaces
                 cleaned = cell.replace("$", "").replace(",", "").strip()
                 val = float(cleaned)
                 pnl_list.append(val)
@@ -367,7 +373,8 @@ class OrderExecuteRequest(BaseModel):
 @app.post("/api/order/execute")
 async def execute_order(req: OrderExecuteRequest):
     """Executes a market BUY or SELL order directly into MT5 with exact lot sizing and SL/TP prices."""
-    res = feed.send_market_order(
+    res = await asyncio.to_thread(
+        feed.send_market_order,
         symbol=req.symbol,
         action=req.action,
         volume=req.volume,
@@ -386,14 +393,38 @@ async def execute_order(req: OrderExecuteRequest):
     return res
 
 
-
 @app.websocket("/ws/live")
 async def websocket_live(websocket: WebSocket):
-    await manager.connect(websocket)
+    """
+    Real-time WebSocket streaming with dynamic client-configurable refresh interval.
+    Supports sub-second Turbo Mode (500ms) and standard monitoring (2000ms).
+    """
+    await manager.connect(websocket, initial_interval=2.0)
+    
+    # Per-client streaming worker
+    async def client_streamer():
+        try:
+            while True:
+                interval = manager.get_interval(websocket)
+                await asyncio.sleep(interval)
+                symbols = await asyncio.to_thread(feed.get_market_symbols)
+                account = await asyncio.to_thread(feed.get_account_summary)
+                await websocket.send_json({
+                    "type": "symbols_update",
+                    "symbols": symbols,
+                    "account": account,
+                    "timestamp": asyncio.get_event_loop().time()
+                })
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
+
+    streamer_task = asyncio.create_task(client_streamer())
     try:
         # Send initial symbols and account state
-        symbols = feed.get_market_symbols()
-        account = feed.get_account_summary()
+        symbols = await asyncio.to_thread(feed.get_market_symbols)
+        account = await asyncio.to_thread(feed.get_account_summary)
         await websocket.send_json({
             "type": "initial_symbols",
             "symbols": symbols,
@@ -401,11 +432,27 @@ async def websocket_live(websocket: WebSocket):
         })
         while True:
             data = await websocket.receive_text()
-            # Heartbeat / ping response
-            await websocket.send_json({"type": "pong"})
+            try:
+                msg = json.loads(data)
+                if isinstance(msg, dict):
+                    if msg.get("action") == "set_rate":
+                        interval_ms = float(msg.get("interval_ms", 2000))
+                        await manager.set_interval(websocket, interval_ms / 1000.0)
+                        await websocket.send_json({
+                            "type": "rate_updated",
+                            "interval_ms": interval_ms
+                        })
+                    elif msg.get("action") == "ping":
+                        await websocket.send_json({"type": "pong"})
+            except json.JSONDecodeError:
+                if data.strip().lower() == "ping":
+                    await websocket.send_json({"type": "pong"})
     except WebSocketDisconnect:
-        await manager.disconnect(websocket)
+        pass
     except Exception:
+        pass
+    finally:
+        streamer_task.cancel()
         await manager.disconnect(websocket)
 
 

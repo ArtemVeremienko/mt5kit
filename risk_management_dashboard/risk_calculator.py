@@ -166,47 +166,48 @@ def calculate_optimal_f_vince(trades_pnl: List[float], resolution: int = 100) ->
     Finds Ralph Vince's Optimal f by maximizing Terminal Wealth Relative (TWR):
     TWR(f) = Product_{i=1..N} [ 1 + f * (-trade_i / Worst_Loss) ]
     where Worst_Loss is the maximum loss expressed as a positive number.
+    Fully vectorized using 2D NumPy array broadcasting.
     Returns (optimal_f, twr_curve).
     """
     if not trades_pnl:
         return 0.0, []
 
-    pnl_array = np.array(trades_pnl, dtype=np.float64)
+    pnl_array = np.asarray(trades_pnl, dtype=np.float64)
     losses = pnl_array[pnl_array < 0]
     
     if len(losses) == 0:
         # No losses in dataset
-        return 0.5, [{"f": round(f, 2), "twr": 1.0} for f in np.linspace(0.01, 0.99, 20)]
+        return 0.5, [{"f": round(float(f), 2), "twr": 1.0} for f in np.linspace(0.01, 0.99, 20)]
 
     worst_loss = abs(float(np.min(losses)))
     if worst_loss == 0:
         return 0.0, []
 
-    # Normalized returns relative to worst loss: HPR_i = 1 + f * (pnl_i / worst_loss)
-    f_candidates = np.linspace(0.01, 0.99, resolution)
-    twr_curve = []
-    best_f = 0.0
-    best_log_twr = -np.inf
+    # 2D Grid Broadcast: f_candidates shape (resolution, 1), pnl shape (1, N)
+    f_candidates = np.linspace(0.01, 0.99, resolution, dtype=np.float64)
+    # HPR matrix shape: (resolution, N)
+    hpr_matrix = 1.0 + f_candidates[:, np.newaxis] * (pnl_array[np.newaxis, :] / worst_loss)
 
-    for f_val in f_candidates:
-        hprs = 1.0 + f_val * (pnl_array / worst_loss)
-        # HPR must be strictly > 0 for all trades
-        if np.any(hprs <= 0):
-            continue
-        
-        # Use log sum for numerical stability: log(TWR) = sum(log(HPR))
-        log_twr = np.sum(np.log(hprs))
-        # Cap TWR for charting to prevent overflow
-        exp_twr = float(np.exp(min(log_twr, 50.0)))
-        twr_curve.append({"f": round(float(f_val), 3), "twr": round(exp_twr, 4)})
-        
-        if log_twr > best_log_twr:
-            best_log_twr = log_twr
-            best_f = float(f_val)
+    # Valid rows where all HPRs are strictly positive
+    valid_mask = np.all(hpr_matrix > 0, axis=1)
+    
+    log_twr = np.full(resolution, -np.inf, dtype=np.float64)
+    if np.any(valid_mask):
+        log_twr[valid_mask] = np.sum(np.log(hpr_matrix[valid_mask]), axis=1)
 
-    # If best_f produces TWR < 1.0 (negative expectancy), optimal f is 0.0
-    if best_log_twr <= 0:
-        best_f = 0.0
+    best_idx = int(np.argmax(log_twr))
+    best_log_twr = log_twr[best_idx]
+    best_f = float(f_candidates[best_idx]) if best_log_twr > 0 else 0.0
+
+    # Build chart points vectorially
+    clipped_log = np.clip(log_twr, -50.0, 50.0)
+    exp_twrs = np.where(valid_mask, np.exp(clipped_log), 0.0)
+    
+    twr_curve = [
+        {"f": round(float(f_val), 3), "twr": round(float(twr_val), 4)}
+        for f_val, twr_val, is_valid in zip(f_candidates, exp_twrs, valid_mask)
+        if is_valid
+    ]
 
     return best_f, twr_curve
 
@@ -220,31 +221,33 @@ def calculate_trade_statistics(
 ) -> TradeStats:
     """
     Computes comprehensive trade statistics from a list of trade PnLs or manual override parameters.
+    Optimized with vectorized NumPy boolean masks and aggregations.
     """
     if trades_pnl and len(trades_pnl) > 0:
-        pnl = np.array(trades_pnl, dtype=np.float64)
-        total_trades = len(pnl)
-        wins = pnl[pnl > 0]
-        losses = pnl[pnl < 0]
-        breakevens = pnl[pnl == 0]
+        pnl = np.asarray(trades_pnl, dtype=np.float64)
+        total_trades = int(pnl.size)
         
-        winning_trades = len(wins)
-        losing_trades = len(losses)
-        breakeven_trades = len(breakevens)
+        wins_mask = pnl > 0
+        losses_mask = pnl < 0
+        breakevens_mask = pnl == 0
+        
+        winning_trades = int(np.count_nonzero(wins_mask))
+        losing_trades = int(np.count_nonzero(losses_mask))
+        breakeven_trades = int(np.count_nonzero(breakevens_mask))
         
         win_rate = winning_trades / total_trades if total_trades > 0 else 0.0
         loss_rate = losing_trades / total_trades if total_trades > 0 else 0.0
         
-        avg_win = float(np.mean(wins)) if winning_trades > 0 else 0.0
-        avg_loss = abs(float(np.mean(losses))) if losing_trades > 0 else 0.0
+        avg_win = float(np.mean(pnl[wins_mask])) if winning_trades > 0 else 0.0
+        avg_loss = abs(float(np.mean(pnl[losses_mask]))) if losing_trades > 0 else 0.0
         
         payoff_ratio = (avg_win / avg_loss) if avg_loss > 0 else 0.0
-        gross_profit = float(np.sum(wins)) if winning_trades > 0 else 0.0
-        gross_loss = abs(float(np.sum(losses))) if losing_trades > 0 else 0.0
+        gross_profit = float(np.sum(pnl[wins_mask])) if winning_trades > 0 else 0.0
+        gross_loss = abs(float(np.sum(pnl[losses_mask]))) if losing_trades > 0 else 0.0
         profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (999.0 if gross_profit > 0 else 0.0)
         
-        worst_loss = abs(float(np.min(losses))) if losing_trades > 0 else 100.0
-        best_win = float(np.max(wins)) if winning_trades > 0 else 0.0
+        worst_loss = abs(float(np.min(pnl[losses_mask]))) if losing_trades > 0 else 100.0
+        best_win = float(np.max(pnl[wins_mask])) if winning_trades > 0 else 0.0
         net_profit = float(np.sum(pnl))
         
         # Kelly Criterion
@@ -289,12 +292,14 @@ def calculate_trade_statistics(
         opt_f_half = opt_f / 2.0
         opt_f_quarter = opt_f / 4.0
         
-        # Simulated TWR curve for visualization
-        twr_curve = []
-        for f_val in np.linspace(0.01, 0.99, 50):
-            dist = (f_val - opt_f) / 0.2
-            twr_synth = max(0.1, np.exp(-0.5 * dist**2) * (1.5 + profit_factor * 0.2))
-            twr_curve.append({"f": round(float(f_val), 3), "twr": round(float(twr_synth), 4)})
+        # Vectorized synthetic TWR curve
+        f_grid = np.linspace(0.01, 0.99, 50, dtype=np.float64)
+        dist = (f_grid - opt_f) / 0.2
+        twr_synths = np.maximum(0.1, np.exp(-0.5 * dist**2) * (1.5 + profit_factor * 0.2))
+        twr_curve = [
+            {"f": round(float(f_val), 3), "twr": round(float(twr_val), 4)}
+            for f_val, twr_val in zip(f_grid, twr_synths)
+        ]
             
         sample_info = evaluate_sample_size(total_trades)
 
