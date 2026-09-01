@@ -1,4 +1,4 @@
-import { Component, For, Show } from 'solid-js';
+import { Component, For, Show, createSignal, onCleanup } from 'solid-js';
 import { positionsStore } from '../../stores/positionsStore';
 import { preferencesStore } from '../../stores/preferencesStore';
 import { PositionRow } from './PositionRow';
@@ -8,11 +8,21 @@ import { toastStore } from '../../stores/toastStore';
 export const OrderManagementPanel: Component = () => {
   const positions = positionsStore.positions;
   const count = positionsStore.totalPositionsCount;
+  const [isArmedCloseAll, setIsArmedCloseAll] = createSignal<boolean>(false);
+  let armedTimer: any;
 
-  const handleCloseAll = async () => {
-    if (!window.confirm(`Are you sure you want to close ALL ${count()} open positions immediately?`)) {
+  const handleCloseAllClick = async () => {
+    if (!isArmedCloseAll()) {
+      setIsArmedCloseAll(true);
+      clearTimeout(armedTimer);
+      armedTimer = setTimeout(() => {
+        setIsArmedCloseAll(false);
+      }, 4000); // 4-second safety window
       return;
     }
+
+    clearTimeout(armedTimer);
+    setIsArmedCloseAll(false);
 
     try {
       positionsStore.setIsActionInProgress(true);
@@ -29,6 +39,10 @@ export const OrderManagementPanel: Component = () => {
     }
   };
 
+  onCleanup(() => {
+    clearTimeout(armedTimer);
+  });
+
   return (
     <div class="positions-section">
       <div class="table-card">
@@ -36,26 +50,36 @@ export const OrderManagementPanel: Component = () => {
           <table class="positions-table">
             <thead>
               <tr>
-                <th class="text-left" style={{ width: '100px' }}>Ticket</th>
-                <th class="text-left" style={{ width: '160px' }}>Symbol / Type</th>
-                <th class="text-right" style={{ width: '120px' }}>Volume</th>
-                <th class="text-right" style={{ width: '110px' }}>Open Price</th>
-                <th class="text-right" style={{ width: '110px' }}>Current Price</th>
-                <th class="text-right" style={{ 'min-width': '175px' }}>Floating P&L</th>
-                <th class="text-center" style={{ width: '115px' }}>R-Multiple</th>
-                <th class="text-center" style={{ 'min-width': '160px' }}>Stop Loss / Take Profit</th>
-                <th class="text-right" style={{ 'min-width': '170px' }}>
+                <th class="text-left col-th-ticket">Ticket</th>
+                <th class="text-left col-th-symbol">Symbol / Type</th>
+                <th class="text-right col-th-volume">Volume</th>
+                <th class="text-right col-th-open">Open Price</th>
+                <th class="text-right col-th-current">Current Price</th>
+                <th class="text-center col-th-sl">Stop Loss</th>
+                <th class="text-center col-th-tp">Take Profit</th>
+                <th class="text-right col-th-pnl">Floating P&L</th>
+                <th class="text-center col-th-r">R-Multiple</th>
+                <th class="text-right col-th-actions">
                   <div class="th-actions-header">
                     <span>Actions</span>
                     <Show when={count() > 0}>
                       <button
                         type="button"
                         class="btn-emergency-close-compact"
-                        onClick={handleCloseAll}
+                        classList={{
+                          'btn-armed-critical': isArmedCloseAll(),
+                        }}
+                        onClick={handleCloseAllClick}
                         disabled={positionsStore.isActionInProgress()}
-                        title="Parallel emergency liquidation of all open trades"
+                        title={
+                          isArmedCloseAll()
+                            ? 'Click again to CONFIRM parallel emergency liquidation'
+                            : 'Parallel emergency liquidation of all open trades (2-step safety)'
+                        }
                       >
-                        🛑 Close All ({count()})
+                        {isArmedCloseAll()
+                          ? `⚠️ Confirm Close ALL (${count()})`
+                          : `🛑 Close All (${count()})`}
                       </button>
                     </Show>
                   </div>
@@ -67,7 +91,7 @@ export const OrderManagementPanel: Component = () => {
                 when={positions().length > 0}
                 fallback={
                   <tr>
-                    <td colspan="9" class="empty-table-cell">
+                    <td colspan="10" class="empty-table-cell">
                       <div class="empty-state-card">
                         <span class="empty-state-icon">💼</span>
                         <div class="empty-state-title">No Open Positions Active</div>
@@ -97,3 +121,4 @@ export const OrderManagementPanel: Component = () => {
     </div>
   );
 };
+

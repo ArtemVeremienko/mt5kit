@@ -14,6 +14,8 @@ export const PositionRow: Component<Props> = (props) => {
   const position = createMemo(() => positionsStore.getPosition(props.ticket));
 
   let hubRef: HTMLDivElement | undefined;
+  let slInputRef: HTMLInputElement | undefined;
+  let tpInputRef: HTMLInputElement | undefined;
 
   const [slValue, setSlValue] = createSignal<string>('');
   const [tpValue, setTpValue] = createSignal<string>('');
@@ -26,12 +28,23 @@ export const PositionRow: Component<Props> = (props) => {
     return getAssetStepRule(p.symbol, p.digits, p.pip_size, p.step_rule);
   });
 
-  const startEditing = () => {
+  const startEditing = (field: 'SL' | 'TP' = 'SL') => {
     const p = position();
     if (p) {
       setSlValue(p.sl ? p.sl.toFixed(p.digits) : '');
       setTpValue(p.tp ? p.tp.toFixed(p.digits) : '');
       setIsEditing(true);
+
+      // Auto-focus requested field with selection
+      setTimeout(() => {
+        if (field === 'SL' && slInputRef) {
+          slInputRef.focus();
+          slInputRef.select();
+        } else if (field === 'TP' && tpInputRef) {
+          tpInputRef.focus();
+          tpInputRef.select();
+        }
+      }, 50);
     }
   };
 
@@ -39,7 +52,7 @@ export const PositionRow: Component<Props> = (props) => {
     setIsEditing(false);
   };
 
-  // Global Escape key and click-outside dismissal
+  // Global Escape key, Enter key, and click-outside dismissal
   createEffect(() => {
     if (!isEditing()) return;
 
@@ -48,6 +61,11 @@ export const PositionRow: Component<Props> = (props) => {
         e.preventDefault();
         e.stopPropagation();
         cancelEditing();
+      } else if (e.key === 'Enter') {
+        // If Enter is pressed while inside popover, commit changes instead of triggering focused buttons
+        e.preventDefault();
+        e.stopPropagation();
+        handleSaveSltp();
       }
     };
 
@@ -57,13 +75,13 @@ export const PositionRow: Component<Props> = (props) => {
       }
     };
 
-    window.addEventListener('keydown', handleGlobalKeyDown);
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
     const timer = setTimeout(() => {
       window.addEventListener('mousedown', handleClickOutside);
     }, 50);
 
     onCleanup(() => {
-      window.removeEventListener('keydown', handleGlobalKeyDown);
+      window.removeEventListener('keydown', handleGlobalKeyDown, true);
       window.removeEventListener('mousedown', handleClickOutside);
       clearTimeout(timer);
     });
@@ -87,7 +105,7 @@ export const PositionRow: Component<Props> = (props) => {
     setTpValue(newVal > 0 ? newVal.toFixed(p.digits) : '');
   };
 
-  // Real-time live distance telemetry
+  // Real-time live distance telemetry with explicit sign calculation
   const slTelemetry = createMemo(() => {
     const p = position();
     if (!p) return null;
@@ -98,13 +116,16 @@ export const PositionRow: Component<Props> = (props) => {
     const isBuy = p.type === 'BUY';
     const diff = isBuy ? p.price_open - val : val - p.price_open;
     const pips = diff / rule.pipSize;
+    const isRisk = pips >= 0;
+    const absPips = Math.abs(pips);
     const calcResult = marketStore.getCalculatedResult(p.symbol);
     const pipVal = calcResult?.calc?.pip_value_per_lot || 10.0;
-    const dollarLoss = pips * p.volume * pipVal;
+    const dollarAmount = absPips * p.volume * pipVal;
 
     return {
-      pips: pips.toFixed(1),
-      dollars: dollarLoss.toFixed(2),
+      absPips: absPips.toFixed(1),
+      isRisk,
+      dollarText: dollarAmount.toFixed(2),
       unit: rule.unitLabel,
     };
   });
@@ -119,14 +140,60 @@ export const PositionRow: Component<Props> = (props) => {
     const isBuy = p.type === 'BUY';
     const diff = isBuy ? val - p.price_open : p.price_open - val;
     const pips = diff / rule.pipSize;
+    const isGain = diff >= 0;
+    const absPips = Math.abs(pips);
     const calcResult = marketStore.getCalculatedResult(p.symbol);
     const pipVal = calcResult?.calc?.pip_value_per_lot || 10.0;
-    const dollarGain = pips * p.volume * pipVal;
+    const dollarAmount = absPips * p.volume * pipVal;
 
     return {
-      pips: pips.toFixed(1),
-      dollars: dollarGain.toFixed(2),
+      absPips: absPips.toFixed(1),
+      isGain,
+      dollarText: dollarAmount.toFixed(2),
       unit: rule.unitLabel,
+    };
+  });
+
+  // Display telemetry for row cells (when not editing)
+  const currentSlRowInfo = createMemo(() => {
+    const p = position();
+    if (!p || !p.sl || p.sl <= 0) return null;
+    const rule = stepRule();
+    const isBuy = p.type === 'BUY';
+    const diff = isBuy ? p.price_open - p.sl : p.sl - p.price_open;
+    const pips = diff / rule.pipSize;
+    const isRisk = pips >= 0;
+    const absPips = Math.abs(pips);
+    const calcResult = marketStore.getCalculatedResult(p.symbol);
+    const pipVal = calcResult?.calc?.pip_value_per_lot || 10.0;
+    const dollarAmount = absPips * p.volume * pipVal;
+
+    return {
+      price: p.sl.toFixed(p.digits),
+      pipText: `${isRisk ? '-' : '+'}${absPips.toFixed(1)} ${rule.unitLabel}`,
+      dollarText: `${isRisk ? '-$' : '+$'}${dollarAmount.toFixed(2)}`,
+      isRisk,
+    };
+  });
+
+  const currentTpRowInfo = createMemo(() => {
+    const p = position();
+    if (!p || !p.tp || p.tp <= 0) return null;
+    const rule = stepRule();
+    const isBuy = p.type === 'BUY';
+    const diff = isBuy ? p.tp - p.price_open : p.price_open - p.tp;
+    const pips = diff / rule.pipSize;
+    const isGain = diff >= 0;
+    const absPips = Math.abs(pips);
+    const calcResult = marketStore.getCalculatedResult(p.symbol);
+    const pipVal = calcResult?.calc?.pip_value_per_lot || 10.0;
+    const dollarAmount = absPips * p.volume * pipVal;
+
+    return {
+      price: p.tp.toFixed(p.digits),
+      pipText: `${isGain ? '+' : '-'}${absPips.toFixed(1)} ${rule.unitLabel}`,
+      dollarText: `${isGain ? '+$' : '-$'}${dollarAmount.toFixed(2)}`,
+      isGain,
     };
   });
 
@@ -137,7 +204,7 @@ export const PositionRow: Component<Props> = (props) => {
     const rule = stepRule();
     const calcResult = marketStore.getCalculatedResult(p.symbol);
     const spreadPips = calcResult?.spec?.spread_pips || 0.5;
-    const bufferPips = spreadPips + 0.5; // Spread + 0.5p safety buffer
+    const bufferPips = spreadPips + 0.5;
     const bufferDist = bufferPips * rule.pipSize;
 
     const bePrice = p.type === 'BUY'
@@ -147,13 +214,13 @@ export const PositionRow: Component<Props> = (props) => {
     setSlValue(bePrice.toFixed(p.digits));
   };
 
-  const applyAdrSnap = () => {
+  const applyAdrSlSnap = (fraction: number) => {
     const p = position();
     if (!p) return;
     const rule = stepRule();
     const calcResult = marketStore.getCalculatedResult(p.symbol);
     const adrPips = calcResult?.spec?.adr_14_pips || 0;
-    const slDistPips = adrPips > 0 ? adrPips / 4 : 15.0;
+    const slDistPips = adrPips > 0 ? adrPips * fraction : 15.0;
     const slDist = slDistPips * rule.pipSize;
 
     const adrPrice = p.type === 'BUY'
@@ -234,7 +301,7 @@ export const PositionRow: Component<Props> = (props) => {
 
   const handleSaveSltp = async () => {
     const p = position();
-    if (!p) return;
+    if (!p || isSubmitting()) return;
     try {
       setIsSubmitting(true);
       const slNum = slValue().trim() ? parseFloat(slValue()) : 0;
@@ -262,13 +329,13 @@ export const PositionRow: Component<Props> = (props) => {
             'is-editing': isEditing(),
           }}
         >
-          <td class="text-left">
-            <div class="pos-ticket-cell">
-              <span class="pos-ticket">#{pos().ticket}</span>
-            </div>
+          {/* 1. Ticket */}
+          <td class="text-left pos-cell-ticket">
+            <span class="pos-ticket">#{pos().ticket}</span>
           </td>
 
-          <td class="text-left">
+          {/* 2. Symbol & Side */}
+          <td class="text-left pos-cell-symbol">
             <div class="pos-symbol-cell">
               <strong class="pos-symbol">{pos().symbol}</strong>
               <span
@@ -283,19 +350,320 @@ export const PositionRow: Component<Props> = (props) => {
             </div>
           </td>
 
-          <td class="text-right">
+          {/* 3. Volume */}
+          <td class="text-right pos-cell-volume">
             <span class="pos-volume tabular-num">{pos().volume.toFixed(2)} Lots</span>
           </td>
 
-          <td class="text-right">
+          {/* 4. Open Price */}
+          <td class="text-right pos-cell-open">
             <span class="font-mono tabular-num">{pos().price_open.toFixed(pos().digits)}</span>
           </td>
 
-          <td class="text-right">
+          {/* 5. Current Price */}
+          <td class="text-right pos-cell-current">
             <span class="font-mono tabular-num">{pos().price_current.toFixed(pos().digits)}</span>
           </td>
 
-          <td class="text-right">
+          {/* 6. Stop Loss (Dedicated Column) */}
+          <td class="text-center pos-cell-sl" onClick={() => startEditing('SL')}>
+            <div class="sltp-col-cell sl-col-cell">
+              <Show
+                when={currentSlRowInfo()}
+                fallback={
+                  <button type="button" class="btn-set-target-empty sl-empty-btn">
+                    + Set SL
+                  </button>
+                }
+              >
+                {(info) => (
+                  <div class="sltp-display-stacked">
+                    <span class="sltp-price-val sl-price-val tabular-num">{info().price}</span>
+                    <span
+                      class="sltp-sub-telemetry tabular-num"
+                      classList={{
+                        'text-risk': info().isRisk,
+                        'text-profit': !info().isRisk,
+                      }}
+                    >
+                      {info().pipText} ({info().dollarText})
+                    </span>
+                  </div>
+                )}
+              </Show>
+              <span class="sltp-edit-affordance" title="Click to adjust Stop Loss & Take Profit">
+                ✎
+              </span>
+            </div>
+          </td>
+
+          {/* 7. Take Profit (Dedicated Column) */}
+          <td class="text-center pos-cell-tp" onClick={() => startEditing('TP')}>
+            <div class="sltp-col-cell tp-col-cell">
+              <Show
+                when={currentTpRowInfo()}
+                fallback={
+                  <button type="button" class="btn-set-target-empty tp-empty-btn">
+                    + Set TP
+                  </button>
+                }
+              >
+                {(info) => (
+                  <div class="sltp-display-stacked">
+                    <span class="sltp-price-val tp-price-val tabular-num">{info().price}</span>
+                    <span
+                      class="sltp-sub-telemetry tabular-num"
+                      classList={{
+                        'text-profit': info().isGain,
+                        'text-loss': !info().isGain,
+                      }}
+                    >
+                      {info().pipText} ({info().dollarText})
+                    </span>
+                  </div>
+                )}
+              </Show>
+              <span class="sltp-edit-affordance" title="Click to adjust Stop Loss & Take Profit">
+                ✎
+              </span>
+            </div>
+
+            {/* Contextual SL/TP Edit Popover Anchored to the Risk Columns */}
+            <Show when={isEditing()}>
+              <div class="sltp-edit-hub" ref={hubRef} onClick={(e) => e.stopPropagation()}>
+                <div class="sltp-hub-header">
+                  <span class="sltp-hub-title">
+                    Modify SL/TP · <strong>{pos().symbol}</strong> (#{pos().ticket})
+                  </span>
+                  <button
+                    type="button"
+                    class="btn-sltp-close-icon"
+                    onClick={cancelEditing}
+                    title="Close (Esc)"
+                    tabindex="-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div class="sltp-hub-body">
+                  {/* Left Column: Stop Loss Field & Presets */}
+                  <div class="sltp-hub-column sl-column">
+                    <div class="sltp-column-header">
+                      <label class="sltp-field-label sl-label">Stop Loss</label>
+                      <Show when={slTelemetry()}>
+                        {(tel) => (
+                          <span
+                            class="sltp-telemetry-badge sl-telemetry tabular-num"
+                            classList={{
+                              'text-risk': tel().isRisk,
+                              'text-profit': !tel().isRisk,
+                            }}
+                          >
+                            {tel().isRisk ? '-' : '+'}{tel().absPips} {tel().unit} ({tel().isRisk ? `-$${tel().dollarText}` : `+$${tel().dollarText}`})
+                          </span>
+                        )}
+                      </Show>
+                    </div>
+
+                    <div class="sltp-stepper-box">
+                      <button
+                        type="button"
+                        class="btn-stepper-touch"
+                        onClick={(e) => stepSl('DOWN', e)}
+                        title={`-1 ${stepRule().unitLabel} (Shift: -10, Alt: -0.1)`}
+                        tabindex="-1"
+                      >
+                        −
+                      </button>
+                      <input
+                        ref={slInputRef}
+                        type="number"
+                        class="sltp-input-main tabular-num"
+                        placeholder="SL Price"
+                        min="0"
+                        step={stepRule().normalStep}
+                        value={slValue()}
+                        onFocus={(e) => e.currentTarget.select()}
+                        onInput={(e) => setSlValue(e.currentTarget.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            stepSl('UP', e);
+                          } else if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            stepSl('DOWN', e);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        class="btn-stepper-touch"
+                        onClick={(e) => stepSl('UP', e)}
+                        title={`+1 ${stepRule().unitLabel} (Shift: +10, Alt: +0.1)`}
+                        tabindex="-1"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <div class="sltp-presets-group">
+                      <span class="preset-group-title">SL Presets</span>
+                      <div class="preset-chips-row">
+                        <button
+                          type="button"
+                          class="btn-preset-chip"
+                          onClick={applyBreakEvenSnap}
+                          title="Snap SL to Entry Price + Spread Buffer"
+                          tabindex="-1"
+                        >
+                          🛡️ Entry / BE
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-preset-chip"
+                          onClick={() => applyAdrSlSnap(0.25)}
+                          title="Snap SL to 1/4 ADR distance"
+                          tabindex="-1"
+                        >
+                          📐 1/4 ADR
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-preset-chip"
+                          onClick={() => applyAdrSlSnap(0.5)}
+                          title="Snap SL to 1/2 ADR distance"
+                          tabindex="-1"
+                        >
+                          📐 1/2 ADR
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="sltp-hub-divider" />
+
+                  {/* Right Column: Take Profit Field & Presets */}
+                  <div class="sltp-hub-column tp-column">
+                    <div class="sltp-column-header">
+                      <label class="sltp-field-label tp-label">Take Profit</label>
+                      <Show when={tpTelemetry()}>
+                        {(tel) => (
+                          <span
+                            class="sltp-telemetry-badge tp-telemetry tabular-num"
+                            classList={{
+                              'text-profit': tel().isGain,
+                              'text-risk': !tel().isGain,
+                            }}
+                          >
+                            {tel().isGain ? '+' : '-'}{tel().absPips} {tel().unit} ({tel().isGain ? `+$${tel().dollarText}` : `-$${tel().dollarText}`})
+                          </span>
+                        )}
+                      </Show>
+                    </div>
+
+                    <div class="sltp-stepper-box">
+                      <button
+                        type="button"
+                        class="btn-stepper-touch"
+                        onClick={(e) => stepTp('DOWN', e)}
+                        title={`-1 ${stepRule().unitLabel} (Shift: -10, Alt: -0.1)`}
+                        tabindex="-1"
+                      >
+                        −
+                      </button>
+                      <input
+                        ref={tpInputRef}
+                        type="number"
+                        class="sltp-input-main tabular-num"
+                        placeholder="TP Price"
+                        min="0"
+                        step={stepRule().normalStep}
+                        value={tpValue()}
+                        onFocus={(e) => e.currentTarget.select()}
+                        onInput={(e) => setTpValue(e.currentTarget.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            stepTp('UP', e);
+                          } else if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            stepTp('DOWN', e);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        class="btn-stepper-touch"
+                        onClick={(e) => stepTp('UP', e)}
+                        title={`+1 ${stepRule().unitLabel} (Shift: +10, Alt: +0.1)`}
+                        tabindex="-1"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <div class="sltp-presets-group">
+                      <span class="preset-group-title">TP Presets</span>
+                      <div class="preset-chips-row">
+                        <button
+                          type="button"
+                          class="btn-preset-chip"
+                          onClick={() => applyRrSnap(1.5)}
+                          title="Set TP to 1:1.5 Risk-Reward Ratio"
+                          tabindex="-1"
+                        >
+                          🎯 1:1.5 RR
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-preset-chip"
+                          onClick={() => applyRrSnap(2.0)}
+                          title="Set TP to 1:2 Risk-Reward Ratio"
+                          tabindex="-1"
+                        >
+                          🎯 1:2 RR
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-preset-chip"
+                          onClick={() => applyRrSnap(3.0)}
+                          title="Set TP to 1:3 Risk-Reward Ratio"
+                          tabindex="-1"
+                        >
+                          🎯 1:3 RR
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Controls: Apply & Cancel */}
+                <div class="sltp-hub-footer">
+                  <button
+                    type="button"
+                    class="btn-sltp-cancel-text"
+                    onClick={cancelEditing}
+                    disabled={isSubmitting()}
+                    tabindex="-1"
+                  >
+                    Cancel (Esc)
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-sltp-apply-main"
+                    onClick={handleSaveSltp}
+                    disabled={isSubmitting()}
+                  >
+                    {isSubmitting() ? 'Submitting...' : '💾 Apply Changes (Enter)'}
+                  </button>
+                </div>
+              </div>
+            </Show>
+          </td>
+
+          {/* 8. Floating P&L */}
+          <td class="text-right pos-cell-pnl">
             <div class="pos-pnl-cell text-right">
               <span
                 class="pos-profit tabular-num"
@@ -307,9 +675,7 @@ export const PositionRow: Component<Props> = (props) => {
               >
                 {pos().profit > 0
                   ? `+${formatCurrency(pos().profit)}`
-                  : pos().profit < 0
-                  ? formatCurrency(pos().profit)
-                  : `$0.00`}
+                  : formatCurrency(pos().profit)}
               </span>
               <span class="pos-pips-sub tabular-num">
                 ({pos().pnl_pips > 0 ? `+${pos().pnl_pips}` : pos().pnl_pips} {stepRule().unitLabel})
@@ -317,7 +683,8 @@ export const PositionRow: Component<Props> = (props) => {
             </div>
           </td>
 
-          <td class="text-center">
+          {/* 9. R-Multiple */}
+          <td class="text-center pos-cell-r">
             <Show
               when={pos().r_multiple !== null}
               fallback={<span class="text-muted">—</span>}
@@ -337,211 +704,15 @@ export const PositionRow: Component<Props> = (props) => {
             </Show>
           </td>
 
-          <td class="pos-sltp-td text-center">
-            <div class="pos-sltp-cell">
-              <Show
-                when={isEditing()}
-                fallback={
-                  <div
-                    class="sltp-display"
-                    onClick={startEditing}
-                    title="Click to edit SL / TP with live steppers & presets"
-                  >
-                    <div class="sltp-display-badges">
-                      <span class="sltp-val sl-pill tabular-num">
-                        SL: {pos().sl ? pos().sl.toFixed(pos().digits) : 'None'}
-                      </span>
-                      <span class="sltp-val tp-pill tabular-num">
-                        TP: {pos().tp ? pos().tp.toFixed(pos().digits) : 'None'}
-                      </span>
-                    </div>
-                    <span class="edit-icon">
-                      <svg class="edit-icon-svg" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                      </svg>
-                    </span>
-                  </div>
-                }
-              >
-                <div class="sltp-edit-hub" ref={hubRef}>
-                  <div class="sltp-steppers-row">
-                    {/* SL Stepper */}
-                    <div class="sltp-field-group">
-                      <label class="sltp-field-label sl-label">SL</label>
-                      <div class="sltp-stepper-box">
-                        <button
-                          type="button"
-                          class="btn-stepper-mini"
-                          onClick={(e) => stepSl('DOWN', e)}
-                          title={`-1 ${stepRule().unitLabel} (Shift: -10, Alt: -0.1)`}
-                        >
-                          −
-                        </button>
-                        <input
-                          type="number"
-                          class="sltp-mini-input tabular-num"
-                          placeholder="SL Price"
-                          min="0"
-                          step={stepRule().normalStep}
-                          value={slValue()}
-                          onFocus={(e) => e.currentTarget.select()}
-                          onInput={(e) => setSlValue(e.currentTarget.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'ArrowUp') {
-                              e.preventDefault();
-                              stepSl('UP', e);
-                            } else if (e.key === 'ArrowDown') {
-                              e.preventDefault();
-                              stepSl('DOWN', e);
-                            } else if (e.key === 'Enter') {
-                              handleSaveSltp();
-                            } else if (e.key === 'Escape') {
-                              cancelEditing();
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          class="btn-stepper-mini"
-                          onClick={(e) => stepSl('UP', e)}
-                          title={`+1 ${stepRule().unitLabel} (Shift: +10, Alt: +0.1)`}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <Show when={slTelemetry()}>
-                        {(tel) => (
-                          <span class="sltp-telemetry-badge sl-telemetry tabular-num">
-                            -{tel().pips} {tel().unit} (-${tel().dollars})
-                          </span>
-                        )}
-                      </Show>
-                    </div>
-
-                    {/* TP Stepper */}
-                    <div class="sltp-field-group">
-                      <label class="sltp-field-label tp-label">TP</label>
-                      <div class="sltp-stepper-box">
-                        <button
-                          type="button"
-                          class="btn-stepper-mini"
-                          onClick={(e) => stepTp('DOWN', e)}
-                          title={`-1 ${stepRule().unitLabel} (Shift: -10, Alt: -0.1)`}
-                        >
-                          −
-                        </button>
-                        <input
-                          type="number"
-                          class="sltp-mini-input tabular-num"
-                          placeholder="TP Price"
-                          min="0"
-                          step={stepRule().normalStep}
-                          value={tpValue()}
-                          onFocus={(e) => e.currentTarget.select()}
-                          onInput={(e) => setTpValue(e.currentTarget.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'ArrowUp') {
-                              e.preventDefault();
-                              stepTp('UP', e);
-                            } else if (e.key === 'ArrowDown') {
-                              e.preventDefault();
-                              stepTp('DOWN', e);
-                            } else if (e.key === 'Enter') {
-                              handleSaveSltp();
-                            } else if (e.key === 'Escape') {
-                              cancelEditing();
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          class="btn-stepper-mini"
-                          onClick={(e) => stepTp('UP', e)}
-                          title={`+1 ${stepRule().unitLabel} (Shift: +10, Alt: +0.1)`}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <Show when={tpTelemetry()}>
-                        {(tel) => (
-                          <span class="sltp-telemetry-badge tp-telemetry tabular-num">
-                            +{tel().pips} {tel().unit} (+${tel().dollars})
-                          </span>
-                        )}
-                      </Show>
-                    </div>
-
-                    {/* Action buttons */}
-                    <div class="sltp-hub-actions">
-                      <button
-                        type="button"
-                        class="btn-sltp-save"
-                        onClick={handleSaveSltp}
-                        disabled={isSubmitting()}
-                        title="Commit SL/TP modifications to MT5 (Enter)"
-                      >
-                        ✓
-                      </button>
-                      <button
-                        type="button"
-                        class="btn-sltp-cancel"
-                        onClick={cancelEditing}
-                        title="Cancel (Escape)"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 1-Click Quick Presets */}
-                  <div class="sltp-quick-presets">
-                    <button
-                      type="button"
-                      class="btn-preset-pill"
-                      onClick={applyBreakEvenSnap}
-                      title="Snap SL to Entry + Spread Buffer"
-                    >
-                      🛡️ BE Snap
-                    </button>
-                    <button
-                      type="button"
-                      class="btn-preset-pill"
-                      onClick={applyAdrSnap}
-                      title="Snap SL to 1/4 ADR distance"
-                    >
-                      📐 1/4 ADR
-                    </button>
-                    <button
-                      type="button"
-                      class="btn-preset-pill"
-                      onClick={() => applyRrSnap(1.5)}
-                      title="Set TP to 1:1.5 Risk-Reward Ratio"
-                    >
-                      🎯 1:1.5 RR
-                    </button>
-                    <button
-                      type="button"
-                      class="btn-preset-pill"
-                      onClick={() => applyRrSnap(2.0)}
-                      title="Set TP to 1:2.0 Risk-Reward Ratio"
-                    >
-                      🎯 1:2 RR
-                    </button>
-                  </div>
-                </div>
-              </Show>
-            </div>
-          </td>
-
-          <td class="text-right">
+          {/* 10. Quick Actions */}
+          <td class="text-right pos-cell-actions">
             <div class="pos-actions-segmented">
               <div class="pos-actions-defensive">
                 <button
                   class="btn-pos-action btn-pos-be"
                   onClick={handleMoveToBreakEven}
                   disabled={isSubmitting()}
-                  title="Move Stop Loss to Entry Price + Spread Offset (True Zero-Loss Scratch)"
+                  title="Instant 1-Click: Move Stop Loss to Entry Price + Spread Offset"
                 >
                   🛡️ BE
                 </button>
@@ -573,3 +744,4 @@ export const PositionRow: Component<Props> = (props) => {
     </Show>
   );
 };
+

@@ -73,5 +73,27 @@
 
 ---
 
+## ⚡ Future Architecture: Native MQL5 Event-Driven Push Bridge & Provider Abstraction
+> 📚 **Detailed Blueprint**: See [STREAMING_PLAN.md](./STREAMING_PLAN.md) for full protocol specs, benchmarks, and MQL5 EA blueprints.
+
+### 6. 🔌 Provider Abstraction Layer (Bridge Pattern & Safe Fallbacks)
+- [ ] **Decoupled Architecture (`providers/`)**:
+  - `IMarketDataProvider`: Standardized interface for ticks, symbol specifications, trade history, and account metrics.
+  - `IExecutionProvider`: Standardized interface for order execution, inline SL/TP modification, partial closes (50%), and emergency close all.
+- [ ] **Transparent Fallback Hierarchy**:
+  - Automatically promotes to `SocketPushProvider` when `RiskBridgeEA.mq5` connects.
+  - Falls back seamlessly to `MT5FallbackProvider` (`MetaTrader5` C-extension polling) if the EA is not attached or drops.
+  - Falls back to `MockDataProvider` for offline/cross-platform development.
+
+### 7. 🚀 Native MQL5 TCP Socket Push & RPC Bridge (`RiskBridgeEA.mq5`)
+- [ ] **Zero-DLL Socket Bridge**:
+  - Native MQL5 non-blocking sockets (`SocketCreate`, `SocketSend`) pushing sub-millisecond ticks on `OnTick()` and fills on `OnTradeTransaction()`.
+  - Dedicated bi-directional RPC channel (:9091) for $< 1\text{ms}$ position modifications and batch liquidations.
+- [ ] **FastAPI TCP Ingestion & UI Telemetry**:
+  - Background `asyncio.start_server` consuming NDJSON streams into FastAPI's WebSocket broadcaster.
+  - Live driver telemetry badge in Solid.js header (`⚡ Push: Active` vs `🔄 Polling Fallback`).
+
+---
+
 > [!NOTE]
 > All post-trade statistical audit tools (Monte Carlo simulation, MAE/MFE, R-multiples, calendar heatmaps, and slippage analytics) are housed in the dedicated [`trade_performance_analytics`](../trade_performance_analytics/IMPLEMENTATION_PLAN.md) module.

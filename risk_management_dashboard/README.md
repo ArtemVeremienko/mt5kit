@@ -3,8 +3,8 @@
 An enterprise-grade, high-frequency risk management and real-time position sizing platform for **MetaTrader 5 (MT5)**, powered by a fine-grained reactive **Solid.js + TypeScript** frontend and a high-performance **FastAPI** backend.
 
 > 📚 **Documentation**:
-> - [🤖 AGENTS.md](file:///d:/projects/metatrader5/risk_management_dashboard/AGENTS.md) — Autonomous agent & developer guidelines, state architecture, reactivity rules, and design tokens.
-> - [🖥️ FRONTEND.md](file:///d:/projects/metatrader5/risk_management_dashboard/FRONTEND.md) — Detailed frontend architecture, component tree, execution safety ergonomics, and WebSocket API specs.
+> - [🤖 AGENTS.md](./AGENTS.md) — Autonomous agent & developer guidelines, state architecture, reactivity rules, and design tokens.
+> - [🖥️ FRONTEND.md](./FRONTEND.md) — Detailed frontend architecture, component tree, execution safety ergonomics, and WebSocket API specs.
 
 ---
 

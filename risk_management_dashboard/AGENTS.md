@@ -10,7 +10,7 @@ The **MT5 Risk Management & Dynamic Lot Sizing Dashboard** is an institutional-g
 
 ### 🏗️ Monorepo & Technology Stack
 - **Backend**: Python 3.10+ / FastAPI / `MetaTrader5` IPC library / Asyncio WebSockets.
-- **Frontend**: [Solid.js 1.9+](file:///d:/projects/metatrader5/risk_management_dashboard/frontend/package.json) (Zero-VDOM Fine-Grained Reactive Framework) / [TypeScript 5.7+](file:///d:/projects/metatrader5/risk_management_dashboard/frontend/package.json) / [Vite 6.2+](file:///d:/projects/metatrader5/risk_management_dashboard/frontend/package.json).
+- **Frontend**: [Solid.js 1.9+](./frontend/package.json) (Zero-VDOM Fine-Grained Reactive Framework) / [TypeScript 5.7+](./frontend/package.json) / [Vite 6.2+](./frontend/package.json).
 - **Styling**: Vanilla CSS Design System with Institutional Dark Mode tokens (`#0b0e14` canvas, `#131722` card, `#161b26` inset) and zero-jitter tabular typography (`font-variant-numeric: tabular-nums`).
 - **Build Output**: Compiled via Vite directly into `risk_management_dashboard/static/dist/`, served automatically by FastAPI with fallback to legacy `static/index.html`.
 
