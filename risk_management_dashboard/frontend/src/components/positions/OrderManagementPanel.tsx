@@ -96,14 +96,14 @@ export const OrderManagementPanel: Component = () => {
                         <span class="empty-state-icon">💼</span>
                         <div class="empty-state-title">No Open Positions Active</div>
                         <div class="empty-state-desc">
-                          Your MT5 account currently has zero open market exposure. Use the Market Screener to size and execute a position.
+                          Your MT5 account currently has zero open market exposure. Use the Risk Matrix to size and execute a position.
                         </div>
                         <button
                           type="button"
                           class="btn-reset-filters-hero"
                           onClick={() => preferencesStore.setActiveView('matrix')}
                         >
-                          📡 Switch to Risk Screener (Hotkey: 1)
+                          🎯 Switch to Risk Matrix (Hotkey: 1)
                         </button>
                       </div>
                     </td>

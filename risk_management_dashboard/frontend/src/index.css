@@ -206,11 +206,49 @@ body {
   gap: 4px;
 }
 
+.metric-mini-group.clickable {
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.metric-mini-group.clickable:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.metric-mini-group.is-overridden {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.metric-mini-group.is-overridden:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.6);
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.25);
+}
+
+.metric-mini-val.wc-highlight {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.wc-badge-dot {
+  font-size: 7px;
+  color: #f59e0b;
+  margin-left: 1px;
+  line-height: 1;
+}
+
 .metric-mini-label {
   font-size: 9px;
   font-weight: 800;
   color: var(--text-muted);
   letter-spacing: 0.4px;
+}
+
+.metric-mini-group.is-overridden .metric-mini-label {
+  color: #f59e0b;
 }
 
 .metric-mini-val {
@@ -329,51 +367,145 @@ body {
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* 2-Row Stacked Capsule Cluster */
-.header-capsules-stacked {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  justify-content: center;
-}
-
-.stacked-capsule-row {
+/* Horizontal Dual Header Pills */
+.header-pills-row {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
+}
+
+.header-nav-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: var(--bg-input);
-  border: 1px solid var(--bg-border);
-  border-left: 2.5px solid var(--accent-blue);
+  border: 1px solid var(--bg-border-subtle);
+  border-left: 3px solid var(--accent-blue);
   color: var(--text-primary);
-  padding: 1px 7px;
-  height: 16px;
-  border-radius: 3px;
+  padding: 0 10px;
+  height: 34px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 600;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
 
-.stacked-capsule-row:hover {
+.header-nav-pill:hover {
   border-color: var(--accent-blue);
-  background: #232836;
-  box-shadow: 0 0 6px rgba(41, 98, 255, 0.2);
+  background: #202636;
+  box-shadow: 0 0 10px rgba(41, 98, 255, 0.2);
 }
 
-.stacked-capsule-row .capsule-icon {
+.header-nav-pill.risk-pill {
+  border-left-color: var(--accent-blue);
+}
+
+.header-nav-pill.stats-pill {
+  border-left-color: var(--tier-color, var(--accent-blue));
+}
+
+.pill-icon {
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.9;
+  flex-shrink: 0;
+}
+
+.pill-tier-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+
+.pill-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pill-chip {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #e2e8f0;
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.2px;
+}
+
+.pill-chip.chip-risk-model {
+  color: #60a5fa;
+  font-weight: 700;
+}
+
+.pill-chip.chip-sl-preset {
+  color: #cbd5e1;
+}
+
+.pill-chip.chip-rr-ratio {
+  color: #6ee7b7;
+  font-weight: 600;
+}
+
+.pill-chip.chip-deals {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.pill-chip.chip-wr {
+  font-weight: 700;
+}
+
+.pill-chip.chip-wr.chip-wr-good {
+  color: #34d399;
+}
+
+.pill-chip.chip-wr.chip-wr-sub {
+  color: #f87171;
+}
+
+.pill-chip.chip-pf {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.pill-chip.chip-kelly {
+  color: #c084fc;
+}
+
+.pill-divider {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.18);
+  line-height: 1;
+  user-select: none;
+}
+
+.pill-arrow {
   font-size: 9px;
-}
-
-.stacked-capsule-row .capsule-text {
-  font-size: 9.5px;
-  color: #d8deeb;
-  letter-spacing: 0.1px;
-}
-
-.stacked-capsule-row .capsule-arrow {
-  font-size: 7.5px;
   color: var(--text-muted);
+  opacity: 0.6;
+  margin-left: 2px;
+  transition: opacity 0.15s ease;
+  line-height: 1;
+}
+
+.header-nav-pill:hover .pill-arrow {
+  opacity: 1;
+  color: #ffffff;
+}
+
+.btn-toggle-compact.has-one-click {
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.btn-toggle-compact.has-one-click:hover {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.16);
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.3);
 }
 
 /* Right Zone: Compact Toggles & Pulsing Connection Beacon */
@@ -1160,14 +1292,17 @@ tr.drag-over {
 }
 
 .spread-pill-mini {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   background: rgba(0, 242, 254, 0.08);
   color: #00f2fe;
-  padding: 1px 6px;
-  border-radius: 4px;
-  border: 1px solid rgba(0, 242, 254, 0.25);
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid rgba(0, 242, 254, 0.22);
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .price-ask-row {
@@ -1181,13 +1316,14 @@ tr.drag-over {
 
 .adr-val {
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   color: #ffffff;
   font-size: 13px;
   font-weight: 600;
 }
 
 /* ==========================================================================
-   STOP LOSS INPUT - EXPANDED & ERGONOMIC (76px + Glow Rings)
+   STOP LOSS INPUT - EXPANDED & ERGONOMIC (84px + Tabular Alignment)
    ========================================================================== */
 .sl-input-cell-wrapper {
   position: relative;
@@ -1197,20 +1333,28 @@ tr.drag-over {
 }
 
 .sl-input {
-  min-width: 68px;
-  width: 76px;
-  max-width: 88px;
+  min-width: 78px;
+  width: 84px;
+  max-width: 100px;
   height: 30px;
   text-align: center;
   background: #161b26;
   border: 1px solid #283044;
   color: #f0f3fa;
-  padding: 4px 8px;
+  padding: 4px 6px;
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sl-input::-webkit-outer-spin-button,
+.sl-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .sl-input:hover {
@@ -2240,6 +2384,43 @@ tr.drag-over {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
+}
+
+.confirm-optin-box {
+  margin-top: 14px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.confirm-optin-box:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.confirm-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.confirm-checkbox {
+  cursor: pointer;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent-blue);
+  flex-shrink: 0;
+}
+
+.confirm-checkbox-text {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  letter-spacing: 0.1px;
 }
 
 .file-upload-dropzone {

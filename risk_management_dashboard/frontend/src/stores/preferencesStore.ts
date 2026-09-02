@@ -139,6 +139,11 @@ function createPreferences() {
     localStorage.setItem('mt5_risk_one_click', next ? 'true' : 'false');
   };
 
+  const setOneClickEnabled = (val: boolean) => {
+    setOneClickEnabledSignal(val);
+    localStorage.setItem('mt5_risk_one_click', val ? 'true' : 'false');
+  };
+
   const toggleStatsBanner = () => {
     const next = !showStatsBanner();
     setShowStatsBannerSignal(next);
@@ -204,6 +209,7 @@ function createPreferences() {
     toggleTurboMode,
     oneClickEnabled,
     toggleOneClick,
+    setOneClickEnabled,
     activeView,
     setActiveView,
     showStatsBanner,

@@ -59,47 +59,34 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
     );
   };
 
-  const handleOneClickToggle = () => {
-    preferencesStore.toggleOneClick();
-    toastStore.addToast(
-      preferencesStore.oneClickEnabled() ? '⚡ One-Click Trading Enabled' : 'One-Click Trading Disabled',
-      preferencesStore.oneClickEnabled()
-        ? 'Orders will execute immediately upon clicking BUY or SELL'
-        : 'Order confirmation modal will appear before execution',
-      preferencesStore.oneClickEnabled() ? 'warning' : 'info'
-    );
-  };
-
-  // Compact Risk summary string
-  const riskSummaryText = createMemo(() => {
-    const wc = formatCurrency(preferencesStore.workingCapital());
+  // Structured Risk summary tags
+  const riskModelTag = createMemo(() => {
     const method = preferencesStore.riskMethod();
     const customPct = preferencesStore.customRiskPct();
-    const sl = preferencesStore.slMode();
-    const rr = preferencesStore.rrRatio();
     const stats = tradeStats();
 
-    let targetRisk = `${customPct.toFixed(1)}% Fixed`;
+    if (method === 'fractional') {
+      return `${customPct.toFixed(1)}% Fixed`;
+    }
     if (method === 'kelly_half') {
       const raw = (stats.kelly_half ?? 0) * 100;
       const minF = preferencesStore.minRiskFloorPct();
       const maxC = preferencesStore.maxRiskCeilingPct();
       const bounded = Math.max(minF, Math.min(maxC, raw));
-      targetRisk = `${bounded.toFixed(2)}% Half-Kelly`;
+      const suffix = raw < minF ? ' (Floor)' : raw > maxC ? ' (Cap)' : '';
+      return `${bounded.toFixed(2)}% ½-Kelly${suffix}`;
     }
-
-    return `${wc} · ${targetRisk} · ${sl} · 1:${rr} RR`;
+    return '1.0% Fixed';
   });
 
-  // Compact Strategy summary string
-  const strategySummaryText = createMemo(() => {
-    const trades = tradeStats().total_trades || 0;
-    const wr = ((tradeStats().win_rate || 0) * 100).toFixed(0);
-    const pf = (tradeStats().profit_factor || 0).toFixed(2);
-    const hk = ((tradeStats().kelly_half || 0) * 100).toFixed(2);
+  const slPresetTag = createMemo(() => preferencesStore.slMode());
+  const rrRatioTag = createMemo(() => `1:${preferencesStore.rrRatio()} RR`);
 
-    return `${trades} Trades · ${wr}% WR · PF ${pf} · 1/2 Kelly: ${hk}%`;
-  });
+  // Structured Strategy summary tags
+  const tradesCountTag = createMemo(() => `${tradeStats().total_trades || 0} Deals`);
+  const winRateTag = createMemo(() => `${((tradeStats().win_rate || 0) * 100).toFixed(0)}% WR`);
+  const profitFactorTag = createMemo(() => `PF ${(tradeStats().profit_factor || 0).toFixed(2)}`);
+  const halfKellyTag = createMemo(() => `½K ${((tradeStats().kelly_half || 0) * 100).toFixed(1)}%`);
 
   return (
     <header class="dashboard-header">
@@ -114,10 +101,10 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
             class="header-nav-btn"
             classList={{ active: activeView() === 'matrix' }}
             onClick={() => preferencesStore.setActiveView('matrix')}
-            title="Market Risk Screener Matrix (Hotkey: 1)"
+            title="Market Risk & Execution Matrix (Hotkey: 1)"
           >
-            <span class="btn-icon">📡</span>
-            <span class="btn-text">Screener</span>
+            <span class="btn-icon">🎯</span>
+            <span class="btn-text">Matrix</span>
             <span class="btn-badge">{symbolCount()}</span>
             <kbd class="btn-kbd">1</kbd>
           </button>
@@ -141,18 +128,34 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
         </div>
       </div>
 
-      {/* Center Zone: Account Telemetry + 2-Row Stacked Capsules */}
+      {/* Center Zone: Account Telemetry + Horizontal Dual Pills */}
       <div class="header-center-zone">
         <div class="account-inline-metrics-container" ref={accountInfoRef}>
           <div class="account-inline-metrics">
-            <div class="metric-mini-group" title="Deposited Balance in Broker Account">
-              <span class="metric-mini-label">BAL</span>
-              <span class="metric-mini-val font-mono">{formatCurrency(account().balance || 0.0)}</span>
-            </div>
-
-            <div class="metric-mini-group" title="Net Real-Time Equity">
-              <span class="metric-mini-label">EQ</span>
-              <span class="metric-mini-val font-mono">{formatCurrency(account().equity || 0.0)}</span>
+            <div
+              class="metric-mini-group clickable"
+              classList={{ 'is-overridden': preferencesStore.isWorkingCapitalCustom() }}
+              onClick={() => props.onOpenRiskModal()}
+              title={
+                preferencesStore.isWorkingCapitalCustom()
+                  ? `Custom Working Capital: ${formatCurrency(preferencesStore.workingCapital())} (MT5 Balance: ${formatCurrency(account().balance || 0.0)}) · Click to configure or reset`
+                  : `Deposited Balance in MT5 Account: ${formatCurrency(account().balance || 0.0)} · Click to customize Working Capital`
+              }
+            >
+              <span class="metric-mini-label">
+                {preferencesStore.isWorkingCapitalCustom() ? 'WC' : 'BAL'}
+              </span>
+              <span
+                class="metric-mini-val font-mono"
+                classList={{ 'wc-highlight': preferencesStore.isWorkingCapitalCustom() }}
+              >
+                {preferencesStore.isWorkingCapitalCustom()
+                  ? formatCurrency(preferencesStore.workingCapital())
+                  : formatCurrency(account().balance || 0.0)}
+              </span>
+              <Show when={preferencesStore.isWorkingCapitalCustom()}>
+                <span class="wc-badge-dot" title="Custom Working Capital Active">●</span>
+              </Show>
             </div>
 
             <div class="metric-mini-group" title="Floating Profit / Loss">
@@ -171,6 +174,11 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
                   ? formatCurrency(floatingProfit())
                   : '$0.00'}
               </span>
+            </div>
+
+            <div class="metric-mini-group" title="Net Real-Time Equity">
+              <span class="metric-mini-label">EQ</span>
+              <span class="metric-mini-val font-mono">{formatCurrency(account().equity || 0.0)}</span>
             </div>
 
             <button
@@ -227,29 +235,53 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
           </Show>
         </div>
 
-        {/* 2-Row Stacked Capsule Cluster */}
-        <div class="header-capsules-stacked">
+        {/* Horizontal Dual Pills */}
+        <div class="header-pills-row">
+          {/* Pill 1: Risk Rule Configuration */}
           <button
-            class="stacked-capsule-row"
+            class="header-nav-pill risk-pill"
             onClick={() => props.onOpenRiskModal()}
-            title="Click to configure Working Capital, Risk Model, SL Presets, and R:R Ratio"
+            title={`Active Risk Rules: ${riskModelTag()} · ${slPresetTag()} · ${rrRatioTag()} (Click to configure)`}
           >
-            <span class="capsule-icon">⚙️</span>
-            <span class="capsule-text">{riskSummaryText()}</span>
-            <span class="capsule-arrow">▾</span>
+            <span class="pill-icon">🎯</span>
+            <div class="pill-content">
+              <span class="pill-chip chip-risk-model">{riskModelTag()}</span>
+              <span class="pill-divider">|</span>
+              <span class="pill-chip chip-sl-preset">{slPresetTag()}</span>
+              <span class="pill-divider">|</span>
+              <span class="pill-chip chip-rr-ratio">{rrRatioTag()}</span>
+            </div>
+            <span class="pill-arrow">⚙️</span>
           </button>
 
+          {/* Pill 2: Strategy Performance Telemetry */}
           <button
-            class="stacked-capsule-row"
+            class="header-nav-pill stats-pill"
             style={{
-              'border-left-color': sampleInfo()?.badge_color || 'var(--accent-blue)',
+              '--tier-color': sampleInfo()?.badge_color || 'var(--accent-blue)',
             }}
             onClick={() => props.onOpenRiskModal()}
-            title={`Live MT5 Closed Deals: Avg Win $${(tradeStats().avg_win || 0).toFixed(2)} / Avg Loss $${(tradeStats().avg_loss || 0).toFixed(2)} · Payoff ${(tradeStats().payoff_ratio || 0).toFixed(2)} R/R · Half-Kelly: ${((tradeStats().kelly_half || 0) * 100).toFixed(2)}%`}
+            title={`Closed Deals Telemetry: Avg Win $${(tradeStats().avg_win || 0).toFixed(2)} / Avg Loss $${(tradeStats().avg_loss || 0).toFixed(2)} · Payoff ${(tradeStats().payoff_ratio || 0).toFixed(2)} R/R · Half-Kelly: ${((tradeStats().kelly_half || 0) * 100).toFixed(2)}% · Sample: ${sampleInfo()?.label || 'Baseline'}`}
           >
-            <span class="capsule-icon">📊</span>
-            <span class="capsule-text">{strategySummaryText()}</span>
-            <span class="capsule-arrow">⚙️</span>
+            <span class="pill-icon">📊</span>
+            <div class="pill-content">
+              <span class="pill-chip chip-deals">{tradesCountTag()}</span>
+              <span class="pill-divider">|</span>
+              <span
+                class="pill-chip chip-wr"
+                classList={{
+                  'chip-wr-good': (tradeStats().win_rate || 0) >= 0.5,
+                  'chip-wr-sub': (tradeStats().win_rate || 0) < 0.5,
+                }}
+              >
+                {winRateTag()}
+              </span>
+              <span class="pill-divider">|</span>
+              <span class="pill-chip chip-pf">{profitFactorTag()}</span>
+              <span class="pill-divider">|</span>
+              <span class="pill-chip chip-kelly">{halfKellyTag()}</span>
+            </div>
+            <span class="pill-arrow">📊</span>
           </button>
         </div>
       </div>
@@ -267,21 +299,18 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
         </button>
 
         <button
-          class="btn-toggle-compact"
-          classList={{ active: preferencesStore.oneClickEnabled() }}
-          onClick={handleOneClickToggle}
-          title={preferencesStore.oneClickEnabled() ? '1-Click Execution: ON' : '1-Click Execution: OFF'}
-        >
-          <span class="toggle-indicator"></span>
-          <span class="toggle-text">{preferencesStore.oneClickEnabled() ? '⚡ 1-Click' : '🛡️ 1-Click'}</span>
-        </button>
-
-        <button
           class="btn-toggle-compact btn-header-settings"
+          classList={{ 'has-one-click': preferencesStore.oneClickEnabled() }}
           onClick={() => props.onOpenRiskModal()}
-          title="Terminal Settings & Risk Configuration"
+          title={
+            preferencesStore.oneClickEnabled()
+              ? 'Terminal Settings (⚡ 1-Click Instant Execution Active)'
+              : 'Terminal Settings & Risk Configuration'
+          }
         >
-          <span class="toggle-text">⚙️ Settings</span>
+          <span class="toggle-text">
+            {preferencesStore.oneClickEnabled() ? '⚡ Settings' : '⚙️ Settings'}
+          </span>
         </button>
 
         {/* Pulsing Status Beacon */}

@@ -1,6 +1,7 @@
-import { Component, Show } from 'solid-js';
+import { Component, Show, createSignal } from 'solid-js';
 import { CalculatedSymbolResult } from '../../types';
 import { preferencesStore } from '../../stores/preferencesStore';
+import { toastStore } from '../../stores/toastStore';
 
 interface Props {
   trade: {
@@ -13,6 +14,20 @@ interface Props {
 }
 
 export const ConfirmTradeModal: Component<Props> = (props) => {
+  const [rememberOneClick, setRememberOneClick] = createSignal<boolean>(false);
+
+  const handleExecute = () => {
+    if (rememberOneClick()) {
+      preferencesStore.setOneClickEnabled(true);
+      toastStore.addToast(
+        '⚡ 1-Click Trading Enabled',
+        'Future orders will execute immediately. You can re-enable confirmation in Settings.',
+        'warning'
+      );
+    }
+    props.onConfirm();
+  };
+
   return (
     <Show when={props.trade}>
       {(trade) => (
@@ -75,6 +90,20 @@ export const ConfirmTradeModal: Component<Props> = (props) => {
                   </div>
                 </div>
               </div>
+
+              <div class="confirm-optin-box">
+                <label class="confirm-checkbox-label">
+                  <input
+                    type="checkbox"
+                    class="confirm-checkbox"
+                    checked={rememberOneClick()}
+                    onChange={(e) => setRememberOneClick(e.currentTarget.checked)}
+                  />
+                  <span class="confirm-checkbox-text">
+                    Don't show this confirmation again (Enable 1-Click Trading)
+                  </span>
+                </label>
+              </div>
             </div>
 
             <div class="modal-footer">
@@ -87,7 +116,7 @@ export const ConfirmTradeModal: Component<Props> = (props) => {
                   'btn-buy': trade().action === 'BUY',
                   'btn-sell': trade().action === 'SELL',
                 }}
-                onClick={props.onConfirm}
+                onClick={handleExecute}
                 disabled={props.isSubmitting}
               >
                 {props.isSubmitting ? 'Executing...' : `Execute ${trade().action}`}

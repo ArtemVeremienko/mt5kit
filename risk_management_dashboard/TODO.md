@@ -54,11 +54,25 @@
 ---
 
 ## 🎨 UI/UX & Ergonomics Polish
-- [ ] **Risk Controls Capsule UX/UI**:
-  - Improve UX/UI for `'Click to configure Working Capital, Risk Model, SL Presets, and R:R Ratio'` capsule.
-  - Smart Working Capital display: If `Working Capital == Balance`, don't show redundant info, or replace the balance value while highlighting that it has been manually overridden/edited.
-- [ ] **Statistics Capsule UX/UI**:
-  - Improve UX/UI for the statistic capsule — optimize size, layout, visual hierarchy, and text formatting.
+- [x] **Risk Controls Capsule UX/UI**:
+  - Improve UX/UI for `'Click to configure Working Capital, Risk Model, SL Presets, and R:R Ratio'` capsule with micro-badge chips.
+  - Smart Working Capital display: If `Working Capital == Balance`, displays clean standard `BAL`; when overridden, replaces `BAL` with highlighted amber `WC` badge and detailed tooltip + modal jump.
+- [x] **Statistics Capsule UX/UI**:
+  - Improve UX/UI for the statistic capsule — optimized size, segmented pill layout, dynamic color coding, and neutral telemetry icon.
+- [x] **Universal Order Execution Alignment (cTrader / MetaTrader DOM)**:
+  - Position `[ SELL ]` on the Left (Red) and `[ BUY ]` on the Right (Green) across all symbols.
+- [x] **Stop Loss Input Expansion & Tabular Numbers (Quantower Pattern)**:
+  - Expanded SL input width (84px–100px) and removed internal browser spinner arrows (`-webkit-appearance: none`) to eliminate glyph clipping on large integers (`GOLD`, `#USSPX500`, `#Japan225`).
+  - Strict vertical decimal alignment via `font-variant-numeric: tabular-nums`.
+- [ ] **Quick-Preset SL Hover Bar (cTrader Pattern)**:
+  - On hovering a symbol's SL box, display micro-chips (`[¼ ADR]`, `[½ ADR]`, `[1 ADR]`, `[1 ATR]`) for instant 1-click preset overrides without manual typing.
+- [ ] **Spread Volatility Alert Highlight (TradingView Pattern)**:
+  - Subtle amber highlight ring on `.spread-pill-mini` if current spread exceeds $2.0\times$ the symbol's 14-day median spread (rollover / news spike guard).
+- [ ] **Daily Session P&L Progress Bar (Quantower Pattern)**:
+  - Micro progress-bar embedded under the header `P&L` metric to track daily profit target or maximum daily drawdown limit.
+- [ ] **Hybrid Stacked Volatility Display in 14D ADR Column (Pips + % Subtext)**:
+  - Display primary tactile pips on top with normalized volatility `%` stacked as muted subtext beneath (e.g. `46.1 p` / `0.40%`).
+  - *Design Rationale*: Avoids a dangerous global `[Pips | %]` mode-switch during live execution, preventing fat-finger errors while providing cross-asset volatility comparison (Forex, Crypto, Indices, Commodities). Multi-unit conversion (`pips` ↔ `price` ↔ `%` ↔ `$ cash`) remains available inside the deep-dive/popover sizing modal.
 
 ---
 

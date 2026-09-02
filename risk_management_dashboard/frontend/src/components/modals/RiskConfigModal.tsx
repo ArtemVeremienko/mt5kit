@@ -257,6 +257,32 @@ export const RiskConfigModal: Component<Props> = (props) => {
                 Field automatically focused and selected when opening the in-place SL/TP editor.
               </span>
             </div>
+
+            <div class="modal-section-divider" />
+
+            {/* 1-Click Order Execution Setting */}
+            <div class="form-group">
+              <div class="control-label-row">
+                <label class="form-label">
+                  1-CLICK INSTANT EXECUTION:
+                </label>
+                <button
+                  type="button"
+                  class="btn-toggle-compact"
+                  classList={{ active: preferencesStore.oneClickEnabled() }}
+                  onClick={() => preferencesStore.toggleOneClick()}
+                  title="Toggle 1-Click Instant Execution"
+                >
+                  <span class="toggle-indicator"></span>
+                  <span class="toggle-text">
+                    {preferencesStore.oneClickEnabled() ? '⚡ Active (Instant)' : '🛡️ Confirmation Modal'}
+                  </span>
+                </button>
+              </div>
+              <span class="form-help-text">
+                When enabled, clicking BUY or SELL dispatches market orders instantly without displaying the confirmation modal.
+              </span>
+            </div>
           </div>
 
           <div class="modal-footer">

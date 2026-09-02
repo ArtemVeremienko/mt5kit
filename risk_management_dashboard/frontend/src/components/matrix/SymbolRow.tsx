@@ -233,19 +233,9 @@ export const SymbolRow: Component<Props> = (props) => {
             </div>
           </td>
 
-          {/* Col 7: Clean Action Execution Buttons */}
+          {/* Col 7: Clean Action Execution Buttons (Universal Convention: SELL Left, BUY Right) */}
           <td class="text-center">
             <div class="trade-btn-group">
-              <button
-                class="btn-trade btn-buy"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  props.onTradeClick(data(), 'BUY');
-                }}
-                title={`Instant BUY ${data().calc.lot_display} Lot ${data().spec.symbol}`}
-              >
-                BUY
-              </button>
               <button
                 class="btn-trade btn-sell"
                 onClick={(e) => {
@@ -255,6 +245,16 @@ export const SymbolRow: Component<Props> = (props) => {
                 title={`Instant SELL ${data().calc.lot_display} Lot ${data().spec.symbol}`}
               >
                 SELL
+              </button>
+              <button
+                class="btn-trade btn-buy"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onTradeClick(data(), 'BUY');
+                }}
+                title={`Instant BUY ${data().calc.lot_display} Lot ${data().spec.symbol}`}
+              >
+                BUY
               </button>
             </div>
           </td>
