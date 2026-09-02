@@ -139,7 +139,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
               onClick={() => props.onOpenRiskModal()}
               title={
                 preferencesStore.isWorkingCapitalCustom()
-                  ? `Custom Working Capital: ${formatCurrency(preferencesStore.workingCapital())} (MT5 Balance: ${formatCurrency(account().balance || 0.0)}) · Click to configure or reset`
+                  ? `Dynamic Working Capital: ${formatCurrency(preferencesStore.workingCapital())} (MT5: ${formatCurrency(account().balance || 0.0)} ${preferencesStore.reserveDelta()! >= 0 ? '+' : '-'} Delta: ${formatCurrency(Math.abs(preferencesStore.reserveDelta() || 0.0))}) · Click to configure or reset`
                   : `Deposited Balance in MT5 Account: ${formatCurrency(account().balance || 0.0)} · Click to customize Working Capital`
               }
             >

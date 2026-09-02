@@ -151,6 +151,7 @@ class MT5RiskFeed:
         self._volatility_cache: Dict[str, Dict[str, Any]] = {}
         self._cached_symbol_names: List[str] = []
         self._last_symbol_sync_time: float = 0.0
+        self._initial_risk_cache: Dict[int, Dict[str, Any]] = {}
 
         if not mock_mode:
             self._init_mt5()
@@ -949,7 +950,8 @@ class MT5RiskFeed:
 
     def get_open_positions(self) -> List[Dict[str, Any]]:
         """
-        Retrieves all currently open positions from MT5 terminal with live floating P&L and R-multiples.
+        Retrieves all currently open positions from MT5 terminal with live floating P&L,
+        immutable 1R baseline R-multiples, and positive stop break-even tracking.
         """
         if not self._is_connected or mt5 is None or self._mock_mode:
             return []
@@ -960,8 +962,11 @@ class MT5RiskFeed:
                 if positions is None:
                     return []
 
+                current_tickets = set()
                 res = []
                 for p in positions:
+                    ticket = int(p.ticket)
+                    current_tickets.add(ticket)
                     pos_type_str = "BUY" if p.type == mt5.ORDER_TYPE_BUY else "SELL"
                     digits = 5
                     pip_size = 0.0001
@@ -972,20 +977,71 @@ class MT5RiskFeed:
                         pip_multiplier = 10.0 if digits in (3, 5) else 1.0
                         pip_size = point * pip_multiplier if point > 0 else 0.0001
 
+                    is_buy = (pos_type_str == "BUY")
+
                     # Compute PnL in pips
-                    pnl_pips = 0.0
-                    if pos_type_str == "BUY":
+                    if is_buy:
                         pnl_pips = (p.price_current - p.price_open) / pip_size
                     else:
                         pnl_pips = (p.price_open - p.price_current) / pip_size
 
-                    # Compute R-Multiple if SL was defined
-                    r_multiple = None
+                    # Check if stop loss is currently in profit / break-even
+                    is_sl_in_profit = False
+                    sl_pips_profit = 0.0
                     if p.sl and p.sl > 0:
-                        risk_dist = abs(p.price_open - p.sl)
-                        if risk_dist > 0:
-                            gain_dist = (p.price_current - p.price_open) if pos_type_str == "BUY" else (p.price_open - p.price_current)
-                            r_multiple = round(gain_dist / risk_dist, 2)
+                        if is_buy:
+                            sl_diff = p.sl - p.price_open
+                        else:
+                            sl_diff = p.price_open - p.sl
+                        sl_pips_profit = sl_diff / pip_size
+                        if sl_pips_profit >= 0:
+                            is_sl_in_profit = True
+
+                    # 1R Baseline Management
+                    initial_sl = 0.0
+                    if ticket in self._initial_risk_cache:
+                        initial_sl = self._initial_risk_cache[ticket].get("initial_sl", 0.0)
+                    else:
+                        # Attempt to query historical open order for initial SL
+                        try:
+                            history_orders = mt5.history_orders_get(position=ticket)
+                            if history_orders and len(history_orders) > 0:
+                                for ho in history_orders:
+                                    if ho.sl and ho.sl > 0:
+                                        initial_sl = float(ho.sl)
+                                        break
+                        except Exception as hist_err:
+                            logger.debug(f"Could not retrieve history orders for #{ticket}: {hist_err}")
+
+                        # If historical order didn't have SL, check if current SL exists and is risking capital
+                        if initial_sl <= 0.0 and p.sl and p.sl > 0 and not is_sl_in_profit:
+                            initial_sl = float(p.sl)
+
+                        self._initial_risk_cache[ticket] = {
+                            "initial_sl": initial_sl,
+                            "open_price": float(p.price_open),
+                            "type": pos_type_str
+                        }
+
+                    # Compute Initial 1R Risk Distance in Pips
+                    initial_risk_pips = 0.0
+                    if initial_sl > 0:
+                        if is_buy:
+                            risk_dist = (p.price_open - initial_sl)
+                        else:
+                            risk_dist = (initial_sl - p.price_open)
+                        initial_risk_pips = max(0.1, risk_dist / pip_size)
+                    elif p.sl and p.sl > 0 and not is_sl_in_profit:
+                        initial_risk_pips = max(0.1, abs(sl_pips_profit))
+                    else:
+                        # Fallback to standard 20 pips or ADR-based baseline
+                        adr_spec = self._volatility_cache.get(p.symbol, {})
+                        adr_pips = adr_spec.get("adr_14_pips", 0.0)
+                        initial_risk_pips = (adr_pips * 0.25) if adr_pips > 0 else 20.0
+
+                    # Compute True Floating R-Multiple and Locked R
+                    r_multiple = round(pnl_pips / initial_risk_pips, 2) if initial_risk_pips > 0 else None
+                    locked_r = round(sl_pips_profit / initial_risk_pips, 2) if (is_sl_in_profit and initial_risk_pips > 0) else 0.0
 
                     category = self._determine_category(p.symbol, info.path if info else "")
                     point = info.point if info else (0.00001 if digits == 5 else 0.001)
@@ -1009,6 +1065,9 @@ class MT5RiskFeed:
                         "price_current": round(float(p.price_current), digits),
                         "sl": round(float(p.sl), digits) if p.sl else 0.0,
                         "tp": round(float(p.tp), digits) if p.tp else 0.0,
+                        "initial_sl": round(float(initial_sl), digits) if initial_sl > 0 else 0.0,
+                        "is_sl_in_profit": is_sl_in_profit,
+                        "locked_r": locked_r,
                         "profit": round(float(p.profit), 2),
                         "swap": round(float(p.swap), 2),
                         "pnl_pips": round(float(pnl_pips), 1),
@@ -1020,6 +1079,12 @@ class MT5RiskFeed:
                         "pip_size": pip_size,
                         "step_rule": step_rule
                     })
+
+                # Cleanup closed positions from initial risk cache
+                stale_tickets = [t for t in self._initial_risk_cache if t not in current_tickets]
+                for t in stale_tickets:
+                    del self._initial_risk_cache[t]
+
                 return res
             except Exception as e:
                 logger.error(f"Error in get_open_positions: {e}")
@@ -1171,6 +1236,243 @@ class MT5RiskFeed:
             res = self.close_position(ticket=p["ticket"])
             results.append(res)
         return results
+
+    def calculate_universal_be_price(self, ticket: int) -> Dict[str, Any]:
+        """
+        Calculates the universal cost-absorbing Break-Even price for an open position across
+        Forex, Equities, Metals, Indices, and Crypto by factoring in:
+        1. Entry Commission & Broker Fees (from mt5.history_deals_get)
+        2. Accumulated Swap/Financing in account currency
+        3. Real-time Spread cost
+        4. Nominal Safety Pad ($1.00 or 0.5 pip equivalent)
+        """
+        if not self._is_connected or mt5 is None or self._mock_mode:
+            return {"success": False, "message": "MT5 not connected"}
+
+        with self._mt5_lock:
+            try:
+                positions = mt5.positions_get(ticket=ticket)
+                if not positions or len(positions) == 0:
+                    return {"success": False, "message": f"Position #{ticket} not found"}
+
+                pos = positions[0]
+                symbol = pos.symbol
+                info = mt5.symbol_info(symbol)
+                tick = mt5.symbol_info_tick(symbol)
+                if not info or not tick:
+                    return {"success": False, "message": f"Could not retrieve spec for {symbol}"}
+
+                digits = info.digits
+                point = info.point if info.point > 0 else 0.00001
+                tick_size = info.trade_tick_size if info.trade_tick_size > 0 else point
+                tick_val = info.trade_tick_value if info.trade_tick_value > 0 else 1.0
+                pip_multiplier = 10.0 if digits in (3, 5) else 1.0
+                pip_size = point * pip_multiplier
+
+                vol = float(pos.volume)
+                point_val_for_pos = (tick_val / tick_size) * vol if (tick_size > 0 and vol > 0) else 10.0
+
+                # 1. Commission Calculation
+                commission_total = 0.0
+                fee_total = 0.0
+                try:
+                    deals = mt5.history_deals_get(position=ticket)
+                    if deals and len(deals) > 0:
+                        for d in deals:
+                            if getattr(d, 'entry', 0) in (0, 1):
+                                commission_total += abs(float(getattr(d, 'commission', 0.0)))
+                                fee_total += abs(float(getattr(d, 'fee', 0.0)))
+                        if len(deals) == 1:
+                            commission_total = commission_total * 2.0
+                except Exception as c_err:
+                    logger.debug(f"Could not query deals for #{ticket}: {c_err}")
+
+                # 2. Swap in account currency
+                swap_cost = abs(float(pos.swap)) if pos.swap < 0 else 0.0
+
+                # 3. Live Spread Cost
+                spread_points = (tick.ask - tick.bid) if (tick.ask and tick.bid) else (info.spread * point)
+                spread_dollars = (spread_points / tick_size) * tick_val * vol if tick_size > 0 else (5.0 * vol)
+
+                # 4. Nominal Safety Pad ($0.50 - $1.00 or 0.5 pip equivalent)
+                pip_val_for_pos = (pip_size / tick_size) * tick_val * vol if tick_size > 0 else (10.0 * vol)
+                safety_pad_dollars = max(1.0, 0.5 * pip_val_for_pos)
+
+                # Total Cost to Absorb
+                total_cost_dollars = commission_total + fee_total + swap_cost + spread_dollars + safety_pad_dollars
+
+                # Exact Price Offset Required
+                price_offset = total_cost_dollars / point_val_for_pos if point_val_for_pos > 0 else (spread_points + 0.5 * pip_size)
+
+                # Calculate Target BE Price
+                is_buy = (pos.type == mt5.ORDER_TYPE_BUY)
+                if is_buy:
+                    target_be = float(pos.price_open) + price_offset
+                    curr_price = float(tick.bid)
+                    is_profitable = (curr_price > target_be + (info.trade_stops_level * point))
+                else:
+                    target_be = float(pos.price_open) - price_offset
+                    curr_price = float(tick.ask)
+                    is_profitable = (curr_price < target_be - (info.trade_stops_level * point))
+
+                rounded_be = round(target_be, digits)
+
+                return {
+                    "success": True,
+                    "ticket": ticket,
+                    "symbol": symbol,
+                    "type": "BUY" if is_buy else "SELL",
+                    "price_open": float(pos.price_open),
+                    "current_price": curr_price,
+                    "target_be_price": rounded_be,
+                    "is_profitable": is_profitable,
+                    "commission_cost": round(commission_total + fee_total, 2),
+                    "swap_cost": round(swap_cost, 2),
+                    "spread_dollars": round(spread_dollars, 2),
+                    "total_cost_absorbed": round(total_cost_dollars, 2),
+                    "stops_level": info.trade_stops_level
+                }
+            except Exception as e:
+                logger.error(f"Error calculating universal BE price for #{ticket}: {e}")
+                return {"success": False, "message": str(e)}
+
+    def break_even_all_positions(self) -> Dict[str, Any]:
+        """
+        Intelligently snaps Stop Loss to Universal Cost-Absorbing Break-Even for all
+        eligible profitable open positions across Forex, Stocks, Metals, Indices, and Crypto.
+        Safely skips trades in loss or insufficient profit.
+        """
+        positions = self.get_open_positions()
+        modified_count = 0
+        skipped_count = 0
+        results = []
+
+        for p in positions:
+            ticket = p["ticket"]
+            be_calc = self.calculate_universal_be_price(ticket)
+            if not be_calc.get("success"):
+                results.append({"ticket": ticket, "success": False, "message": be_calc.get("message")})
+                skipped_count += 1
+                continue
+
+            if not be_calc.get("is_profitable", False):
+                results.append({
+                    "ticket": ticket,
+                    "symbol": p["symbol"],
+                    "success": False,
+                    "skipped": True,
+                    "reason": "Not sufficiently profitable to cover spread + commissions",
+                    "current_price": be_calc.get("current_price"),
+                    "target_be": be_calc.get("target_be_price")
+                })
+                skipped_count += 1
+                continue
+
+            target_be = be_calc["target_be_price"]
+            mod_res = self.modify_position_sltp(ticket=ticket, sl=target_be, tp=p.get("tp"))
+            if mod_res.get("success"):
+                modified_count += 1
+                results.append({
+                    "ticket": ticket,
+                    "symbol": p["symbol"],
+                    "success": True,
+                    "target_be": target_be,
+                    "message": f"BE locked at {target_be} (absorbed ${be_calc['total_cost_absorbed']} fees)"
+                })
+            else:
+                skipped_count += 1
+                results.append(mod_res)
+
+        return {
+            "success": True,
+            "count_modified": modified_count,
+            "count_skipped": skipped_count,
+            "total_positions": len(positions),
+            "results": results
+        }
+
+    def close_50_all_positions(self) -> Dict[str, Any]:
+        """
+        Executes TP1 (Take Profit 1) workflow across all profitable positions:
+        1. Closes 50% volume (clamped to broker steps).
+        2. Automatically snaps the remaining volume's Stop Loss to universal Break-Even.
+        3. If position is at minimum lot (e.g. 0.01 lot), preserves volume and moves SL to BE.
+        """
+        positions = self.get_open_positions()
+        scaled_out_count = 0
+        be_locked_count = 0
+        skipped_count = 0
+        results = []
+
+        for p in positions:
+            ticket = p["ticket"]
+            be_calc = self.calculate_universal_be_price(ticket)
+
+            if not be_calc.get("is_profitable", False):
+                skipped_count += 1
+                results.append({
+                    "ticket": ticket,
+                    "symbol": p["symbol"],
+                    "success": False,
+                    "skipped": True,
+                    "reason": "Position in drawdown / not sufficiently in profit for TP1"
+                })
+                continue
+
+            target_be = be_calc.get("target_be_price")
+
+            info = mt5.symbol_info(p["symbol"]) if (self._is_connected and mt5) else None
+            vol_min = float(info.volume_min) if (info and info.volume_min > 0) else 0.01
+            vol_step = float(info.volume_step) if (info and info.volume_step > 0) else 0.01
+
+            curr_vol = float(p["volume"])
+            half_vol_raw = curr_vol / 2.0
+
+            if curr_vol <= vol_min:
+                mod_res = self.modify_position_sltp(ticket=ticket, sl=target_be, tp=p.get("tp"))
+                if mod_res.get("success"):
+                    be_locked_count += 1
+                    results.append({
+                        "ticket": ticket,
+                        "symbol": p["symbol"],
+                        "success": True,
+                        "action": "BE_ONLY_MIN_LOT",
+                        "message": f"Min volume ({curr_vol} lots): Preserved full volume and locked SL at {target_be}"
+                    })
+                else:
+                    skipped_count += 1
+                    results.append(mod_res)
+            else:
+                steps = round(half_vol_raw / vol_step)
+                close_vol = max(vol_min, round(steps * vol_step, 6))
+
+                close_res = self.close_position(ticket=ticket, volume=close_vol)
+                if close_res.get("success"):
+                    scaled_out_count += 1
+                    mod_res = self.modify_position_sltp(ticket=ticket, sl=target_be, tp=p.get("tp"))
+                    if mod_res.get("success"):
+                        be_locked_count += 1
+                    results.append({
+                        "ticket": ticket,
+                        "symbol": p["symbol"],
+                        "success": True,
+                        "action": "SCALED_OUT_AND_BE",
+                        "closed_volume": close_vol,
+                        "target_be": target_be,
+                        "message": f"Closed {close_vol} lots and moved SL to BE ({target_be})"
+                    })
+                else:
+                    skipped_count += 1
+                    results.append(close_res)
+
+        return {
+            "success": True,
+            "count_scaled_out": scaled_out_count,
+            "count_be_locked": be_locked_count,
+            "count_skipped": skipped_count,
+            "total_positions": len(positions),
+            "results": results
+        }
 
 
 feed = MT5RiskFeed(mock_mode=False)

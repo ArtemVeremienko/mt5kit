@@ -27,6 +27,11 @@
   - 🛡️ **Move to Break-Even (BE)**: Snaps SL to entry price with spread buffer (`POST /api/position/modify`).
   - ✂️ **Partial Close (50%)**: Instant half-position profit taking.
   - 🛑 **Emergency Close All**: Parallelized liquidation across all open positions with 2-step armed safety confirmation.
+- [ ] **Smart Flatten vs. Close All (Configurable Liquidation Engine)**:
+  - Global user preference in Settings: `Emergency Action Mode` (`Close Positions Only` vs `Smart Flatten: Positions + Cancel Pending Orders`).
+  - **Close All Mode**: Exclusively liquidates open market positions (`mt5.positions_get()`).
+  - **Smart Flatten Mode**: Concurrently closes 100% of open positions AND deletes all active pending orders (`mt5.orders_get()`), guaranteeing true $0.00$ net exposure.
+  - UI reflection: Toolbar button and tooltip adapt dynamically (`🛑 Close All (N)` vs `🚨 Flatten All (N Pos + M Orders)`).
 - [x] **cTrader/TradingView Stacked SL/TP Popover**:
   - 3-tier stacked inputs: **Price**, **Pips**, **Loss $/Profit $** with instant bidirectional calculations.
   - Stepper touch controls (`-` / `+`) with modifier accelerators (Shift = 10x, Alt = 0.1x).

@@ -123,6 +123,9 @@ export interface OpenPosition {
   price_current: number;
   sl: number;
   tp: number;
+  initial_sl?: number;
+  is_sl_in_profit?: boolean;
+  locked_r?: number;
   profit: number;
   swap: number;
   pnl_pips: number;

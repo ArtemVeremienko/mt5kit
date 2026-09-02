@@ -2,40 +2,57 @@ import { createSignal, createMemo, createRoot } from 'solid-js';
 import { accountStore } from './accountStore';
 
 function createPreferences() {
-  const savedWcStr = localStorage.getItem('mt5_risk_working_capital');
-  const initialSavedWc =
-    savedWcStr !== null && !isNaN(parseFloat(savedWcStr)) && parseFloat(savedWcStr) > 0
-      ? parseFloat(savedWcStr)
-      : null;
+  const savedDeltaStr = localStorage.getItem('mt5_risk_reserve_delta');
+  let initialDelta: number | null = null;
 
-  const [customWorkingCapital, setCustomWorkingCapital] = createSignal<number | null>(initialSavedWc);
+  if (savedDeltaStr !== null && !isNaN(parseFloat(savedDeltaStr))) {
+    initialDelta = parseFloat(savedDeltaStr);
+  } else {
+    // Migration: Check legacy custom working capital
+    const legacyWcStr = localStorage.getItem('mt5_risk_working_capital');
+    if (legacyWcStr !== null && !isNaN(parseFloat(legacyWcStr))) {
+      const legacyTarget = parseFloat(legacyWcStr);
+      const curBal = accountStore.account().balance ?? 0;
+      initialDelta = Math.max(0, legacyTarget - curBal);
+      localStorage.setItem('mt5_risk_reserve_delta', initialDelta.toString());
+      localStorage.removeItem('mt5_risk_working_capital');
+    }
+  }
+
+  const [reserveDelta, setReserveDelta] = createSignal<number | null>(initialDelta);
 
   const workingCapital = createMemo<number>(() => {
-    const custom = customWorkingCapital();
-    if (custom !== null && custom > 0) {
-      return custom;
-    }
     const bal = accountStore.account().balance;
-    if (bal !== undefined && bal !== null && bal > 0) {
-      return bal;
+    const curBal = bal !== undefined && bal !== null && bal > 0 ? bal : 0;
+    const delta = reserveDelta();
+
+    if (delta !== null) {
+      return Math.max(1.0, curBal + delta);
+    }
+    if (curBal > 0) {
+      return curBal;
     }
     return 100.0;
   });
 
   const isWorkingCapitalCustom = createMemo<boolean>(() => {
-    return customWorkingCapital() !== null;
+    return reserveDelta() !== null;
   });
 
-  const setWorkingCapital = (val: number) => {
-    if (!isNaN(val) && val > 0) {
-      setCustomWorkingCapital(val);
-      localStorage.setItem('mt5_risk_working_capital', val.toString());
+  const setWorkingCapital = (targetVal: number) => {
+    if (!isNaN(targetVal) && targetVal > 0) {
+      const curBal = accountStore.account().balance ?? 0;
+      const delta = targetVal - curBal;
+      setReserveDelta(delta);
+      localStorage.setItem('mt5_risk_reserve_delta', delta.toString());
+      localStorage.removeItem('mt5_risk_working_capital');
     }
   };
 
   const resetWorkingCapital = () => {
+    localStorage.removeItem('mt5_risk_reserve_delta');
     localStorage.removeItem('mt5_risk_working_capital');
-    setCustomWorkingCapital(null);
+    setReserveDelta(null);
   };
 
   const rawRiskMethod = localStorage.getItem('mt5_risk_method') || 'fractional';
@@ -190,6 +207,7 @@ function createPreferences() {
 
   return {
     workingCapital,
+    reserveDelta,
     isWorkingCapitalCustom,
     setWorkingCapital,
     resetWorkingCapital,

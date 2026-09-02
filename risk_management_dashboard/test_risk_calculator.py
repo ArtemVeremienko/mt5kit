@@ -561,4 +561,236 @@ def test_position_id_grouping_logic():
     assert pnl_list[0] == 142.00
 
 
+def test_immutable_initial_risk_and_positive_stop_rmultiple():
+    """Verify that trailing SL to BE/profit does not distort R-Multiple calculation."""
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    from risk_management_dashboard.feed import MT5RiskFeed
+
+    feed = MT5RiskFeed(mock_mode=True)
+    feed._is_connected = True
+    feed._mock_mode = False
+
+    # Simulate position on EURUSD (SELL, Open: 1.15952, Current: 1.15906, Initial SL was 1.16102 (15 pips risk))
+    # SL is now trailed to 1.15945 (+0.7 pips in profit / BE)
+    mock_pos = SimpleNamespace(
+        ticket=320798347,
+        symbol="EURUSD",
+        type=1, # mt5.ORDER_TYPE_SELL
+        volume=0.74,
+        price_open=1.15952,
+        price_current=1.15906,
+        sl=1.15945, # in profit by 0.7 pips
+        tp=1.15820,
+        profit=34.04,
+        swap=0.0,
+        comment="",
+        magic=0,
+        time=1700000000
+    )
+
+    # Preset initial risk cache with the initial 15 pip SL (1.16102)
+    feed._initial_risk_cache[320798347] = {
+        "initial_sl": 1.16102,
+        "open_price": 1.15952,
+        "type": "SELL"
+    }
+
+    import risk_management_dashboard.feed as feed_module
+
+    mock_info = SimpleNamespace(
+        digits=5,
+        point=0.00001,
+        spread=5,
+        trade_stops_level=0,
+        path="Forex\\Majors"
+    )
+
+    mock_mt5 = MagicMock()
+    mock_mt5.positions_get.return_value = [mock_pos]
+    mock_mt5.symbol_info.return_value = mock_info
+    mock_mt5.ORDER_TYPE_BUY = 0
+    mock_mt5.ORDER_TYPE_SELL = 1
+
+    orig_mt5 = feed_module.mt5
+    try:
+        feed_module.mt5 = mock_mt5
+        feed._is_connected = True
+        feed._mock_mode = False
+
+        positions = feed.get_open_positions()
+        assert len(positions) == 1
+        pos_data = positions[0]
+
+        # Gain is 4.6 pips. Initial risk is 15.0 pips.
+        # R-Multiple should be 4.6 / 15.0 = +0.31 R (NOT 4.6 / 0.7 = +6.57 R!)
+        assert pos_data["r_multiple"] == 0.31
+        assert pos_data["is_sl_in_profit"] is True
+        assert pos_data["locked_r"] == 0.05 # 0.7 pips / 15.0 pips = 0.05R
+        assert pos_data["pnl_pips"] == 4.6
+    finally:
+        feed_module.mt5 = orig_mt5
+
+
+def test_universal_cost_absorbing_be_calculation():
+    """Verify that universal BE absorbs commission, swap, and spread across asset classes."""
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    from risk_management_dashboard.feed import MT5RiskFeed
+    import risk_management_dashboard.feed as feed_module
+
+    feed = MT5RiskFeed(mock_mode=True)
+    feed._is_connected = True
+    feed._mock_mode = False
+
+    # Mock stock position on AAPL (BUY 100 shares / 1.0 lot @ $220.00, $5.00 entry commission, -$2.00 swap, spread 0.05)
+    mock_pos = SimpleNamespace(
+        ticket=998877,
+        symbol="AAPL",
+        type=0, # BUY
+        volume=1.0,
+        price_open=220.00,
+        price_current=225.00, # comfortably in profit
+        sl=0.0,
+        tp=235.00,
+        swap=-2.00,
+        profit=500.00
+    )
+
+    mock_info = SimpleNamespace(
+        digits=2,
+        point=0.01,
+        trade_tick_size=0.01,
+        trade_tick_value=1.0, # $1.00 per 1-cent move for 100 shares
+        spread=5, # 5 cents = $0.05
+        trade_stops_level=0
+    )
+
+    mock_tick = SimpleNamespace(
+        bid=224.95,
+        ask=225.00
+    )
+
+    mock_deal = SimpleNamespace(
+        entry=0, # entry deal
+        commission=-5.00, # $5.00 entry fee (round-turn = $10.00)
+        fee=-0.50
+    )
+
+    mock_mt5 = MagicMock()
+    mock_mt5.positions_get.return_value = [mock_pos]
+    mock_mt5.symbol_info.return_value = mock_info
+    mock_mt5.symbol_info_tick.return_value = mock_tick
+    mock_mt5.history_deals_get.return_value = [mock_deal]
+    mock_mt5.ORDER_TYPE_BUY = 0
+    mock_mt5.ORDER_TYPE_SELL = 1
+
+    orig_mt5 = feed_module.mt5
+    try:
+        feed_module.mt5 = mock_mt5
+        res = feed.calculate_universal_be_price(998877)
+        assert res["success"] is True
+        assert res["is_profitable"] is True
+        # Total cost: round-turn commission ($10) + fee ($0.50) + swap ($2.00) + spread ($0.05 * 100 = $5.00) + safety pad ($1.00) = $18.50
+        # Point val: (0.01 / 0.01) * 1.0 = 1.0 ($100 per $1 move)
+        # Target BE should be > 220.00 (e.g. around 220.19)
+        assert res["target_be_price"] > 220.00
+        assert res["commission_cost"] == 10.50
+        assert res["swap_cost"] == 2.00
+    finally:
+        feed_module.mt5 = orig_mt5
+
+
+def test_bulk_be_and_tp1_profitability_filtering():
+    """Verify that break_even_all and close_50_all skip trades in drawdown."""
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+    from risk_management_dashboard.feed import MT5RiskFeed
+    import risk_management_dashboard.feed as feed_module
+
+    feed = MT5RiskFeed(mock_mode=True)
+    feed._is_connected = True
+    feed._mock_mode = False
+
+    # Position 1: EURUSD in profit (+50 pips)
+    pos_win = SimpleNamespace(
+        ticket=101,
+        symbol="EURUSD",
+        type=0, # BUY
+        volume=0.04,
+        price_open=1.08000,
+        price_current=1.08500,
+        sl=1.07500,
+        tp=1.09000,
+        profit=200.0,
+        swap=0.0,
+        comment="",
+        magic=0,
+        time=100
+    )
+
+    # Position 2: GBPUSD in drawdown (-30 pips)
+    pos_loss = SimpleNamespace(
+        ticket=102,
+        symbol="GBPUSD",
+        type=0, # BUY
+        volume=0.01,
+        price_open=1.30000,
+        price_current=1.29700,
+        sl=1.29500,
+        tp=1.31000,
+        profit=-30.0,
+        swap=0.0,
+        comment="",
+        magic=0,
+        time=200
+    )
+
+    mock_info = SimpleNamespace(
+        digits=5,
+        point=0.00001,
+        trade_tick_size=0.00001,
+        trade_tick_value=1.0,
+        spread=10,
+        trade_stops_level=0,
+        volume_min=0.01,
+        volume_step=0.01,
+        path="Forex\\Majors"
+    )
+
+    mock_tick_win = SimpleNamespace(bid=1.08490, ask=1.08500)
+    mock_tick_loss = SimpleNamespace(bid=1.29690, ask=1.29700)
+
+    mock_mt5 = MagicMock()
+    mock_mt5.positions_get.side_effect = lambda **kwargs: [pos_win, pos_loss] if not kwargs.get('ticket') else ([pos_win] if kwargs.get('ticket') == 101 else [pos_loss])
+    mock_mt5.symbol_info.return_value = mock_info
+    mock_mt5.symbol_info_tick.side_effect = lambda sym: mock_tick_win if sym == "EURUSD" else mock_tick_loss
+    mock_mt5.history_deals_get.return_value = []
+    mock_mt5.history_orders_get.return_value = []
+    mock_mt5.ORDER_TYPE_BUY = 0
+    mock_mt5.ORDER_TYPE_SELL = 1
+    mock_mt5.TRADE_ACTION_SLTP = 1
+    mock_mt5.TRADE_ACTION_DEAL = 2
+    mock_mt5.TRADE_RETCODE_DONE = 10009
+    mock_mt5.order_send.return_value = SimpleNamespace(retcode=10009, comment="Done")
+
+    orig_mt5 = feed_module.mt5
+    try:
+        feed_module.mt5 = mock_mt5
+
+        # Test BE All: Should modify 101, skip 102
+        be_res = feed.break_even_all_positions()
+        assert be_res["count_modified"] == 1
+        assert be_res["count_skipped"] == 1
+
+        # Test Close 50% All: Should scale out 101 (close 0.02) and lock BE, skip 102
+        tp1_res = feed.close_50_all_positions()
+        assert tp1_res["count_scaled_out"] == 1
+        assert tp1_res["count_be_locked"] == 1
+        assert tp1_res["count_skipped"] == 1
+    finally:
+        feed_module.mt5 = orig_mt5
+
+
+
 

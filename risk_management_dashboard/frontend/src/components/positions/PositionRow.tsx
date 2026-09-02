@@ -361,7 +361,8 @@ export const PositionRow: Component<Props> = (props) => {
     const isBuy = p.type === 'BUY';
     const diff = isBuy ? p.price_open - p.sl : p.sl - p.price_open;
     const pips = diff / rule.pipSize;
-    const isRisk = pips >= 0;
+    const isRisk = pips > 0;
+    const isBeOrProfit = pips <= 0;
     const absPips = Math.abs(pips);
     const calcResult = marketStore.getCalculatedResult(p.symbol);
     const pipVal = calcResult?.calc?.pip_value_per_lot || 10.0;
@@ -372,6 +373,7 @@ export const PositionRow: Component<Props> = (props) => {
       pipText: `${isRisk ? '-' : '+'}${absPips.toFixed(1)} ${rule.unitLabel}`,
       dollarText: `${isRisk ? '-$' : '+$'}${dollarAmount.toFixed(2)}`,
       isRisk,
+      isBeOrProfit,
     };
   });
 
@@ -533,12 +535,27 @@ export const PositionRow: Component<Props> = (props) => {
               >
                 {(info) => (
                   <div class="sltp-display-stacked">
-                    <span class="sltp-price-val sl-price-val tabular-num">{info().price}</span>
+                    <div class="sltp-price-row">
+                      <span
+                        class="sltp-price-val tabular-num"
+                        classList={{
+                          'sl-price-val': info().isRisk,
+                          'sl-price-locked': info().isBeOrProfit,
+                        }}
+                      >
+                        {info().price}
+                      </span>
+                      <Show when={info().isBeOrProfit}>
+                        <span class="sl-shield-micro-badge" title="Break-Even / Locked Profit Active">
+                          🛡️ BE
+                        </span>
+                      </Show>
+                    </div>
                     <span
                       class="sltp-sub-telemetry tabular-num"
                       classList={{
                         'text-risk': info().isRisk,
-                        'text-profit': !info().isRisk,
+                        'text-profit': info().isBeOrProfit,
                       }}
                     >
                       {info().pipText} ({info().dollarText})
@@ -1044,53 +1061,72 @@ export const PositionRow: Component<Props> = (props) => {
               when={pos().r_multiple !== null}
               fallback={<span class="text-muted">—</span>}
             >
-              <span
-                class="r-multiple-pill tabular-num"
-                classList={{
-                  'r-profit': (pos().r_multiple || 0) > 0,
-                  'r-loss': (pos().r_multiple || 0) < 0,
-                  'r-neutral': (pos().r_multiple || 0) === 0,
-                }}
-              >
-                {(pos().r_multiple || 0) > 0
-                  ? `+${pos().r_multiple} R`
-                  : `${pos().r_multiple || 0} R`}
-              </span>
+              <div class="r-multiple-stack">
+                <span
+                  class="r-multiple-pill tabular-num"
+                  classList={{
+                    'r-profit': (pos().r_multiple || 0) > 0,
+                    'r-loss': (pos().r_multiple || 0) < 0,
+                    'r-neutral': (pos().r_multiple || 0) === 0,
+                  }}
+                  title={pos().initial_sl ? `Floating R based on initial SL: ${pos().initial_sl}` : `Floating R-Multiple`}
+                >
+                  {(pos().r_multiple || 0) > 0
+                    ? `+${pos().r_multiple} R`
+                    : `${pos().r_multiple || 0} R`}
+                </span>
+                <Show when={(pos().locked_r || 0) > 0}>
+                  <span
+                    class="r-locked-badge tabular-num"
+                    title={`Stop Loss locks in +${pos().locked_r}R profit`}
+                  >
+                    🔒 +{pos().locked_r}R
+                  </span>
+                </Show>
+              </div>
             </Show>
           </td>
 
           {/* 10. Quick Actions */}
           <td class="text-right pos-cell-actions">
             <div class="pos-actions-segmented">
-              <div class="pos-actions-defensive">
-                <button
-                  class="btn-pos-action btn-pos-be"
-                  onClick={handleMoveToBreakEven}
-                  disabled={isSubmitting()}
-                  title="Instant 1-Click: Move Stop Loss to Entry Price + Spread Offset"
-                >
-                  🛡️ BE
-                </button>
-
-                <button
-                  class="btn-pos-action btn-pos-half"
-                  onClick={() => handleClosePosition(pos().volume / 2)}
-                  disabled={isSubmitting()}
-                  title="Close 50% of position volume"
-                >
-                  ✂️ 50%
-                </button>
-              </div>
-
-              <div class="pos-action-divider" />
+              <button
+                type="button"
+                class="btn-pos-action btn-pos-be"
+                onClick={handleMoveToBreakEven}
+                disabled={isSubmitting()}
+                title={`Instant Break-Even: Move SL to Entry + Spread Offset for #${pos().ticket}`}
+              >
+                <svg class="btn-pos-svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.225 3.34 9.67 8 11.317C14.66 16.67 18 12.225 18 7c0-.682-.057-1.35-.166-2.001A11.954 11.954 0 0110 1.944zM11 14a1 1 0 11-2 0 1 1 0 012 0zm0-7a1 1 0 10-2 0v3a1 1 0 102 0V7z" clip-rule="evenodd" />
+                </svg>
+                <span>BE</span>
+              </button>
 
               <button
+                type="button"
+                class="btn-pos-action btn-pos-half"
+                onClick={() => handleClosePosition(pos().volume / 2)}
+                disabled={isSubmitting()}
+                title={`Scale Out: Close 50% volume (${(pos().volume / 2).toFixed(2)} Lots) for #${pos().ticket}`}
+              >
+                <svg class="btn-pos-svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M5.5 2a3.5 3.5 0 101.996 6.368l2.584 2.584a3.5 3.5 0 101.414-1.414L8.91 6.954A3.5 3.5 0 005.5 2zm-1.5 3.5a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm10 8a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0z" clip-rule="evenodd" />
+                </svg>
+                <span>50%</span>
+              </button>
+
+              <button
+                type="button"
                 class="btn-pos-action btn-pos-close"
                 onClick={() => handleClosePosition()}
                 disabled={isSubmitting()}
-                title="Instantly liquidate position at market price"
+                title={`Liquidate: Close full position (${pos().volume.toFixed(2)} Lots) for #${pos().ticket}`}
               >
-                ✕ Close
+                <svg class="btn-pos-svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+                <span>CLOSE</span>
               </button>
             </div>
           </td>

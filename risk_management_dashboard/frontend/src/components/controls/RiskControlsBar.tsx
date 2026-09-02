@@ -1,10 +1,38 @@
-import { Component, Show, createMemo } from 'solid-js';
+import { Component, Show, createMemo, createSignal, onCleanup } from 'solid-js';
 import { preferencesStore } from '../../stores/preferencesStore';
 import { accountStore } from '../../stores/accountStore';
 import { marketStore } from '../../stores/marketStore';
 
 export const RiskControlsBar: Component = () => {
   const tradeStats = marketStore.tradeStats;
+
+  const [isEditingWc, setIsEditingWc] = createSignal(false);
+  const [wcDraft, setWcDraft] = createSignal('');
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  onCleanup(() => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+  });
+
+  const handleWcInput = (rawVal: string) => {
+    setWcDraft(rawVal);
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      const val = parseFloat(rawVal);
+      if (!isNaN(val) && val > 0) {
+        preferencesStore.setWorkingCapital(val);
+      }
+    }, 600);
+  };
+
+  const commitWcImmediately = (rawVal: string) => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    const val = parseFloat(rawVal);
+    if (!isNaN(val) && val > 0) {
+      preferencesStore.setWorkingCapital(val);
+    }
+    setIsEditingWc(false);
+  };
 
   const activeRiskPctLabel = createMemo(() => {
     const method = preferencesStore.riskMethod();
@@ -23,11 +51,33 @@ export const RiskControlsBar: Component = () => {
     return '1.0%';
   });
 
+  const formatWcDisplay = (val: number) => {
+    return val % 1 === 0 ? val.toString() : val.toFixed(2);
+  };
+
   return (
     <div class="risk-controls-panel">
       <div class="control-group">
         <label class="control-label" for="working-capital">
-          <span>WORKING CAPITAL ($)</span>
+          <div style={{ display: 'flex', 'align-items': 'center', gap: '6px' }}>
+            <span>WORKING CAPITAL ($)</span>
+            <Show when={preferencesStore.isWorkingCapitalCustom()}>
+              <span
+                class="control-value-tag font-mono"
+                style={{
+                  'font-size': '10px',
+                  'background': 'rgba(245, 158, 11, 0.15)',
+                  'color': '#fbbf24',
+                  'border': '1px solid rgba(245, 158, 11, 0.3)',
+                  'padding': '1px 5px',
+                  'border-radius': '4px',
+                }}
+                title={`Delta (Δ): ${preferencesStore.reserveDelta()! >= 0 ? '+' : ''}$${preferencesStore.reserveDelta()?.toFixed(2)} relative to MT5 balance`}
+              >
+                Δ: {preferencesStore.reserveDelta()! >= 0 ? '+' : '-'}${Math.abs(preferencesStore.reserveDelta() || 0).toFixed(0)}
+              </span>
+            </Show>
+          </div>
           <button
             class="btn-text-action"
             onClick={() => preferencesStore.resetWorkingCapital()}
@@ -46,10 +96,18 @@ export const RiskControlsBar: Component = () => {
             class="control-input"
             step="10"
             min="1"
-            value={preferencesStore.workingCapital()}
-            onInput={(e) => {
-              const val = parseFloat(e.currentTarget.value);
-              if (!isNaN(val) && val > 0) preferencesStore.setWorkingCapital(val);
+            value={isEditingWc() ? wcDraft() : formatWcDisplay(preferencesStore.workingCapital())}
+            onFocus={() => {
+              setIsEditingWc(true);
+              setWcDraft(formatWcDisplay(preferencesStore.workingCapital()));
+            }}
+            onInput={(e) => handleWcInput(e.currentTarget.value)}
+            onBlur={() => commitWcImmediately(wcDraft())}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                commitWcImmediately(wcDraft());
+                e.currentTarget.blur();
+              }
             }}
           />
         </div>

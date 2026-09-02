@@ -1,4 +1,4 @@
-import { Component, Show, createMemo } from 'solid-js';
+import { Component, Show, createMemo, createSignal, onCleanup } from 'solid-js';
 import { preferencesStore } from '../../stores/preferencesStore';
 import { accountStore } from '../../stores/accountStore';
 import { marketStore } from '../../stores/marketStore';
@@ -11,6 +11,38 @@ interface Props {
 
 export const RiskConfigModal: Component<Props> = (props) => {
   const tradeStats = marketStore.tradeStats;
+
+  const [isEditingWc, setIsEditingWc] = createSignal(false);
+  const [wcDraft, setWcDraft] = createSignal('');
+  let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+  onCleanup(() => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+  });
+
+  const handleWcInput = (rawVal: string) => {
+    setWcDraft(rawVal);
+    if (debounceTimer) clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      const val = parseFloat(rawVal);
+      if (!isNaN(val) && val > 0) {
+        preferencesStore.setWorkingCapital(val);
+      }
+    }, 600);
+  };
+
+  const commitWcImmediately = (rawVal: string) => {
+    if (debounceTimer) clearTimeout(debounceTimer);
+    const val = parseFloat(rawVal);
+    if (!isNaN(val) && val > 0) {
+      preferencesStore.setWorkingCapital(val);
+    }
+    setIsEditingWc(false);
+  };
+
+  const formatWcDisplay = (val: number) => {
+    return val % 1 === 0 ? val.toString() : val.toFixed(2);
+  };
 
   const activeRiskPctLabel = createMemo(() => {
     const method = preferencesStore.riskMethod();
@@ -47,9 +79,26 @@ export const RiskConfigModal: Component<Props> = (props) => {
             {/* Working Capital */}
             <div class="form-group">
               <div class="control-label-row">
-                <label class="form-label" for="modal-working-capital">
-                  WORKING CAPITAL ($):
-                </label>
+                <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
+                  <label class="form-label" for="modal-working-capital" style={{ 'margin-bottom': '0' }}>
+                    WORKING CAPITAL ($):
+                  </label>
+                  <Show when={preferencesStore.isWorkingCapitalCustom()}>
+                    <span
+                      class="control-value-tag font-mono"
+                      style={{
+                        'font-size': '11px',
+                        'background': 'rgba(245, 158, 11, 0.15)',
+                        'color': '#fbbf24',
+                        'border': '1px solid rgba(245, 158, 11, 0.3)',
+                        'padding': '1px 6px',
+                        'border-radius': '4px',
+                      }}
+                    >
+                      Delta: {preferencesStore.reserveDelta()! >= 0 ? '+' : '-'}${Math.abs(preferencesStore.reserveDelta() || 0).toFixed(2)}
+                    </span>
+                  </Show>
+                </div>
                 <button
                   class="btn-text-action"
                   onClick={() => preferencesStore.resetWorkingCapital()}
@@ -68,15 +117,50 @@ export const RiskConfigModal: Component<Props> = (props) => {
                   class="control-input"
                   step="10"
                   min="1"
-                  value={preferencesStore.workingCapital()}
-                  onInput={(e) => {
-                    const val = parseFloat(e.currentTarget.value);
-                    if (!isNaN(val) && val > 0) preferencesStore.setWorkingCapital(val);
+                  value={isEditingWc() ? wcDraft() : formatWcDisplay(preferencesStore.workingCapital())}
+                  onFocus={() => {
+                    setIsEditingWc(true);
+                    setWcDraft(formatWcDisplay(preferencesStore.workingCapital()));
+                  }}
+                  onInput={(e) => handleWcInput(e.currentTarget.value)}
+                  onBlur={() => commitWcImmediately(wcDraft())}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      commitWcImmediately(wcDraft());
+                      e.currentTarget.blur();
+                    }
                   }}
                 />
               </div>
+
+              <Show when={preferencesStore.isWorkingCapitalCustom()}>
+                <div
+                  style={{
+                    display: 'flex',
+                    'align-items': 'center',
+                    'justify-content': 'space-between',
+                    'font-size': '11px',
+                    'background': 'rgba(245, 158, 11, 0.08)',
+                    'border': '1px solid rgba(245, 158, 11, 0.25)',
+                    'border-radius': '6px',
+                    'padding': '6px 10px',
+                    'margin-top': '8px',
+                    'color': '#fbbf24',
+                    'font-family': 'monospace',
+                  }}
+                >
+                  <span>MT5: ${accountStore.account().balance?.toFixed(2) || '0.00'}</span>
+                  <span>{preferencesStore.reserveDelta()! >= 0 ? '+' : '-'}</span>
+                  <span>Delta (Δ): ${Math.abs(preferencesStore.reserveDelta() || 0).toFixed(2)}</span>
+                  <span>=</span>
+                  <span style={{ 'font-weight': 'bold' }}>
+                    Total: ${preferencesStore.workingCapital().toFixed(2)}
+                  </span>
+                </div>
+              </Show>
+
               <span class="form-help-text">
-                Base capital used for position sizing (independent of deposited margin cash).
+                Base capital used for position sizing. The virtual capital delta (Δ) dynamically compounds profits and deleverages losses as MT5 trades close, without depositing full capital at the broker.
               </span>
             </div>
 

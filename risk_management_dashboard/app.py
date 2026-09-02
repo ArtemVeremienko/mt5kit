@@ -455,6 +455,31 @@ async def close_all_positions():
     return {"results": results, "count": len(results)}
 
 
+@app.post("/api/position/break-even-all")
+async def break_even_all_positions():
+    """Snaps SL to Universal Cost-Absorbing BE for all eligible open positions."""
+    res = await asyncio.to_thread(feed.break_even_all_positions)
+    asyncio.create_task(manager.broadcast({
+        "type": "symbols_update",
+        "timestamp": asyncio.get_event_loop().time()
+    }))
+    return res
+
+
+@app.post("/api/position/close-50-all")
+async def close_50_all_positions():
+    """Closes 50% volume and locks BE on remaining volume across all eligible open positions."""
+    res = await asyncio.to_thread(feed.close_50_all_positions)
+    stats, sample_info = await get_trade_stats_payload()
+    asyncio.create_task(manager.broadcast({
+        "type": "symbols_update",
+        "trade_stats": stats,
+        "sample_info": sample_info,
+        "timestamp": asyncio.get_event_loop().time()
+    }))
+    return res
+
+
 @app.websocket("/ws/live")
 async def websocket_live(websocket: WebSocket):
     """

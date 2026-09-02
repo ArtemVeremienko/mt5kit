@@ -92,6 +92,33 @@ export const api = {
     return res.json();
   },
 
+  async breakEvenAllPositions(): Promise<{
+    success: boolean;
+    count_modified: number;
+    count_skipped: number;
+    total_positions: number;
+    results: Array<any>;
+  }> {
+    const res = await fetch('/api/position/break-even-all', {
+      method: 'POST',
+    });
+    return res.json();
+  },
+
+  async close50AllPositions(): Promise<{
+    success: boolean;
+    count_scaled_out: number;
+    count_be_locked: number;
+    count_skipped: number;
+    total_positions: number;
+    results: Array<any>;
+  }> {
+    const res = await fetch('/api/position/close-50-all', {
+      method: 'POST',
+    });
+    return res.json();
+  },
+
   async submitManualStats(params: {
     win_rate: number;
     payoff_ratio: number;
