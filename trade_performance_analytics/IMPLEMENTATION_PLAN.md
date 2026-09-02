@@ -111,6 +111,18 @@ A dedicated post-trade performance analytics, equity growth audit, and trade jou
 - **Calmar Ratio**: $\frac{\text{CAGR}}{\text{Max Drawdown \%}}$
 - **Expectancy ($E$ in \$ and $R$)**: $E = (p \times \bar{W}) - ((1 - p) \times \bar{L})$
 
+### 7. ⚖️ Optimal $f$ vs. Kelly Criterion Compounding & Sizing Curve Audit
+- **Ralph Vince Empirical Optimal $f$ Engine**:
+  $$\text{TWR}(f) = \prod_{i=1}^N \left(1 + f \cdot \frac{-P_i}{\text{MaxLoss}}\right)$$
+  - Vectorized numerical sweep across $f \in [0.01, 0.99]$ to find empirical $\text{Opt } f$ maximizing Terminal Wealth Relative.
+- **Interactive Geometric Compounding Curve Chart**:
+  - Plots the full growth curve and benchmarks:
+    - **Half-Kelly ($\frac{1}{2} f^*$)** & **Quarter-Kelly ($\frac{1}{4} f^*$)**
+    - **Ralph Vince $\text{Opt } f$** & **Safe $\frac{1}{3} \text{Opt } f$**
+    - **Overbetting / Ruin Boundary ($f > f^*$)**
+- **Parametric vs. Empirical Discrepancy Analysis**:
+  - Detects if fat-tail loss outliers (`MaxLoss`) cause Optimal $f$ to diverge sharply from parametric Kelly.
+
 ---
 
 ## 📁 Proposed File & Module Structure
