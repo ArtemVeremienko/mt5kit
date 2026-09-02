@@ -406,6 +406,124 @@ body {
   border-left-color: var(--tier-color, var(--accent-blue));
 }
 
+.header-nav-pill.read-only {
+  cursor: default;
+  user-select: text;
+}
+
+.header-nav-pill.read-only:hover {
+  border-color: #283044;
+  background: #161b26;
+  box-shadow: none;
+}
+
+.stats-pill-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.stats-telemetry-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 1000;
+  min-width: 320px;
+  background: #141824;
+  border: 1px solid #283044;
+  border-top: 2px solid var(--tier-color, var(--accent-blue));
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.9);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: popoverFadeIn 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: auto;
+}
+
+@keyframes popoverFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stats-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stats-popover-title-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stats-popover-icon {
+  font-size: 13px;
+}
+
+.stats-popover-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+}
+
+.stats-popover-badge {
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 1px 7px;
+  border-radius: var(--radius-sm);
+  border: 1px solid currentColor;
+  text-transform: uppercase;
+}
+
+.stats-popover-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+}
+
+.stats-popover-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stats-popover-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stats-popover-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.stats-popover-footer {
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.stats-popover-note {
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+
 .pill-icon {
   font-size: 12px;
   line-height: 1;

@@ -22,6 +22,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
   const sampleInfo = marketStore.sampleInfo;
 
   const [isAccountInfoOpen, setIsAccountInfoOpen] = createSignal<boolean>(false);
+  const [isStatsHovered, setIsStatsHovered] = createSignal<boolean>(false);
   let accountInfoRef: HTMLDivElement | undefined;
 
   // Global Escape & Click-Outside dismissal for Account Info popover
@@ -254,35 +255,109 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
             <span class="pill-arrow">⚙️</span>
           </button>
 
-          {/* Pill 2: Strategy Performance Telemetry */}
-          <button
-            class="header-nav-pill stats-pill"
-            style={{
-              '--tier-color': sampleInfo()?.badge_color || 'var(--accent-blue)',
-            }}
-            onClick={() => props.onOpenRiskModal()}
-            title={`Closed Deals Telemetry: Avg Win $${(tradeStats().avg_win || 0).toFixed(2)} / Avg Loss $${(tradeStats().avg_loss || 0).toFixed(2)} · Payoff ${(tradeStats().payoff_ratio || 0).toFixed(2)} R/R · Half-Kelly: ${((tradeStats().kelly_half || 0) * 100).toFixed(2)}% · Sample: ${sampleInfo()?.label || 'Baseline'}`}
+          {/* Pill 2: Strategy Performance Telemetry (Read-Only Indicative Display with HTML Popover) */}
+          <div
+            class="stats-pill-wrapper"
+            onMouseEnter={() => setIsStatsHovered(true)}
+            onMouseLeave={() => setIsStatsHovered(false)}
           >
-            <span class="pill-icon">📊</span>
-            <div class="pill-content">
-              <span class="pill-chip chip-deals">{tradesCountTag()}</span>
-              <span class="pill-divider">|</span>
-              <span
-                class="pill-chip chip-wr"
-                classList={{
-                  'chip-wr-good': (tradeStats().win_rate || 0) >= 0.5,
-                  'chip-wr-sub': (tradeStats().win_rate || 0) < 0.5,
-                }}
-              >
-                {winRateTag()}
-              </span>
-              <span class="pill-divider">|</span>
-              <span class="pill-chip chip-pf">{profitFactorTag()}</span>
-              <span class="pill-divider">|</span>
-              <span class="pill-chip chip-kelly">{halfKellyTag()}</span>
+            <div
+              class="header-nav-pill stats-pill read-only"
+              style={{
+                '--tier-color': sampleInfo()?.badge_color || 'var(--accent-blue)',
+              }}
+            >
+              <span class="pill-icon">📊</span>
+              <div class="pill-content">
+                <span class="pill-chip chip-deals">{tradesCountTag()}</span>
+                <span class="pill-divider">|</span>
+                <span
+                  class="pill-chip chip-wr"
+                  classList={{
+                    'chip-wr-good': (tradeStats().win_rate || 0) >= 0.5,
+                    'chip-wr-sub': (tradeStats().win_rate || 0) < 0.5,
+                  }}
+                >
+                  {winRateTag()}
+                </span>
+                <span class="pill-divider">|</span>
+                <span class="pill-chip chip-pf">{profitFactorTag()}</span>
+                <span class="pill-divider">|</span>
+                <span class="pill-chip chip-kelly">{halfKellyTag()}</span>
+              </div>
             </div>
-            <span class="pill-arrow">📊</span>
-          </button>
+
+            {/* Rich HTML Telemetry Popover */}
+            <Show when={isStatsHovered()}>
+              <div class="stats-telemetry-popover">
+                <div class="stats-popover-header">
+                  <div class="stats-popover-title-group">
+                    <span class="stats-popover-icon">📊</span>
+                    <span class="stats-popover-title">STRATEGY PERFORMANCE TELEMETRY</span>
+                  </div>
+                  <span
+                    class="stats-popover-badge"
+                    style={{
+                      color: sampleInfo()?.badge_color || '#60a5fa',
+                      'border-color': `${sampleInfo()?.badge_color || '#60a5fa'}40`,
+                      'background-color': `${sampleInfo()?.badge_color || '#60a5fa'}18`,
+                    }}
+                  >
+                    {sampleInfo()?.label || 'Baseline'}
+                  </span>
+                </div>
+
+                <div class="stats-popover-grid">
+                  <div class="stats-popover-item">
+                    <span class="stats-popover-label">Total Closed Deals</span>
+                    <span class="stats-popover-val font-mono">{tradeStats().total_trades || 0}</span>
+                  </div>
+                  <div class="stats-popover-item">
+                    <span class="stats-popover-label">Win Rate</span>
+                    <span
+                      class="stats-popover-val font-mono font-bold"
+                      classList={{
+                        'text-profit': (tradeStats().win_rate || 0) >= 0.5,
+                        'text-loss': (tradeStats().win_rate || 0) < 0.5,
+                      }}
+                    >
+                      {((tradeStats().win_rate || 0) * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div class="stats-popover-item">
+                    <span class="stats-popover-label">Profit Factor</span>
+                    <span class="stats-popover-val font-mono">{(tradeStats().profit_factor || 0).toFixed(2)}</span>
+                  </div>
+                  <div class="stats-popover-item">
+                    <span class="stats-popover-label">Payoff Ratio (R:R)</span>
+                    <span class="stats-popover-val font-mono">{(tradeStats().payoff_ratio || 0).toFixed(2)}</span>
+                  </div>
+                  <div class="stats-popover-item">
+                    <span class="stats-popover-label">Average Win / Loss</span>
+                    <span class="stats-popover-val font-mono">
+                      <span class="text-profit">+${(tradeStats().avg_win || 0).toFixed(2)}</span>
+                      {' / '}
+                      <span class="text-loss">-${Math.abs(tradeStats().avg_loss || 0).toFixed(2)}</span>
+                    </span>
+                  </div>
+                  <div class="stats-popover-item">
+                    <span class="stats-popover-label">Dynamic Half-Kelly</span>
+                    <span class="stats-popover-val font-mono text-accent font-bold">
+                      {((tradeStats().kelly_half || 0) * 100).toFixed(2)}%
+                    </span>
+                  </div>
+                </div>
+
+                <div class="stats-popover-footer">
+                  <span class="stats-popover-note">
+                    {(tradeStats().total_trades || 0) < 100
+                      ? '⚠️ Sample < 100 deals: Sizing defaults to Fixed 1.0% until statistical confidence is reached.'
+                      : '✅ Statistically robust sample tier for dynamic fractional sizing.'}
+                  </span>
+                </div>
+              </div>
+            </Show>
+          </div>
         </div>
       </div>
 
