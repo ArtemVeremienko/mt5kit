@@ -12,7 +12,8 @@ import json
 import io
 import csv
 import logging
-from typing import Dict, List, Optional, Any, Set
+import dataclasses
+from typing import Dict, List, Optional, Any, Set, Tuple
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
@@ -20,15 +21,26 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from risk_management_dashboard.risk_calculator import (
-    calculate_trade_statistics,
-    calculate_lot_for_symbol,
-    TradeStats,
-    LotCalculationResult,
-    SampleSizeTier,
-    evaluate_sample_size
-)
-from risk_management_dashboard.feed import MT5RiskFeed
+try:
+    from risk_management_dashboard.risk_calculator import (
+        calculate_trade_statistics,
+        calculate_lot_for_symbol,
+        TradeStats,
+        LotCalculationResult,
+        SampleSizeTier,
+        evaluate_sample_size
+    )
+    from risk_management_dashboard.feed import MT5RiskFeed
+except ImportError:
+    from risk_calculator import (
+        calculate_trade_statistics,
+        calculate_lot_for_symbol,
+        TradeStats,
+        LotCalculationResult,
+        SampleSizeTier,
+        evaluate_sample_size
+    )
+    from feed import MT5RiskFeed
 
 logger = logging.getLogger("RiskApp")
 feed = MT5RiskFeed()
@@ -159,15 +171,22 @@ async def get_symbols():
     return await asyncio.to_thread(feed.get_market_symbols)
 
 
+async def get_trade_stats_payload() -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Fetches closed deals history, groups by position_id, and computes JSON-serializable TradeStats."""
+    trades_pnl = await asyncio.to_thread(feed.fetch_closed_deals_history)
+    stats = calculate_trade_statistics(trades_pnl)
+    stats_dict = dataclasses.asdict(stats)
+    return stats_dict, stats_dict.get("sample_info", {})
+
+
 @app.get("/api/trade-history")
 async def get_trade_history():
     """Returns trade statistics, Kelly metrics, and sample size tier."""
-    trades_pnl = await asyncio.to_thread(feed.fetch_closed_deals_history)
-    stats = calculate_trade_statistics(trades_pnl)
+    stats, sample_info = await get_trade_stats_payload()
     return {
         "stats": stats,
-        "sample_info": stats.sample_info,
-        "recent_trades": trades_pnl[-50:] if trades_pnl else []
+        "sample_info": sample_info,
+        "recent_trades": feed._cached_trades[-50:] if feed._cached_trades else []
     }
 
 
@@ -400,8 +419,11 @@ async def close_position(req: PositionCloseRequest):
     """Closes an open position (full or partial volume)."""
     res = await asyncio.to_thread(feed.close_position, ticket=req.ticket, volume=req.volume)
     if res.get("success"):
+        stats, sample_info = await get_trade_stats_payload()
         asyncio.create_task(manager.broadcast({
             "type": "symbols_update",
+            "trade_stats": stats,
+            "sample_info": sample_info,
             "timestamp": asyncio.get_event_loop().time()
         }))
     return res
@@ -423,8 +445,11 @@ async def modify_position(req: PositionModifyRequest):
 async def close_all_positions():
     """Closes all open positions in MT5."""
     results = await asyncio.to_thread(feed.close_all_positions)
+    stats, sample_info = await get_trade_stats_payload()
     asyncio.create_task(manager.broadcast({
         "type": "symbols_update",
+        "trade_stats": stats,
+        "sample_info": sample_info,
         "timestamp": asyncio.get_event_loop().time()
     }))
     return {"results": results, "count": len(results)}
@@ -440,6 +465,8 @@ async def websocket_live(websocket: WebSocket):
     
     # Per-client streaming worker
     async def client_streamer():
+        last_pos_count = -1
+        last_stats_time = asyncio.get_event_loop().time()
         try:
             while True:
                 interval = manager.get_interval(websocket)
@@ -447,29 +474,46 @@ async def websocket_live(websocket: WebSocket):
                 symbols = await asyncio.to_thread(feed.get_market_symbols)
                 account = await asyncio.to_thread(feed.get_account_summary)
                 positions = await asyncio.to_thread(feed.get_open_positions)
-                await websocket.send_json({
+                
+                curr_pos_count = len(positions) if positions else 0
+                now_time = asyncio.get_event_loop().time()
+                
+                payload = {
                     "type": "symbols_update",
                     "symbols": symbols,
                     "account": account,
                     "positions": positions,
-                    "timestamp": asyncio.get_event_loop().time()
-                })
+                    "timestamp": now_time
+                }
+                
+                # Check stats if position count decreased (e.g. SL/TP hit in MT5) or 5-second heartbeat
+                if (last_pos_count != -1 and curr_pos_count < last_pos_count) or (now_time - last_stats_time >= 5.0):
+                    stats, sample_info = await get_trade_stats_payload()
+                    payload["trade_stats"] = stats
+                    payload["sample_info"] = sample_info
+                    last_stats_time = now_time
+                
+                last_pos_count = curr_pos_count
+                await websocket.send_json(payload)
         except asyncio.CancelledError:
             pass
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"WebSocket client_streamer error: {e}", exc_info=True)
 
     streamer_task = asyncio.create_task(client_streamer())
     try:
-        # Send initial symbols, account state and open positions
+        # Send initial symbols, account state, open positions, and trade statistics
         symbols = await asyncio.to_thread(feed.get_market_symbols)
         account = await asyncio.to_thread(feed.get_account_summary)
         positions = await asyncio.to_thread(feed.get_open_positions)
+        stats, sample_info = await get_trade_stats_payload()
         await websocket.send_json({
             "type": "initial_symbols",
             "symbols": symbols,
             "account": account,
-            "positions": positions
+            "positions": positions,
+            "trade_stats": stats,
+            "sample_info": sample_info
         })
         while True:
             data = await websocket.receive_text()
@@ -490,8 +534,8 @@ async def websocket_live(websocket: WebSocket):
                     await websocket.send_json({"type": "pong"})
     except WebSocketDisconnect:
         pass
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"WebSocket unexpected error: {e}", exc_info=True)
     finally:
         streamer_task.cancel()
         await manager.disconnect(websocket)

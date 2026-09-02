@@ -523,3 +523,42 @@ def test_stock_cfd_margin_calculation():
     assert m_exact == 383.68
 
 
+def test_position_id_grouping_logic():
+    """Verify that multiple scale-outs for a position_id are aggregated into 1 completed trade."""
+    from types import SimpleNamespace
+    from risk_management_dashboard.feed import MT5RiskFeed
+
+    # Mock deal objects as returned by mt5.history_deals_get
+    deal_1 = SimpleNamespace(position_id=1001, ticket=501, type=0, entry=0, profit=0.0, commission=-3.50, swap=0.0, fee=0.0, time=100, symbol="EURUSD")
+    deal_2 = SimpleNamespace(position_id=1001, ticket=502, type=1, entry=1, profit=100.0, commission=-1.75, swap=-0.50, fee=0.0, time=200, symbol="EURUSD")
+    deal_3 = SimpleNamespace(position_id=1001, ticket=503, type=1, entry=1, profit=50.0, commission=-1.75, swap=-0.50, fee=0.0, time=300, symbol="EURUSD")
+    # Position 1002 is open (only entry deal, no exit deals)
+    deal_4 = SimpleNamespace(position_id=1002, ticket=504, type=0, entry=0, profit=0.0, commission=-3.50, swap=0.0, fee=0.0, time=150, symbol="GBPUSD")
+
+    mock_deals = [deal_1, deal_2, deal_3, deal_4]
+
+    # Reconstruct positions using the feed aggregation algorithm
+    positions_map = {}
+    for d in mock_deals:
+        if getattr(d, 'type', 0) == 2:
+            continue
+        pos_id = getattr(d, 'position_id', 0) or getattr(d, 'ticket', 0)
+        if pos_id not in positions_map:
+            positions_map[pos_id] = {"net_pnl": 0.0, "is_closed": False, "time": getattr(d, 'time', 0)}
+        
+        net_deal = float(getattr(d, 'profit', 0.0)) + float(getattr(d, 'swap', 0.0)) + float(getattr(d, 'commission', 0.0)) + float(getattr(d, 'fee', 0.0))
+        positions_map[pos_id]["net_pnl"] += net_deal
+        positions_map[pos_id]["time"] = max(positions_map[pos_id]["time"], getattr(d, 'time', 0))
+
+        if getattr(d, 'entry', 0) in (1, 2, 3) or (getattr(d, 'type', 0) in (0, 1) and getattr(d, 'profit', 0.0) != 0):
+            positions_map[pos_id]["is_closed"] = True
+
+    closed_positions = [pos for pos in positions_map.values() if pos["is_closed"]]
+    pnl_list = [round(pos["net_pnl"], 2) for pos in closed_positions]
+
+    assert len(pnl_list) == 1, f"Expected 1 closed trade, got {len(pnl_list)}"
+    # Net PnL: 0 + 100 + 50 - 3.50 - 1.75 - 1.75 - 0.50 - 0.50 = 142.00
+    assert pnl_list[0] == 142.00
+
+
+

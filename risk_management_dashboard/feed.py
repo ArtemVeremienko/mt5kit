@@ -762,23 +762,42 @@ class MT5RiskFeed:
                     deals = mt5.history_deals_get(from_dt, now)
                     
                     if deals is not None and len(deals) > 0:
-                        pnl_list = []
+                        # Group deals by position_id to reconstruct true round-turn completed Trades
+                        positions_map = {}
                         for d in deals:
                             # Exclude balance deposits/withdrawals (DEAL_TYPE_BALANCE = 2)
                             if getattr(d, 'type', 0) == 2:
                                 continue
-                            # Closed deals (ENTRY_OUT=1, ENTRY_INOUT=2, ENTRY_OUT_BY=3) or trading deals with profit != 0
-                            if d.entry in (1, 2, 3) or (d.type in (0, 1) and d.profit != 0):
-                                if symbol and d.symbol.upper() != symbol.upper():
-                                    continue
-                                if magic is not None and d.magic != magic:
-                                    continue
-                                
-                                net_pnl = float(d.profit) + float(d.swap) + float(d.commission) + float(d.fee)
-                                pnl_list.append(round(net_pnl, 2))
+                            if symbol and getattr(d, 'symbol', '').upper() != symbol.upper():
+                                continue
+                            if magic is not None and getattr(d, 'magic', None) != magic:
+                                continue
+
+                            pos_id = getattr(d, 'position_id', 0) or getattr(d, 'ticket', 0)
+                            if pos_id not in positions_map:
+                                positions_map[pos_id] = {
+                                    "net_pnl": 0.0,
+                                    "is_closed": False,
+                                    "time": getattr(d, 'time', 0)
+                                }
+                            
+                            net_deal = float(getattr(d, 'profit', 0.0)) + float(getattr(d, 'swap', 0.0)) + float(getattr(d, 'commission', 0.0)) + float(getattr(d, 'fee', 0.0))
+                            positions_map[pos_id]["net_pnl"] += net_deal
+                            positions_map[pos_id]["time"] = max(positions_map[pos_id]["time"], getattr(d, 'time', 0))
+
+                            # Position is closed if there is an exit deal (ENTRY_OUT=1, ENTRY_INOUT=2, ENTRY_OUT_BY=3) or profit != 0
+                            if getattr(d, 'entry', 0) in (1, 2, 3) or (getattr(d, 'type', 0) in (0, 1) and getattr(d, 'profit', 0.0) != 0):
+                                positions_map[pos_id]["is_closed"] = True
+
+                        # Filter only completed positions and sort by close time
+                        closed_positions = [
+                            pos for pos in positions_map.values() if pos["is_closed"]
+                        ]
+                        closed_positions.sort(key=lambda x: x["time"])
+                        pnl_list = [round(pos["net_pnl"], 2) for pos in closed_positions]
                         
                         if pnl_list:
-                            logger.info(f"Loaded {len(pnl_list)} closed deals from MT5 history.")
+                            logger.info(f"Loaded {len(pnl_list)} completed round-turn trades (from {len(deals)} deals) from MT5 history.")
                             self._cached_trades = pnl_list
                             return pnl_list
                 except Exception as e:

@@ -42,8 +42,10 @@ def main():
     if not args.no_browser:
         threading.Thread(target=open_browser, args=(url,), daemon=True).start()
 
+    import os
+    app_target = "app:app" if os.path.exists("app.py") else "risk_management_dashboard.app:app"
     uvicorn.run(
-        "risk_management_dashboard.app:app",
+        app_target,
         host=args.host,
         port=args.port,
         reload=args.reload,

@@ -84,7 +84,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
   const rrRatioTag = createMemo(() => formatRrRatio(preferencesStore.rrRatio()));
 
   // Structured Strategy summary tags
-  const tradesCountTag = createMemo(() => `${tradeStats().total_trades || 0} Deals`);
+  const tradesCountTag = createMemo(() => `${tradeStats().total_trades || 0} Trades`);
   const winRateTag = createMemo(() => `${((tradeStats().win_rate || 0) * 100).toFixed(0)}% WR`);
   const profitFactorTag = createMemo(() => `PF ${(tradeStats().profit_factor || 0).toFixed(2)}`);
   const halfKellyTag = createMemo(() => `½K ${((tradeStats().kelly_half || 0) * 100).toFixed(1)}%`);
@@ -309,7 +309,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
 
                 <div class="stats-popover-grid">
                   <div class="stats-popover-item">
-                    <span class="stats-popover-label">Total Closed Deals</span>
+                    <span class="stats-popover-label">Total Closed Trades</span>
                     <span class="stats-popover-val font-mono">{tradeStats().total_trades || 0}</span>
                   </div>
                   <div class="stats-popover-item">
@@ -351,7 +351,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
                 <div class="stats-popover-footer">
                   <span class="stats-popover-note">
                     {(tradeStats().total_trades || 0) < 100
-                      ? '⚠️ Sample < 100 deals: Sizing defaults to Fixed 1.0% until statistical confidence is reached.'
+                      ? '⚠️ Sample < 100 trades: Sizing defaults to Fixed 1.0% until statistical confidence is reached.'
                       : '✅ Statistically robust sample tier for dynamic fractional sizing.'}
                   </span>
                 </div>
