@@ -9,7 +9,6 @@ import { formatCurrency } from '../../utils/formatters';
 
 interface Props {
   onOpenRiskModal: () => void;
-  onOpenStrategyModal: () => void;
 }
 
 export const HeaderMetricsBar: Component<Props> = (props) => {
@@ -80,13 +79,14 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
     const rr = preferencesStore.rrRatio();
     const stats = tradeStats();
 
-    let targetRisk = `${customPct.toFixed(1)}%`;
-    if (method === 'kelly_full') targetRisk = `${((stats.kelly_full ?? 0) * 100).toFixed(1)}% Kelly`;
-    else if (method === 'kelly_half') targetRisk = `${((stats.kelly_half ?? 0) * 100).toFixed(1)}% 1/2 Kelly`;
-    else if (method === 'kelly_quarter') targetRisk = `${((stats.kelly_quarter ?? 0) * 100).toFixed(1)}% 1/4 Kelly`;
-    else if (method === 'optimal_f_full') targetRisk = `${((stats.optimal_f ?? 0) * 100).toFixed(1)}% Opt f`;
-    else if (method === 'optimal_f_half') targetRisk = `${((stats.optimal_f_half ?? 0) * 100).toFixed(1)}% 1/2 f`;
-    else if (method === 'optimal_f_quarter') targetRisk = `${((stats.optimal_f_quarter ?? 0) * 100).toFixed(1)}% 1/4 f`;
+    let targetRisk = `${customPct.toFixed(1)}% Fixed`;
+    if (method === 'kelly_half') {
+      const raw = (stats.kelly_half ?? 0) * 100;
+      const minF = preferencesStore.minRiskFloorPct();
+      const maxC = preferencesStore.maxRiskCeilingPct();
+      const bounded = Math.max(minF, Math.min(maxC, raw));
+      targetRisk = `${bounded.toFixed(2)}% Half-Kelly`;
+    }
 
     return `${wc} · ${targetRisk} · ${sl} · 1:${rr} RR`;
   });
@@ -96,8 +96,9 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
     const trades = tradeStats().total_trades || 0;
     const wr = ((tradeStats().win_rate || 0) * 100).toFixed(0);
     const pf = (tradeStats().profit_factor || 0).toFixed(2);
+    const hk = ((tradeStats().kelly_half || 0) * 100).toFixed(2);
 
-    return `${trades} Trades · ${wr}% WR · PF ${pf}`;
+    return `${trades} Trades · ${wr}% WR · PF ${pf} · 1/2 Kelly: ${hk}%`;
   });
 
   return (
@@ -115,7 +116,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
             onClick={() => preferencesStore.setActiveView('matrix')}
             title="Market Risk Screener Matrix (Hotkey: 1)"
           >
-            <span class="btn-icon">🎯</span>
+            <span class="btn-icon">📡</span>
             <span class="btn-text">Screener</span>
             <span class="btn-badge">{symbolCount()}</span>
             <kbd class="btn-kbd">1</kbd>
@@ -230,7 +231,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
         <div class="header-capsules-stacked">
           <button
             class="stacked-capsule-row"
-            onClick={props.onOpenRiskModal}
+            onClick={() => props.onOpenRiskModal()}
             title="Click to configure Working Capital, Risk Model, SL Presets, and R:R Ratio"
           >
             <span class="capsule-icon">⚙️</span>
@@ -243,12 +244,12 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
             style={{
               'border-left-color': sampleInfo()?.badge_color || 'var(--accent-blue)',
             }}
-            onClick={props.onOpenStrategyModal}
-            title={`Sample Tier: ${sampleInfo()?.tier || 'Informational'} (${sampleInfo()?.count || 0} trades). Click to view Strategy Profile, Optimal f, and Kelly math`}
+            onClick={() => props.onOpenRiskModal()}
+            title={`Live MT5 Closed Deals: Avg Win $${(tradeStats().avg_win || 0).toFixed(2)} / Avg Loss $${(tradeStats().avg_loss || 0).toFixed(2)} · Payoff ${(tradeStats().payoff_ratio || 0).toFixed(2)} R/R · Half-Kelly: ${((tradeStats().kelly_half || 0) * 100).toFixed(2)}%`}
           >
             <span class="capsule-icon">📊</span>
             <span class="capsule-text">{strategySummaryText()}</span>
-            <span class="capsule-arrow">▾</span>
+            <span class="capsule-arrow">⚙️</span>
           </button>
         </div>
       </div>
@@ -277,7 +278,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
 
         <button
           class="btn-toggle-compact btn-header-settings"
-          onClick={props.onOpenRiskModal}
+          onClick={() => props.onOpenRiskModal()}
           title="Terminal Settings & Risk Configuration"
         >
           <span class="toggle-text">⚙️ Settings</span>

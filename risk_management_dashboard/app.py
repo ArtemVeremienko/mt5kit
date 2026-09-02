@@ -41,8 +41,10 @@ class CalculationRequest(BaseModel):
     working_capital: float = Field(default=100.0, description="Virtual / Real Working Capital for risk budgeting")
     deposited_cash: float = Field(default=20.0, description="Broker account deposited equity for margin checks")
     leverage: float = Field(default=300.0, description="Broker account leverage (e.g. 300 for 1:300)")
-    risk_method: str = Field(default="fractional", description="Risk model: fractional, kelly_full, kelly_half, kelly_quarter, optimal_f_full, optimal_f_half, optimal_f_quarter")
+    risk_method: str = Field(default="fractional", description="Risk model: fractional, kelly_half")
     custom_risk_pct: float = Field(default=1.0, description="Fractional risk percentage (e.g. 1.0 = 1.0%)")
+    min_risk_floor_pct: float = Field(default=0.25, description="Quantitative risk floor (%)")
+    max_risk_ceiling_pct: float = Field(default=2.50, description="Quantitative risk ceiling (%)")
     global_sl_mode: str = Field(default="1/4 ADR", description="Global SL preset: 1/4 ADR, 1/3 ADR, 1/2 ADR, 1.0 ADR, ATR(14), 20 pips, 50 pips, custom")
     global_sl_pips: float = Field(default=20.0, description="Custom global SL pips when mode is custom")
     symbol_sl_overrides: Dict[str, float] = Field(default_factory=dict, description="Per-symbol SL pips overrides")
@@ -53,7 +55,6 @@ class ManualStatsRequest(BaseModel):
     win_rate: float = Field(default=0.55, ge=0.01, le=1.0)
     payoff_ratio: float = Field(default=1.5, gt=0.0)
     total_trades: int = Field(default=150, ge=1)
-    worst_loss: float = Field(default=100.0, gt=0.0)
 
 
 class LiveConnectionManager:
@@ -160,13 +161,12 @@ async def get_symbols():
 
 @app.get("/api/trade-history")
 async def get_trade_history():
-    """Returns trade statistics, Kelly/Optimal f metrics, and sample size tier."""
+    """Returns trade statistics, Kelly metrics, and sample size tier."""
     trades_pnl = await asyncio.to_thread(feed.fetch_closed_deals_history)
     stats = calculate_trade_statistics(trades_pnl)
     return {
         "stats": stats,
         "sample_info": stats.sample_info,
-        "twr_curve": stats.twr_curve,
         "recent_trades": trades_pnl[-50:] if trades_pnl else []
     }
 
@@ -223,7 +223,9 @@ async def calculate_risk_matrix(req: CalculationRequest):
             currency_base=spec.get("currency_base", "USD"),
             currency_profit=spec.get("currency_profit", "USD"),
             currency_margin=spec.get("currency_margin", "USD"),
-            exact_broker_margin=broker_margin
+            exact_broker_margin=broker_margin,
+            min_risk_floor_pct=req.min_risk_floor_pct,
+            max_risk_ceiling_pct=req.max_risk_ceiling_pct
         )
         
         if calc.is_clamped_to_min:
@@ -256,7 +258,8 @@ async def calculate_risk_matrix(req: CalculationRequest):
             contract_size=spec["trade_contract_size"], volume_min=spec["volume_min"], volume_max=spec["volume_max"],
             volume_step=spec["volume_step"], risk_method="kelly_half", custom_risk_pct=1.0, trade_stats=trade_stats,
             currency_base=spec.get("currency_base", "USD"), currency_profit=spec.get("currency_profit", "USD"),
-            currency_margin=spec.get("currency_margin", "USD")
+            currency_margin=spec.get("currency_margin", "USD"), min_risk_floor_pct=req.min_risk_floor_pct,
+            max_risk_ceiling_pct=req.max_risk_ceiling_pct
         )
         margin_hk = feed.calculate_margin(sym, alt_hk_pre.executable_lot, spec["ask"], req.leverage)
         alt_half_kelly = calculate_lot_for_symbol(
@@ -265,25 +268,8 @@ async def calculate_risk_matrix(req: CalculationRequest):
             contract_size=spec["trade_contract_size"], volume_min=spec["volume_min"], volume_max=spec["volume_max"],
             volume_step=spec["volume_step"], risk_method="kelly_half", custom_risk_pct=1.0, trade_stats=trade_stats,
             currency_base=spec.get("currency_base", "USD"), currency_profit=spec.get("currency_profit", "USD"),
-            currency_margin=spec.get("currency_margin", "USD"), exact_broker_margin=margin_hk
-        )
-
-        alt_opt_pre = calculate_lot_for_symbol(
-            symbol=sym, working_capital=req.working_capital, deposited_cash=req.deposited_cash, leverage=req.leverage,
-            sl_pips=sl_pips, pip_value_per_lot=spec["pip_value_per_lot"], market_price=spec["ask"],
-            contract_size=spec["trade_contract_size"], volume_min=spec["volume_min"], volume_max=spec["volume_max"],
-            volume_step=spec["volume_step"], risk_method="optimal_f_half", custom_risk_pct=1.0, trade_stats=trade_stats,
-            currency_base=spec.get("currency_base", "USD"), currency_profit=spec.get("currency_profit", "USD"),
-            currency_margin=spec.get("currency_margin", "USD")
-        )
-        margin_opt = feed.calculate_margin(sym, alt_opt_pre.executable_lot, spec["ask"], req.leverage)
-        alt_optimal_f = calculate_lot_for_symbol(
-            symbol=sym, working_capital=req.working_capital, deposited_cash=req.deposited_cash, leverage=req.leverage,
-            sl_pips=sl_pips, pip_value_per_lot=spec["pip_value_per_lot"], market_price=spec["ask"],
-            contract_size=spec["trade_contract_size"], volume_min=spec["volume_min"], volume_max=spec["volume_max"],
-            volume_step=spec["volume_step"], risk_method="optimal_f_half", custom_risk_pct=1.0, trade_stats=trade_stats,
-            currency_base=spec.get("currency_base", "USD"), currency_profit=spec.get("currency_profit", "USD"),
-            currency_margin=spec.get("currency_margin", "USD"), exact_broker_margin=margin_opt
+            currency_margin=spec.get("currency_margin", "USD"), exact_broker_margin=margin_hk,
+            min_risk_floor_pct=req.min_risk_floor_pct, max_risk_ceiling_pct=req.max_risk_ceiling_pct
         )
 
         results.append({
@@ -291,8 +277,7 @@ async def calculate_risk_matrix(req: CalculationRequest):
             "calc": calc,
             "comparison": {
                 "fractional_1pct": {"lot": alt_fractional.executable_lot, "risk_pct": alt_fractional.effective_risk_pct, "margin": alt_fractional.required_margin},
-                "half_kelly": {"lot": alt_half_kelly.executable_lot, "risk_pct": alt_half_kelly.effective_risk_pct, "margin": alt_half_kelly.required_margin},
-                "half_optimal_f": {"lot": alt_optimal_f.executable_lot, "risk_pct": alt_optimal_f.effective_risk_pct, "margin": alt_optimal_f.required_margin}
+                "half_kelly": {"lot": alt_half_kelly.executable_lot, "risk_pct": alt_half_kelly.effective_risk_pct, "margin": alt_half_kelly.required_margin}
             }
         })
 
@@ -347,12 +332,11 @@ async def upload_trades_csv(file: UploadFile = File(...)):
 
 @app.post("/api/manual-stats")
 async def set_manual_stats(req: ManualStatsRequest):
-    """Sets manual strategy performance parameters (Win Rate, Payoff, Total Trades, Worst Loss)."""
+    """Sets manual strategy performance parameters (Win Rate, Payoff, Total Trades)."""
     stats = calculate_trade_statistics(
         override_win_rate=req.win_rate,
         override_payoff_ratio=req.payoff_ratio,
-        override_total_trades=req.total_trades,
-        override_worst_loss=req.worst_loss
+        override_total_trades=req.total_trades
     )
     return {
         "status": "success",

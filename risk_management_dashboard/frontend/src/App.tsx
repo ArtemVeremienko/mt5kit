@@ -3,11 +3,8 @@ import { HeaderMetricsBar } from './components/header/HeaderMetricsBar';
 import { RiskMatrixTable } from './components/matrix/RiskMatrixTable';
 import { OrderManagementPanel } from './components/positions/OrderManagementPanel';
 import { RiskConfigModal } from './components/modals/RiskConfigModal';
-import { StrategyProfileModal } from './components/modals/StrategyProfileModal';
 import { DeepDiveModal } from './components/modals/DeepDiveModal';
 import { ConfirmTradeModal } from './components/modals/ConfirmTradeModal';
-import { ManualStatsModal } from './components/modals/ManualStatsModal';
-import { CsvUploadModal } from './components/modals/CsvUploadModal';
 import { ToastContainer } from './components/toasts/ToastContainer';
 import { api } from './services/api';
 import { wsService } from './services/websocket';
@@ -22,9 +19,6 @@ export const App: Component = () => {
   const [deepDiveItem, setDeepDiveItem] = createSignal<CalculatedSymbolResult | null>(null);
   const [pendingTrade, setPendingTrade] = createSignal<{ item: CalculatedSymbolResult; action: 'BUY' | 'SELL' } | null>(null);
   const [isRiskModalOpen, setIsRiskModalOpen] = createSignal<boolean>(false);
-  const [isStrategyModalOpen, setIsStrategyModalOpen] = createSignal<boolean>(false);
-  const [isManualStatsOpen, setIsManualStatsOpen] = createSignal<boolean>(false);
-  const [isCsvUploadOpen, setIsCsvUploadOpen] = createSignal<boolean>(false);
   const [isSubmittingOrder, setIsSubmittingOrder] = createSignal<boolean>(false);
 
   const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -38,11 +32,8 @@ export const App: Component = () => {
 
     if (e.key === 'Escape') {
       setIsRiskModalOpen(false);
-      setIsStrategyModalOpen(false);
       setDeepDiveItem(null);
       setPendingTrade(null);
-      setIsManualStatsOpen(false);
-      setIsCsvUploadOpen(false);
       return;
     }
 
@@ -144,7 +135,6 @@ export const App: Component = () => {
     <div class="dashboard-container">
       <HeaderMetricsBar
         onOpenRiskModal={() => setIsRiskModalOpen(true)}
-        onOpenStrategyModal={() => setIsStrategyModalOpen(true)}
       />
 
       <main class="dashboard-main">
@@ -160,24 +150,19 @@ export const App: Component = () => {
         </Show>
       </main>
 
-      {/* Modals */}
+      {/* Unified Settings Modal */}
       <RiskConfigModal
         isOpen={isRiskModalOpen()}
         onClose={() => setIsRiskModalOpen(false)}
       />
 
-      <StrategyProfileModal
-        isOpen={isStrategyModalOpen()}
-        onClose={() => setIsStrategyModalOpen(false)}
-        onOpenManualModal={() => setIsManualStatsOpen(true)}
-        onOpenCsvModal={() => setIsCsvUploadOpen(true)}
-      />
-
+      {/* Symbol Multi-Model Deep Dive Modal */}
       <DeepDiveModal
         item={deepDiveItem()}
         onClose={() => setDeepDiveItem(null)}
       />
 
+      {/* Pre-Execution Confirmation Modal */}
       <ConfirmTradeModal
         trade={pendingTrade()}
         onConfirm={() => {
@@ -188,20 +173,6 @@ export const App: Component = () => {
         onCancel={() => setPendingTrade(null)}
         isSubmitting={isSubmittingOrder()}
       />
-
-      <Show when={isManualStatsOpen()}>
-        <ManualStatsModal
-          isOpen={isManualStatsOpen()}
-          onClose={() => setIsManualStatsOpen(false)}
-        />
-      </Show>
-
-      <Show when={isCsvUploadOpen()}>
-        <CsvUploadModal
-          isOpen={isCsvUploadOpen()}
-          onClose={() => setIsCsvUploadOpen(false)}
-        />
-      </Show>
 
       {/* Toasts */}
       <ToastContainer />

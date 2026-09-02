@@ -9,15 +9,17 @@ export const RiskControlsBar: Component = () => {
   const activeRiskPctLabel = createMemo(() => {
     const method = preferencesStore.riskMethod();
     const customPct = preferencesStore.customRiskPct();
+    const minFloor = preferencesStore.minRiskFloorPct();
+    const maxCeiling = preferencesStore.maxRiskCeilingPct();
     const stats = tradeStats();
 
     if (method === 'fractional') return `${customPct.toFixed(1)}%`;
-    if (method === 'kelly_full') return `${((stats.kelly_full ?? 0) * 100).toFixed(1)}%`;
-    if (method === 'kelly_half') return `${((stats.kelly_half ?? 0) * 100).toFixed(1)}%`;
-    if (method === 'kelly_quarter') return `${((stats.kelly_quarter ?? 0) * 100).toFixed(1)}%`;
-    if (method === 'optimal_f_full') return `${((stats.optimal_f ?? 0) * 100).toFixed(1)}%`;
-    if (method === 'optimal_f_half') return `${((stats.optimal_f_half ?? 0) * 100).toFixed(1)}%`;
-    if (method === 'optimal_f_quarter') return `${((stats.optimal_f_quarter ?? 0) * 100).toFixed(1)}%`;
+    if (method === 'kelly_half') {
+      const rawPct = (stats.kelly_half ?? 0) * 100.0;
+      if (rawPct < minFloor) return `${minFloor.toFixed(2)}% (🛡️ Floor)`;
+      if (rawPct > maxCeiling) return `${maxCeiling.toFixed(2)}% (🔒 Capped)`;
+      return `${rawPct.toFixed(2)}%`;
+    }
     return '1.0%';
   });
 
@@ -65,12 +67,7 @@ export const RiskControlsBar: Component = () => {
           onChange={(e) => preferencesStore.setRiskMethod(e.currentTarget.value)}
         >
           <option value="fractional">Fixed Fractional (% of Capital)</option>
-          <option value="kelly_quarter">Quarter Kelly (Safe Expectancy)</option>
-          <option value="kelly_half">Half Kelly (Recommended)</option>
-          <option value="kelly_full">Full Kelly (Aggressive)</option>
-          <option value="optimal_f_quarter">Quarter Optimal f (Ralph Vince)</option>
-          <option value="optimal_f_half">Half Optimal f (Balanced)</option>
-          <option value="optimal_f_full">Full Optimal f (Max Growth)</option>
+          <option value="kelly_half">Dynamic Half-Kelly (f*/2)</option>
         </select>
       </div>
 

@@ -2,12 +2,7 @@ import { Component, Show } from 'solid-js';
 import { marketStore } from '../../stores/marketStore';
 import { preferencesStore } from '../../stores/preferencesStore';
 
-interface Props {
-  onOpenManualModal: () => void;
-  onOpenCsvModal: () => void;
-}
-
-export const StrategyStatsBanner: Component<Props> = (props) => {
+export const StrategyStatsBanner: Component = () => {
   const tradeStats = marketStore.tradeStats;
   const sampleInfo = marketStore.sampleInfo;
 
@@ -19,7 +14,7 @@ export const StrategyStatsBanner: Component<Props> = (props) => {
           <span class="stats-summary-title">Strategy Sample Profile</span>
           <span class="stats-divider">•</span>
           <span class="stats-summary-highlight">
-            {tradeStats().total_trades || 120} Trades
+            {tradeStats().total_trades || 0} Trades
           </span>
           <span class="stats-divider">•</span>
           <span class="stats-summary-highlight">
@@ -46,26 +41,6 @@ export const StrategyStatsBanner: Component<Props> = (props) => {
         </div>
 
         <div class="stats-accordion-right">
-          <button
-            class="btn-sm btn-ghost"
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onOpenManualModal();
-            }}
-            title="Configure manual strategy win rate, payoff ratio, and worst loss"
-          >
-            ⚙️ Strategy Params
-          </button>
-          <button
-            class="btn-sm btn-ghost"
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onOpenCsvModal();
-            }}
-            title="Upload CSV closed trades history"
-          >
-            📁 Import CSV
-          </button>
           <span class="accordion-toggle-icon">
             {preferencesStore.showStatsBanner() ? '▲ Collapse' : '▼ Expand'}
           </span>
@@ -94,23 +69,38 @@ export const StrategyStatsBanner: Component<Props> = (props) => {
             </div>
 
             <div class="stat-mini-card">
-              <div class="stat-mini-label">KELLY CRITERION (f*)</div>
+              <div class="stat-mini-label">DYNAMIC HALF-KELLY (f*/2)</div>
               <div class="stat-mini-val text-accent">
-                {((tradeStats().kelly_full ?? 0) * 100).toFixed(1)}%
+                {((tradeStats().kelly_half ?? 0) * 100).toFixed(2)}%
               </div>
               <div class="stat-mini-sub">
-                Half: {((tradeStats().kelly_half ?? 0) * 100).toFixed(1)}% | Qtr: {((tradeStats().kelly_quarter ?? 0) * 100).toFixed(1)}%
+                Full Kelly (f*): {((tradeStats().kelly_full ?? 0) * 100).toFixed(1)}%
               </div>
             </div>
 
             <div class="stat-mini-card">
-              <div class="stat-mini-label">OPTIMAL f (RALPH VINCE)</div>
-              <div class="stat-mini-val text-accent">
-                {((tradeStats().optimal_f ?? 0) * 100).toFixed(1)}%
-              </div>
-              <div class="stat-mini-sub">
-                Worst Loss: ${tradeStats().worst_loss?.toFixed(2) ?? '0.00'} | Half: {((tradeStats().optimal_f_half ?? 0) * 100).toFixed(1)}%
-              </div>
+              <Show
+                when={preferencesStore.riskMethod() === 'kelly_half'}
+                fallback={
+                  <>
+                    <div class="stat-mini-label">ACTIVE SIZING TARGET</div>
+                    <div class="stat-mini-val" style={{ color: 'var(--accent-blue)' }}>
+                      {preferencesStore.customRiskPct().toFixed(1)}% Fixed
+                    </div>
+                    <div class="stat-mini-sub">
+                      Deterministic Manual Sizing
+                    </div>
+                  </>
+                }
+              >
+                <div class="stat-mini-label">QUANTITATIVE RISK BOUNDS</div>
+                <div class="stat-mini-val" style={{ color: 'var(--accent-blue)' }}>
+                  {preferencesStore.minRiskFloorPct().toFixed(2)}% ↔ {preferencesStore.maxRiskCeilingPct().toFixed(2)}%
+                </div>
+                <div class="stat-mini-sub">
+                  Floor: {preferencesStore.minRiskFloorPct().toFixed(2)}% | Ceiling: {preferencesStore.maxRiskCeilingPct().toFixed(2)}%
+                </div>
+              </Show>
             </div>
           </div>
 

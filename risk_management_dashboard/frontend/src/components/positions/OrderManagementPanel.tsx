@@ -103,7 +103,7 @@ export const OrderManagementPanel: Component = () => {
                           class="btn-reset-filters-hero"
                           onClick={() => preferencesStore.setActiveView('matrix')}
                         >
-                          🎯 Switch to Risk Screener (Hotkey: 1)
+                          📡 Switch to Risk Screener (Hotkey: 1)
                         </button>
                       </div>
                     </td>

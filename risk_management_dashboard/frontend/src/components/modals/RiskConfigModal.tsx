@@ -14,28 +14,30 @@ export const RiskConfigModal: Component<Props> = (props) => {
   const activeRiskPctLabel = createMemo(() => {
     const method = preferencesStore.riskMethod();
     const customPct = preferencesStore.customRiskPct();
+    const minFloor = preferencesStore.minRiskFloorPct();
+    const maxCeiling = preferencesStore.maxRiskCeilingPct();
     const stats = tradeStats();
 
     if (method === 'fractional') return `${customPct.toFixed(1)}%`;
-    if (method === 'kelly_full') return `${((stats.kelly_full ?? 0) * 100).toFixed(1)}%`;
-    if (method === 'kelly_half') return `${((stats.kelly_half ?? 0) * 100).toFixed(1)}%`;
-    if (method === 'kelly_quarter') return `${((stats.kelly_quarter ?? 0) * 100).toFixed(1)}%`;
-    if (method === 'optimal_f_full') return `${((stats.optimal_f ?? 0) * 100).toFixed(1)}%`;
-    if (method === 'optimal_f_half') return `${((stats.optimal_f_half ?? 0) * 100).toFixed(1)}%`;
-    if (method === 'optimal_f_quarter') return `${((stats.optimal_f_quarter ?? 0) * 100).toFixed(1)}%`;
+    if (method === 'kelly_half') {
+      const rawPct = (stats.kelly_half ?? 0) * 100.0;
+      if (rawPct < minFloor) return `${minFloor.toFixed(2)}% (Floor)`;
+      if (rawPct > maxCeiling) return `${maxCeiling.toFixed(2)}% (Capped)`;
+      return `${rawPct.toFixed(2)}%`;
+    }
     return '1.0%';
   });
 
   return (
     <Show when={props.isOpen}>
-      <div class="modal-backdrop" onClick={props.onClose}>
+      <div class="modal-backdrop" onClick={() => props.onClose()}>
         <div class="modal-card" onClick={(e) => e.stopPropagation()}>
           <div class="modal-header">
             <div class="modal-title-group">
               <span class="modal-icon">⚙️</span>
               <h3 class="modal-title">Risk & Position Sizing Configuration</h3>
             </div>
-            <button class="modal-close-btn" onClick={props.onClose}>
+            <button class="modal-close-btn" onClick={() => props.onClose()}>
               ✕
             </button>
           </div>
@@ -91,19 +93,8 @@ export const RiskConfigModal: Component<Props> = (props) => {
                 value={preferencesStore.riskMethod()}
                 onChange={(e) => preferencesStore.setRiskMethod(e.currentTarget.value)}
               >
-                <optgroup label="Fixed Risk Models">
-                  <option value="fractional">Fixed Fractional (% of Capital)</option>
-                </optgroup>
-                <optgroup label="Kelly Criterion Models (Win Rate & Payoff)">
-                  <option value="kelly_half">Half Kelly (Recommended for Forex)</option>
-                  <option value="kelly_quarter">Quarter Kelly (Conservative)</option>
-                  <option value="kelly_full">Full Kelly (Aggressive Theoretical Max)</option>
-                </optgroup>
-                <optgroup label="Ralph Vince Optimal f Models (TWR Optimization)">
-                  <option value="optimal_f_half">Half Optimal f (Balanced Growth)</option>
-                  <option value="optimal_f_quarter">Quarter Optimal f (Conservative)</option>
-                  <option value="optimal_f_full">Full Optimal f (Aggressive TWR Peak)</option>
-                </optgroup>
+                <option value="fractional">Fixed Fractional (% of Capital)</option>
+                <option value="kelly_half">Dynamic Half-Kelly (f*/2) — Edge Proportional</option>
               </select>
             </div>
 
@@ -128,6 +119,65 @@ export const RiskConfigModal: Component<Props> = (props) => {
                 />
               </div>
             </Show>
+
+            {/* Quantitative Risk Boundaries (Only shown when Dynamic Half-Kelly is selected) */}
+            <Show when={preferencesStore.riskMethod() === 'kelly_half'}>
+              <div class="modal-section-divider" />
+              <div class="form-group">
+                <label class="form-label">
+                  QUANTITATIVE RISK BOUNDARIES:
+                </label>
+                <div style={{ display: 'grid', 'grid-template-columns': '1fr 1fr', gap: '12px', 'margin-top': '6px' }}>
+                  <div>
+                    <label class="control-label" for="modal-min-floor" style={{ 'font-size': '11px', 'margin-bottom': '4px' }}>
+                      MIN RISK FLOOR (%)
+                    </label>
+                    <div class="input-with-symbol">
+                      <input
+                        id="modal-min-floor"
+                        type="number"
+                        class="control-input"
+                        step="0.05"
+                        min="0.05"
+                        max="1.0"
+                        value={preferencesStore.minRiskFloorPct()}
+                        onInput={(e) => {
+                          const val = parseFloat(e.currentTarget.value);
+                          if (!isNaN(val) && val > 0) preferencesStore.setMinRiskFloorPct(val);
+                        }}
+                      />
+                      <span class="currency-suffix">%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label class="control-label" for="modal-max-ceiling" style={{ 'font-size': '11px', 'margin-bottom': '4px' }}>
+                      MAX RISK CEILING (%)
+                    </label>
+                    <div class="input-with-symbol">
+                      <input
+                        id="modal-max-ceiling"
+                        type="number"
+                        class="control-input"
+                        step="0.1"
+                        min="1.0"
+                        max="5.0"
+                        value={preferencesStore.maxRiskCeilingPct()}
+                        onInput={(e) => {
+                          const val = parseFloat(e.currentTarget.value);
+                          if (!isNaN(val) && val > 0) preferencesStore.setMaxRiskCeilingPct(val);
+                        }}
+                      />
+                      <span class="currency-suffix">%</span>
+                    </div>
+                  </div>
+                </div>
+                <span class="form-help-text">
+                  Enforces dynamic clamping on Half-Kelly during losing streaks (floor) or excessive sample edge (ceiling).
+                </span>
+              </div>
+            </Show>
+
+            <div class="modal-section-divider" />
 
             {/* Global Stop Loss Preset */}
             <div class="form-group">
@@ -210,7 +260,7 @@ export const RiskConfigModal: Component<Props> = (props) => {
           </div>
 
           <div class="modal-footer">
-            <button class="btn-primary" onClick={props.onClose}>
+            <button class="btn-primary" onClick={() => props.onClose()}>
               Done
             </button>
           </div>

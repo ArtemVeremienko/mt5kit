@@ -99,7 +99,11 @@ export interface LotCalculation {
   margin_utilization_display?: string;
   is_margin_exceeded?: boolean;
   margin_status?: 'healthy' | 'warning' | 'exceeded';
+  is_floor_clamped?: boolean;
+  is_ceiling_clamped?: boolean;
 }
+
+export type RiskMethod = 'fractional' | 'kelly_half';
 
 export interface CalculatedSymbolResult {
   spec: SymbolSpec;
@@ -107,7 +111,6 @@ export interface CalculatedSymbolResult {
   comparison: {
     fractional_1pct: ModelComparison;
     half_kelly: ModelComparison;
-    half_optimal_f: ModelComparison;
   };
 }
 
@@ -152,15 +155,11 @@ export interface TradeStats {
   avg_loss: number;
   payoff_ratio: number;
   profit_factor: number;
-  worst_loss: number;
   best_win: number;
   net_profit: number;
   kelly_full: number;
   kelly_half: number;
   kelly_quarter: number;
-  optimal_f: number;
-  optimal_f_half: number;
-  optimal_f_quarter: number;
   sample_info?: SampleSizeInfo;
 }
 

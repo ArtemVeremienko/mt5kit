@@ -20,63 +20,73 @@
 
 ### 2. 📊 Order Management Panel (Live Positions & Execution)
 - [x] **Live Open Positions Table**:
-  - Displays: `Symbol`, `Ticket #`, `Type (BUY/SELL)`, `Volume`, `Open Price`, `Current Price`, `Floating P&L ($ / R-multiple)`, `SL Price`, `TP Price`.
-- [x] **One-Click Position Controls**:
+  - Dedicated 10-column layout: `Ticket #`, `Symbol / Type`, `Volume`, `Open Price`, `Current Price`, `Stop Loss`, `Take Profit`, `Floating P&L ($ / pips)`, `R-Multiple`, `Actions`.
+  - Fixed table layout preventing numerical layout shifts and column jumping.
+- [x] **High-Speed Position Controls**:
   - ❌ **Instant Market Close**: One-click position liquidation (`POST /api/position/close`).
-  - 🛡️ **Move to Break-Even (BE)**: Snaps SL to entry price with live position modification (`POST /api/position/modify`).
+  - 🛡️ **Move to Break-Even (BE)**: Snaps SL to entry price with spread buffer (`POST /api/position/modify`).
   - ✂️ **Partial Close (50%)**: Instant half-position profit taking.
-  - ✏️ **Inline SL/TP Modifier**: Modify stop levels directly in the table.
-  - 🛑 **Emergency Close All**: Parallelized liquidation across all open positions (`POST /api/position/close-all`).
+  - 🛑 **Emergency Close All**: Parallelized liquidation across all open positions with 2-step armed safety confirmation.
+- [x] **cTrader/TradingView Stacked SL/TP Popover**:
+  - 3-tier stacked inputs: **Price**, **Pips**, **Loss $/Profit $** with instant bidirectional calculations.
+  - Stepper touch controls (`-` / `+`) with modifier accelerators (Shift = 10x, Alt = 0.1x).
+  - Quick-preset snap chips: `🛡️ Entry / BE`, `📐 1/4 ADR`, `📐 1/2 ADR`, `🎯 1:1.5 RR`, `🎯 1:2.0 RR`, `🎯 1:3.0 RR`.
+  - Configurable default autofocus preference (`price`, `pips`, `cash`) via Solid.js `use:autofocus` custom directive.
+  - Raw unformatted typing preservation with canonical `onBlur` formatting.
 
 ---
 
 ## ⚡ Next Architectural Milestone: Solid.js + Vite + TypeScript Enterprise Migration
 - [x] **Modular Component Architecture**:
-  - `<HeaderMetricsBar />`: Balance, Equity, Floating P&L, Leverage, Live Status.
-  - `<RiskControlsBar />`: Working Capital, Risk Sizing Selector, Global SL Mode, RR Ratio.
+  - `<HeaderMetricsBar />`: Balance, Equity, Floating P&L, Status, and Workspace Switcher (`📡 Screener` / `💼 Positions`).
+  - `<RiskControlsBar />`: Working Capital, Risk Sizing Selector (Fixed %, Kelly, Vince), Global SL Mode, RR Ratio.
   - `<StrategyStatsBanner />`: Collapsible sample size tier and Kelly / Vince Optimal $f$ metrics.
   - `<RiskMatrixTable />`: Fine-grained Signal-bound table rows with drag & drop reordering and symbol pinning.
   - `<OrderManagementPanel />`: Live position management table with one-click actions.
 - [x] **Fine-Grained Reactive Pipeline**:
-  - Pure Solid Signals (`createSignal`, `createMemo`) with zero Virtual DOM.
+  - Pure Solid Signals (`createSignal`, `createMemo`) with zero Virtual DOM overhead.
   - Microsecond direct Text/Attr bindings (`node.data = newPrice`) for deterministic sub-millisecond 60fps streaming.
-- [x] **Client Math & Type Safety**:
+- [x] **Client Math, Tooling & Type Safety**:
   - Strict TypeScript types for MT5 payloads, broker specs, and lot calculation models.
+  - ESLint v10 flat config (`eslint.config.js`) + TypeScript `typecheck` scripts (`npm run lint`, `npm run typecheck`).
   - Colocated `frontend/` workspace with Vite production build to `static/dist/`.
-  - Dedicated Web Worker for quantitative simulations and multi-asset margin calculations.
 
 ---
 
-## 🛡️ Phase 2: Live Execution Risk & Safety Guards (P1 Priority)
-
-### 3. 🛑 Daily Drawdown Circuit Breaker & Multi-Stage Equity Stop
-- [ ] **Baseline Equity Tracking**:
-  - Snapshot account equity at 00:00:00 MT5 server time.
-- [ ] **Multi-Stage Circuit Breakers**:
-  - **Soft Warning (3.0% Daily Loss)**: Amber banner, auto-halves recommended lot size.
-  - **Trade Lockout (4.5% Daily Loss)**: Disables all BUY / SELL execution buttons.
-  - **Hard Stop Liquidation (5.0% Daily Loss)**: Auto-closes open positions and locks terminal until midnight.
-
-### 4. 🛡️ Pre-Trade Execution Safety Gatekeeper
-- [ ] **Spread Blowout Filter**: Rejects execution if current spread exceeds $2.5\times$ 14D median spread.
-- [ ] **Anti-Double-Click Debounce**: Filters accidental duplicate order submissions within 3.0 seconds.
-- [ ] **Margin Health Gate**: Rejects orders that would breach the safety margin threshold.
+## 🎨 UI/UX & Ergonomics Polish
+- [ ] **Risk Controls Capsule UX/UI**:
+  - Improve UX/UI for `'Click to configure Working Capital, Risk Model, SL Presets, and R:R Ratio'` capsule.
+  - Smart Working Capital display: If `Working Capital == Balance`, don't show redundant info, or replace the balance value while highlighting that it has been manually overridden/edited.
+- [ ] **Statistics Capsule UX/UI**:
+  - Improve UX/UI for the statistic capsule — optimize size, layout, visual hierarchy, and text formatting.
 
 ---
 
-## 🌐 Phase 3: Real-Time Portfolio Risk (P2 Priority)
+## 🛡️ Phase 2: Pre-Trade Safety & Portfolio Telemetry (P1 Priority)
 
-### 5. 🌐 Real-Time Currency Exposure & Portfolio Heat Matrix
-- [ ] **Net Currency Exposure**: Computes net dollar exposure across USD, EUR, GBP, JPY, AUD, CAD, CHF, NZD.
-- [ ] **Total Portfolio Heat**: Real-time sum of total dollar risk across all open stop-losses:
-  $$\text{Portfolio Heat} = \sum_{k} |\text{OpenPrice}_k - \text{SL}_k| \times \text{Volume}_k \times \text{PipValue}_k$$
+### 3. 🛡️ Pre-Trade Execution Safety Gatekeeper
+- [ ] **Anti-Double-Click Debounce**:
+  - 3.0-second safety window on 1-Click execution buttons to prevent accidental duplicate order submissions.
+- [ ] **Spread Blowout Visual Warning / Soft Guard**:
+  - Amber visual badge and confirmation alert if current spread exceeds $2.5\times$ the 14-day median spread (e.g. news spikes, illiquid rollover).
+- [ ] **Margin Health Pre-Flight Check**:
+  - Pre-calculates margin requirements before order dispatch; disables execution if free margin is insufficient.
+- [ ] **Max Risk Per Trade Safety Ceiling (Optional Setting)**:
+  - User-configurable hard ceiling in Settings (e.g. max 2.0% risk) that prevents oversized manual trades.
+
+### 4. 🌐 Real-Time Portfolio Heat & Exposure Telemetry
+- [ ] **Total Portfolio Heat Gauge**:
+  - Real-time sum of total open stop-loss risk in currency and account percentage:
+    $$\text{Portfolio Heat} = \sum_{k} |\text{OpenPrice}_k - \text{SL}_k| \times \text{Volume}_k \times \text{PipValue}_k$$
+- [ ] **Net Currency Exposure Breakdown**:
+  - Computes net long/short dollar exposure aggregated across base currencies (USD, EUR, GBP, JPY, AUD, CAD, CHF, NZD).
 
 ---
 
 ## ⚡ Future Architecture: Native MQL5 Event-Driven Push Bridge & Provider Abstraction
 > 📚 **Detailed Blueprint**: See [STREAMING_PLAN.md](./STREAMING_PLAN.md) for full protocol specs, benchmarks, and MQL5 EA blueprints.
 
-### 6. 🔌 Provider Abstraction Layer (Bridge Pattern & Safe Fallbacks)
+### 5. 🔌 Provider Abstraction Layer (Bridge Pattern & Safe Fallbacks)
 - [ ] **Decoupled Architecture (`providers/`)**:
   - `IMarketDataProvider`: Standardized interface for ticks, symbol specifications, trade history, and account metrics.
   - `IExecutionProvider`: Standardized interface for order execution, inline SL/TP modification, partial closes (50%), and emergency close all.
@@ -85,7 +95,7 @@
   - Falls back seamlessly to `MT5FallbackProvider` (`MetaTrader5` C-extension polling) if the EA is not attached or drops.
   - Falls back to `MockDataProvider` for offline/cross-platform development.
 
-### 7. 🚀 Native MQL5 TCP Socket Push & RPC Bridge (`RiskBridgeEA.mq5`)
+### 6. 🚀 Native MQL5 TCP Socket Push & RPC Bridge (`RiskBridgeEA.mq5`)
 - [ ] **Zero-DLL Socket Bridge**:
   - Native MQL5 non-blocking sockets (`SocketCreate`, `SocketSend`) pushing sub-millisecond ticks on `OnTick()` and fills on `OnTradeTransaction()`.
   - Dedicated bi-directional RPC channel (:9091) for $< 1\text{ms}$ position modifications and batch liquidations.
@@ -96,4 +106,7 @@
 ---
 
 > [!NOTE]
-> All post-trade statistical audit tools (Monte Carlo simulation, MAE/MFE, R-multiples, calendar heatmaps, and slippage analytics) are housed in the dedicated [`trade_performance_analytics`](../trade_performance_analytics/IMPLEMENTATION_PLAN.md) module.
+> **Separation of Concerns**:
+> - **Trading Dashboard (This Project)**: Fast execution, dynamic position sizing math, high-frequency telemetry, and discretionary trade management.
+> - **24/7 Account & Trade Automation (MQL5 Layer)**: Any 24/7 automated trailing stops or account-level daily drawdown circuit breakers belong inside the native MQL5 EA layer (`RiskBridgeEA.mq5` / `ProtectionEA.mq5`), ensuring uninterrupted execution on VPS even when the web UI is closed.
+> - **Post-Trade Statistical Audit**: Historical trade analytics, Monte Carlo simulation, MAE/MFE, and calendar heatmaps are housed in the dedicated [`trade_performance_analytics`](../trade_performance_analytics/IMPLEMENTATION_PLAN.md) module.

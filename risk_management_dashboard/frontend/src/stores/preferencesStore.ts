@@ -38,12 +38,34 @@ function createPreferences() {
     setCustomWorkingCapital(null);
   };
 
-  const [riskMethod, setRiskMethodSignal] = createSignal<string>(
-    localStorage.getItem('mt5_risk_method') || 'fractional'
-  );
+  const rawRiskMethod = localStorage.getItem('mt5_risk_method') || 'fractional';
+  const initialRiskMethod = rawRiskMethod === 'kelly_half' ? 'kelly_half' : 'fractional';
+  const [riskMethod, setRiskMethodSignal] = createSignal<string>(initialRiskMethod);
+
   const [customRiskPct, setCustomRiskPctSignal] = createSignal<number>(
     parseFloat(localStorage.getItem('mt5_risk_custom_pct') || '1.0') || 1.0
   );
+  const [minRiskFloorPct, setMinRiskFloorPctSignal] = createSignal<number>(
+    parseFloat(localStorage.getItem('mt5_min_risk_floor') || '0.25') || 0.25
+  );
+  const [maxRiskCeilingPct, setMaxRiskCeilingPctSignal] = createSignal<number>(
+    parseFloat(localStorage.getItem('mt5_max_risk_ceiling') || '2.50') || 2.50
+  );
+
+  const setMinRiskFloorPct = (val: number) => {
+    if (!isNaN(val) && val > 0) {
+      setMinRiskFloorPctSignal(val);
+      localStorage.setItem('mt5_min_risk_floor', val.toString());
+    }
+  };
+
+  const setMaxRiskCeilingPct = (val: number) => {
+    if (!isNaN(val) && val > 0) {
+      setMaxRiskCeilingPctSignal(val);
+      localStorage.setItem('mt5_max_risk_ceiling', val.toString());
+    }
+  };
+
   const [slMode, setSlModeSignal] = createSignal<string>(
     localStorage.getItem('mt5_risk_sl_mode') || '1/4 ADR'
   );
@@ -170,6 +192,10 @@ function createPreferences() {
     setRiskMethod,
     customRiskPct,
     setCustomRiskPct,
+    minRiskFloorPct,
+    setMinRiskFloorPct,
+    maxRiskCeilingPct,
+    setMaxRiskCeilingPct,
     slMode,
     setSlMode,
     rrRatio,

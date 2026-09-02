@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 
 from risk_management_dashboard.risk_calculator import (
     calculate_kelly_fraction,
-    calculate_optimal_f_vince,
     calculate_trade_statistics,
     clamp_lot_to_broker_specs,
     calculate_required_margin,
@@ -59,15 +58,41 @@ def test_kelly_criterion_math():
     assert calculate_kelly_fraction(win_rate=1.0, payoff_ratio=2.0) == 1.0
 
 
-def test_optimal_f_vince():
-    """Test Ralph Vince Optimal f optimization on empirical returns."""
-    # Simple winning series: +$20, +$30, -$10, +$15, -$10
-    trades = [20.0, 30.0, -10.0, 15.0, -10.0]
-    opt_f, curve = calculate_optimal_f_vince(trades)
-    assert 0.0 < opt_f < 1.0
-    assert len(curve) > 0
-    # Check that TWR values exist
-    assert all("f" in c and "twr" in c for c in curve)
+def test_kelly_half_risk_clamping():
+    """Test Dynamic Half-Kelly risk bounds clamping."""
+    stats_low = calculate_trade_statistics(override_win_rate=0.30, override_payoff_ratio=0.8)
+    res_floor = calculate_lot_for_symbol(
+        symbol="EURUSD",
+        working_capital=1000.0,
+        deposited_cash=500.0,
+        leverage=100.0,
+        sl_pips=20.0,
+        pip_value_per_lot=10.0,
+        market_price=1.0850,
+        risk_method="kelly_half",
+        trade_stats=stats_low,
+        min_risk_floor_pct=0.25,
+        max_risk_ceiling_pct=2.50
+    )
+    assert res_floor.is_floor_clamped is True
+    assert res_floor.target_risk_pct == 0.25
+
+    stats_high = calculate_trade_statistics(override_win_rate=0.80, override_payoff_ratio=3.0)
+    res_ceiling = calculate_lot_for_symbol(
+        symbol="EURUSD",
+        working_capital=1000.0,
+        deposited_cash=500.0,
+        leverage=100.0,
+        sl_pips=20.0,
+        pip_value_per_lot=10.0,
+        market_price=1.0850,
+        risk_method="kelly_half",
+        trade_stats=stats_high,
+        min_risk_floor_pct=0.25,
+        max_risk_ceiling_pct=2.50
+    )
+    assert res_ceiling.is_ceiling_clamped is True
+    assert res_ceiling.target_risk_pct == 2.50
 
 
 def test_sample_size_reliability_tiers():
@@ -224,8 +249,7 @@ def test_fastapi_endpoints():
     manual_payload = {
         "win_rate": 0.60,
         "payoff_ratio": 1.8,
-        "total_trades": 350,
-        "worst_loss": 80.0
+        "total_trades": 350
     }
     res_manual = client.post("/api/manual-stats", json=manual_payload)
     assert res_manual.status_code == 200
@@ -257,15 +281,6 @@ def test_edge_cases_zero_and_negative():
     )
     assert res.sl_pips > 0
     assert res.executable_lot >= 0.01
-
-    # Optimal f with empty list
-    opt_f_empty, curve_empty = calculate_optimal_f_vince([])
-    assert opt_f_empty == 0.0
-    assert curve_empty == []
-
-    # Optimal f with all losses (negative expectancy)
-    opt_f_loss, _ = calculate_optimal_f_vince([-10.0, -20.0, -15.0])
-    assert opt_f_loss == 0.0
 
 
 def test_websocket_stream():

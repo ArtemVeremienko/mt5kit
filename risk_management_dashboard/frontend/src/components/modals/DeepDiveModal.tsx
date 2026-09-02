@@ -112,18 +112,11 @@ export const DeepDiveModal: Component<Props> = (props) => {
                       <td>${item().comparison.fractional_1pct.margin.toFixed(2)}</td>
                     </tr>
                     <tr>
-                      <td><strong>Half Kelly Criterion</strong></td>
-                      <td>{item().comparison.half_kelly.risk_pct.toFixed(1)}%</td>
+                      <td><strong>Dynamic Half-Kelly (Bounded)</strong></td>
+                      <td>{item().comparison.half_kelly.risk_pct.toFixed(2)}%</td>
                       <td>{item().comparison.half_kelly.lot} Lot</td>
                       <td>${item().comparison.half_kelly.risk_amount.toFixed(2)}</td>
                       <td>${item().comparison.half_kelly.margin.toFixed(2)}</td>
-                    </tr>
-                    <tr>
-                      <td><strong>Half Optimal f (Ralph Vince)</strong></td>
-                      <td>{item().comparison.half_optimal_f.risk_pct.toFixed(1)}%</td>
-                      <td>{item().comparison.half_optimal_f.lot} Lot</td>
-                      <td>${item().comparison.half_optimal_f.risk_amount.toFixed(2)}</td>
-                      <td>${item().comparison.half_optimal_f.margin.toFixed(2)}</td>
                     </tr>
                   </tbody>
                 </table>

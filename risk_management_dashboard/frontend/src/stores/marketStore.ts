@@ -30,13 +30,27 @@ function createMarketStore() {
     const lev = accountStore.account().leverage || 300.0;
     const method = preferencesStore.riskMethod();
     const customPct = preferencesStore.customRiskPct();
+    const minFloor = preferencesStore.minRiskFloorPct();
+    const maxCeiling = preferencesStore.maxRiskCeilingPct();
     const slM = preferencesStore.slMode();
     const overrides = preferencesStore.slOverrides();
     const stats = tradeStats();
 
     const map = new Map<string, CalculatedSymbolResult>();
     for (const s of symbols) {
-      const res = computeLocalRiskForResult(s, wc, depCash, lev, method, customPct, slM, overrides, stats);
+      const res = computeLocalRiskForResult(
+        s,
+        wc,
+        depCash,
+        lev,
+        method,
+        customPct,
+        slM,
+        overrides,
+        stats,
+        minFloor,
+        maxCeiling
+      );
       map.set(s.symbol, res);
     }
     return map;

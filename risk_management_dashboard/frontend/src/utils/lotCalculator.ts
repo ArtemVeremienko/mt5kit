@@ -9,7 +9,9 @@ export function computeLocalRiskForResult(
   customRiskPct: number,
   slMode: string,
   symbolSlOverrides: Record<string, number>,
-  tradeStats: Partial<TradeStats>
+  tradeStats: Partial<TradeStats>,
+  minRiskFloorPct: number = 0.25,
+  maxRiskCeilingPct: number = 2.50
 ): CalculatedSymbolResult {
   const symbol = spec.symbol;
   const digits = spec.digits !== undefined ? spec.digits : 5;
@@ -42,20 +44,22 @@ export function computeLocalRiskForResult(
 
   // 2. Target Risk %
   let targetRiskPct = 1.0;
+  let isFloorClamped = false;
+  let isCeilingClamped = false;
+
   if (riskMethod === 'fractional') {
     targetRiskPct = Math.max(0.01, customRiskPct || 1.0);
-  } else if (riskMethod === 'kelly_full') {
-    targetRiskPct = (tradeStats.kelly_full ?? 0) * 100.0;
-  } else if (riskMethod === 'kelly_half') {
-    targetRiskPct = (tradeStats.kelly_half ?? 0) * 100.0;
-  } else if (riskMethod === 'kelly_quarter') {
-    targetRiskPct = (tradeStats.kelly_quarter ?? 0) * 100.0;
-  } else if (riskMethod === 'optimal_f_full') {
-    targetRiskPct = (tradeStats.optimal_f ?? 0) * 100.0;
-  } else if (riskMethod === 'optimal_f_half') {
-    targetRiskPct = (tradeStats.optimal_f_half ?? 0) * 100.0;
-  } else if (riskMethod === 'optimal_f_quarter') {
-    targetRiskPct = (tradeStats.optimal_f_quarter ?? 0) * 100.0;
+  } else if (riskMethod === 'kelly_half' || riskMethod === 'kelly') {
+    const rawPct = (tradeStats.kelly_half ?? 0) * 100.0;
+    if (rawPct < minRiskFloorPct) {
+      targetRiskPct = minRiskFloorPct;
+      isFloorClamped = true;
+    } else if (rawPct > maxRiskCeilingPct) {
+      targetRiskPct = maxRiskCeilingPct;
+      isCeilingClamped = true;
+    } else {
+      targetRiskPct = rawPct;
+    }
   }
 
   const workingCap = workingCapital || 100.0;
@@ -154,10 +158,11 @@ export function computeLocalRiskForResult(
     };
   };
 
+  const boundedKellyPct = Math.max(minRiskFloorPct, Math.min(maxRiskCeilingPct, (tradeStats.kelly_half ?? 0) * 100));
+
   const comparison = {
     fractional_1pct: calcCompare(1.0),
-    half_kelly: calcCompare((tradeStats.kelly_half ?? 0) * 100),
-    half_optimal_f: calcCompare((tradeStats.optimal_f_half ?? 0) * 100),
+    half_kelly: calcCompare(boundedKellyPct),
   };
 
   const specFormatted: SymbolSpec = {
@@ -201,6 +206,8 @@ export function computeLocalRiskForResult(
     margin_utilization_display: marginUtilPct.toFixed(0),
     is_margin_exceeded: isMarginExceeded,
     margin_status: marginStatus,
+    is_floor_clamped: isFloorClamped,
+    is_ceiling_clamped: isCeilingClamped,
   };
 
   return {

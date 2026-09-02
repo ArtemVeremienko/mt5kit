@@ -44,17 +44,12 @@ class TradeStats:
     avg_loss: float            # average loss in currency (positive number)
     payoff_ratio: float        # avg_win / avg_loss (b)
     profit_factor: float       # gross profit / gross loss
-    worst_loss: float          # largest single loss (positive number)
     best_win: float            # largest single win
     net_profit: float          # total net profit
     kelly_full: float          # f* (can be negative if negative expectancy)
     kelly_half: float          # f* / 2
     kelly_quarter: float       # f* / 4
-    optimal_f: float           # optimal f (0.0 - 1.0)
-    optimal_f_half: float      # optimal f / 2
-    optimal_f_quarter: float   # optimal f / 4
     sample_info: SampleSizeInfo
-    twr_curve: List[Dict[str, float]] = field(default_factory=list)
 
 
 @dataclass
@@ -63,7 +58,7 @@ class LotCalculationResult:
     working_capital: float
     deposited_cash: float
     leverage: float
-    risk_method: str           # "fractional", "kelly_full", "kelly_half", "kelly_quarter", "optimal_f_full", "optimal_f_half", "optimal_f_quarter"
+    risk_method: str           # "fractional", "kelly_half"
     target_risk_pct: float     # e.g. 1.0 = 1.0%
     target_risk_amount: float  # in currency, e.g. $1.00
     sl_pips: float
@@ -90,8 +85,9 @@ class LotCalculationResult:
     is_margin_exceeded: bool
     margin_status: str         # "healthy", "warning", "exceeded"
     
-    # Vince contracts (units based on worst loss)
-    vince_units: Optional[float] = None
+    # Risk Clamping Bounds
+    is_floor_clamped: bool = False
+    is_ceiling_clamped: bool = False
     
     # Notes / warnings
     warnings: List[str] = field(default_factory=list)
@@ -161,63 +157,11 @@ def calculate_kelly_fraction(win_rate: float, payoff_ratio: float) -> float:
     return max(0.0, float(f_star))
 
 
-def calculate_optimal_f_vince(trades_pnl: List[float], resolution: int = 100) -> Tuple[float, List[Dict[str, float]]]:
-    """
-    Finds Ralph Vince's Optimal f by maximizing Terminal Wealth Relative (TWR):
-    TWR(f) = Product_{i=1..N} [ 1 + f * (-trade_i / Worst_Loss) ]
-    where Worst_Loss is the maximum loss expressed as a positive number.
-    Fully vectorized using 2D NumPy array broadcasting.
-    Returns (optimal_f, twr_curve).
-    """
-    if not trades_pnl:
-        return 0.0, []
-
-    pnl_array = np.asarray(trades_pnl, dtype=np.float64)
-    losses = pnl_array[pnl_array < 0]
-    
-    if len(losses) == 0:
-        # No losses in dataset
-        return 0.5, [{"f": round(float(f), 2), "twr": 1.0} for f in np.linspace(0.01, 0.99, 20)]
-
-    worst_loss = abs(float(np.min(losses)))
-    if worst_loss == 0:
-        return 0.0, []
-
-    # 2D Grid Broadcast: f_candidates shape (resolution, 1), pnl shape (1, N)
-    f_candidates = np.linspace(0.01, 0.99, resolution, dtype=np.float64)
-    # HPR matrix shape: (resolution, N)
-    hpr_matrix = 1.0 + f_candidates[:, np.newaxis] * (pnl_array[np.newaxis, :] / worst_loss)
-
-    # Valid rows where all HPRs are strictly positive
-    valid_mask = np.all(hpr_matrix > 0, axis=1)
-    
-    log_twr = np.full(resolution, -np.inf, dtype=np.float64)
-    if np.any(valid_mask):
-        log_twr[valid_mask] = np.sum(np.log(hpr_matrix[valid_mask]), axis=1)
-
-    best_idx = int(np.argmax(log_twr))
-    best_log_twr = log_twr[best_idx]
-    best_f = float(f_candidates[best_idx]) if best_log_twr > 0 else 0.0
-
-    # Build chart points vectorially
-    clipped_log = np.clip(log_twr, -50.0, 50.0)
-    exp_twrs = np.where(valid_mask, np.exp(clipped_log), 0.0)
-    
-    twr_curve = [
-        {"f": round(float(f_val), 3), "twr": round(float(twr_val), 4)}
-        for f_val, twr_val, is_valid in zip(f_candidates, exp_twrs, valid_mask)
-        if is_valid
-    ]
-
-    return best_f, twr_curve
-
-
 def calculate_trade_statistics(
     trades_pnl: Optional[List[float]] = None,
     override_win_rate: Optional[float] = None,
     override_payoff_ratio: Optional[float] = None,
-    override_total_trades: Optional[int] = None,
-    override_worst_loss: Optional[float] = None
+    override_total_trades: Optional[int] = None
 ) -> TradeStats:
     """
     Computes comprehensive trade statistics from a list of trade PnLs or manual override parameters.
@@ -246,7 +190,6 @@ def calculate_trade_statistics(
         gross_loss = abs(float(np.sum(pnl[losses_mask]))) if losing_trades > 0 else 0.0
         profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else (999.0 if gross_profit > 0 else 0.0)
         
-        worst_loss = abs(float(np.min(pnl[losses_mask]))) if losing_trades > 0 else 100.0
         best_win = float(np.max(pnl[wins_mask])) if winning_trades > 0 else 0.0
         net_profit = float(np.sum(pnl))
         
@@ -254,11 +197,6 @@ def calculate_trade_statistics(
         kelly_full = calculate_kelly_fraction(win_rate, payoff_ratio)
         kelly_half = kelly_full / 2.0
         kelly_quarter = kelly_full / 4.0
-        
-        # Optimal f
-        opt_f, twr_curve = calculate_optimal_f_vince(trades_pnl)
-        opt_f_half = opt_f / 2.0
-        opt_f_quarter = opt_f / 4.0
         
         sample_info = evaluate_sample_size(total_trades)
         
@@ -268,9 +206,8 @@ def calculate_trade_statistics(
         win_rate = override_win_rate if override_win_rate is not None else 0.55
         loss_rate = 1.0 - win_rate
         payoff_ratio = override_payoff_ratio if override_payoff_ratio is not None else 1.5
-        worst_loss = override_worst_loss if override_worst_loss is not None else 100.0
         
-        avg_loss = worst_loss * 0.4
+        avg_loss = 40.0
         avg_win = avg_loss * payoff_ratio
         
         winning_trades = int(round(total_trades * win_rate))
@@ -286,23 +223,6 @@ def calculate_trade_statistics(
         kelly_full = calculate_kelly_fraction(win_rate, payoff_ratio)
         kelly_half = kelly_full / 2.0
         kelly_quarter = kelly_full / 4.0
-        
-        # Approximate optimal f
-        if kelly_full <= 0:
-            opt_f = 0.0
-        else:
-            opt_f = min(0.35, max(0.01, kelly_half))
-        opt_f_half = opt_f / 2.0
-        opt_f_quarter = opt_f / 4.0
-        
-        # Vectorized synthetic TWR curve
-        f_grid = np.linspace(0.01, 0.99, 50, dtype=np.float64)
-        dist = (f_grid - opt_f) / 0.2
-        twr_synths = np.maximum(0.1, np.exp(-0.5 * dist**2) * (1.5 + profit_factor * 0.2))
-        twr_curve = [
-            {"f": round(float(f_val), 3), "twr": round(float(twr_val), 4)}
-            for f_val, twr_val in zip(f_grid, twr_synths)
-        ]
             
         sample_info = evaluate_sample_size(total_trades)
 
@@ -317,17 +237,12 @@ def calculate_trade_statistics(
         avg_loss=round(avg_loss, 2),
         payoff_ratio=round(payoff_ratio, 3),
         profit_factor=round(profit_factor, 3),
-        worst_loss=round(worst_loss, 2),
         best_win=round(best_win, 2),
         net_profit=round(net_profit, 2),
         kelly_full=round(kelly_full, 4),
         kelly_half=round(kelly_half, 4),
         kelly_quarter=round(kelly_quarter, 4),
-        optimal_f=round(opt_f, 4),
-        optimal_f_half=round(opt_f_half, 4),
-        optimal_f_quarter=round(opt_f_quarter, 4),
-        sample_info=sample_info,
-        twr_curve=twr_curve
+        sample_info=sample_info
     )
 
 
@@ -461,13 +376,17 @@ def calculate_lot_for_symbol(
     currency_profit: str = "USD",
     currency_margin: str = "USD",
     exact_broker_margin: Optional[float] = None,
-    margin_per_lot: Optional[float] = None
+    margin_per_lot: Optional[float] = None,
+    min_risk_floor_pct: float = 0.25,
+    max_risk_ceiling_pct: float = 2.50
 ) -> LotCalculationResult:
     """
     Performs full risk budgeting, exact lot sizing, broker step clamping,
     effective risk calculation, and leverage margin validation for a symbol.
     """
     warnings = []
+    is_floor_clamped = False
+    is_ceiling_clamped = False
     
     # 1. Determine Target Risk % based on selected method
     if trade_stats is None:
@@ -475,18 +394,16 @@ def calculate_lot_for_symbol(
 
     if risk_method == "fractional":
         target_risk_pct = max(0.01, float(custom_risk_pct))
-    elif risk_method == "kelly_full":
-        target_risk_pct = trade_stats.kelly_full * 100.0
-    elif risk_method == "kelly_half":
-        target_risk_pct = trade_stats.kelly_half * 100.0
-    elif risk_method == "kelly_quarter":
-        target_risk_pct = trade_stats.kelly_quarter * 100.0
-    elif risk_method == "optimal_f_full":
-        target_risk_pct = trade_stats.optimal_f * 100.0
-    elif risk_method == "optimal_f_half":
-        target_risk_pct = trade_stats.optimal_f_half * 100.0
-    elif risk_method == "optimal_f_quarter":
-        target_risk_pct = trade_stats.optimal_f_quarter * 100.0
+    elif risk_method in ("kelly_half", "kelly", "kelly_full", "kelly_quarter"):
+        raw_pct = trade_stats.kelly_half * 100.0
+        if raw_pct < min_risk_floor_pct:
+            target_risk_pct = min_risk_floor_pct
+            is_floor_clamped = True
+        elif raw_pct > max_risk_ceiling_pct:
+            target_risk_pct = max_risk_ceiling_pct
+            is_ceiling_clamped = True
+        else:
+            target_risk_pct = raw_pct
     else:
         target_risk_pct = 1.0
 
@@ -555,9 +472,6 @@ def calculate_lot_for_symbol(
     else:
         margin_status = "healthy"
 
-    # Vince classic contract allocation bounds
-    vince_units = (working_capital * (target_risk_pct / 100.0)) / trade_stats.worst_loss if trade_stats.worst_loss > 0 else None
-
     return LotCalculationResult(
         symbol=symbol,
         working_capital=round(working_capital, 2),
@@ -583,6 +497,7 @@ def calculate_lot_for_symbol(
         margin_utilization_pct=round(margin_utilization_pct, 1),
         is_margin_exceeded=is_margin_exceeded,
         margin_status=margin_status,
-        vince_units=round(vince_units, 4) if vince_units is not None else None,
+        is_floor_clamped=is_floor_clamped,
+        is_ceiling_clamped=is_ceiling_clamped,
         warnings=warnings
     )
