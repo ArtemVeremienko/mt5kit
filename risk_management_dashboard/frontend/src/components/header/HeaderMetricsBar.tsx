@@ -5,7 +5,7 @@ import { positionsStore } from '../../stores/positionsStore';
 import { marketStore } from '../../stores/marketStore';
 import { toastStore } from '../../stores/toastStore';
 import { wsService } from '../../services/websocket';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, formatRrRatio } from '../../utils/formatters';
 
 interface Props {
   onOpenRiskModal: () => void;
@@ -80,7 +80,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
   });
 
   const slPresetTag = createMemo(() => preferencesStore.slMode());
-  const rrRatioTag = createMemo(() => `1:${preferencesStore.rrRatio()} RR`);
+  const rrRatioTag = createMemo(() => formatRrRatio(preferencesStore.rrRatio()));
 
   // Structured Strategy summary tags
   const tradesCountTag = createMemo(() => `${tradeStats().total_trades || 0} Deals`);

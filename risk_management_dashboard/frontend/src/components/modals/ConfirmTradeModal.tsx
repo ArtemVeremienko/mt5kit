@@ -2,6 +2,7 @@ import { Component, Show, createSignal } from 'solid-js';
 import { CalculatedSymbolResult } from '../../types';
 import { preferencesStore } from '../../stores/preferencesStore';
 import { toastStore } from '../../stores/toastStore';
+import { formatRrRatio } from '../../utils/formatters';
 
 interface Props {
   trade: {
@@ -76,8 +77,8 @@ export const ConfirmTradeModal: Component<Props> = (props) => {
                     <span>Take Profit:</span>
                     <span>
                       {preferencesStore.rrRatio() > 0
-                        ? `${(trade().item.calc.sl_pips * preferencesStore.rrRatio()).toFixed(1)} Pips (1:${preferencesStore.rrRatio()})`
-                        : 'None'}
+                        ? `${(trade().item.calc.sl_pips * preferencesStore.rrRatio()).toFixed(1)} Pips (${formatRrRatio(preferencesStore.rrRatio(), { showUnit: false })})`
+                        : 'None (Manual Exit)'}
                     </span>
                   </div>
                   <div class="confirm-detail-row">

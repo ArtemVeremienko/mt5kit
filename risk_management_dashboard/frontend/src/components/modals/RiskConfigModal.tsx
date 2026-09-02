@@ -2,6 +2,7 @@ import { Component, Show, createMemo } from 'solid-js';
 import { preferencesStore } from '../../stores/preferencesStore';
 import { accountStore } from '../../stores/accountStore';
 import { marketStore } from '../../stores/marketStore';
+import { formatRrRatio } from '../../utils/formatters';
 
 interface Props {
   isOpen: boolean;
@@ -203,27 +204,88 @@ export const RiskConfigModal: Component<Props> = (props) => {
 
             {/* Take Profit Risk:Reward Ratio */}
             <div class="form-group">
-              <label class="form-label" for="modal-rr-ratio">
-                TAKE PROFIT (RISK:REWARD RATIO):
-              </label>
-              <div class="input-with-symbol">
-                <span class="currency-prefix">1:</span>
-                <input
-                  id="modal-rr-ratio"
-                  type="number"
-                  class="control-input"
-                  step="0.1"
-                  min="0"
-                  max="10"
-                  value={preferencesStore.rrRatio()}
-                  onInput={(e) => {
-                    const val = parseFloat(e.currentTarget.value);
-                    if (!isNaN(val) && val >= 0) preferencesStore.setRrRatio(val);
-                  }}
-                />
+              <div class="control-label-row">
+                <label class="form-label" for="modal-rr-slider">
+                  TAKE PROFIT (RISK:REWARD RATIO):
+                </label>
+                <span
+                  class="control-value-tag font-mono"
+                  classList={{ 'tag-off': preferencesStore.rrRatio() === 0 }}
+                >
+                  {formatRrRatio(preferencesStore.rrRatio(), { showUnit: true, offLabel: '🛡️ TP Off' })}
+                </span>
+              </div>
+              <input
+                id="modal-rr-slider"
+                type="range"
+                class="control-slider"
+                min="0"
+                max="5.0"
+                step="0.1"
+                value={preferencesStore.rrRatio()}
+                onInput={(e) => preferencesStore.setRrRatio(parseFloat(e.currentTarget.value))}
+              />
+              <div class="preset-chips-row">
+                <button
+                  type="button"
+                  class="chip-snap-btn chip-snap-off"
+                  classList={{ active: preferencesStore.rrRatio() === 0 }}
+                  onClick={() => preferencesStore.setRrRatio(0)}
+                  title="Disable Take Profit (Manual Trailing Exit)"
+                >
+                  🛡️ Off
+                </button>
+                <button
+                  type="button"
+                  class="chip-snap-btn"
+                  classList={{ active: Math.abs(preferencesStore.rrRatio() - 1.0) < 0.01 }}
+                  onClick={() => preferencesStore.setRrRatio(1.0)}
+                >
+                  1:1
+                </button>
+                <button
+                  type="button"
+                  class="chip-snap-btn"
+                  classList={{ active: Math.abs(preferencesStore.rrRatio() - 1.5) < 0.01 }}
+                  onClick={() => preferencesStore.setRrRatio(1.5)}
+                >
+                  1:1.5
+                </button>
+                <button
+                  type="button"
+                  class="chip-snap-btn"
+                  classList={{ active: Math.abs(preferencesStore.rrRatio() - 2.0) < 0.01 }}
+                  onClick={() => preferencesStore.setRrRatio(2.0)}
+                >
+                  1:2
+                </button>
+                <button
+                  type="button"
+                  class="chip-snap-btn"
+                  classList={{ active: Math.abs(preferencesStore.rrRatio() - 2.5) < 0.01 }}
+                  onClick={() => preferencesStore.setRrRatio(2.5)}
+                >
+                  1:2.5
+                </button>
+                <button
+                  type="button"
+                  class="chip-snap-btn"
+                  classList={{ active: Math.abs(preferencesStore.rrRatio() - 3.0) < 0.01 }}
+                  onClick={() => preferencesStore.setRrRatio(3.0)}
+                >
+                  1:3
+                </button>
+                <button
+                  type="button"
+                  class="chip-snap-btn"
+                  classList={{ active: Math.abs(preferencesStore.rrRatio() - 4.0) < 0.01 }}
+                  onClick={() => preferencesStore.setRrRatio(4.0)}
+                >
+                  1:4
+                </button>
               </div>
               <span class="form-help-text">
-                Multiplier applied to Stop Loss pips (e.g. 1:1.5 creates a 30 pip TP for a 20 pip SL). Set 0 for no TP.
+                Multiplier applied to Stop Loss pips (e.g. 1:1.5 creates a 30 pip TP for a 20 pip SL). Select Off for manual runner.
               </span>
             </div>
 
