@@ -17,7 +17,7 @@ A comprehensive suite of production-grade Python analytics engines, high-perform
   - [7. Multi-Timeframe History Viewer (`history_viewer/`)](#7-multi-timeframe-history-viewer-history_viewer)
   - [8. Asset Behavior Profiler & Exit Recommender (`regime_exit_recommender/`)](#8-asset-behavior-profiler--exit-recommender-regime_exit_recommender)
   - [9. Macro Market Regime Analyzer (`macro_regime_analyzer/`)](#9-macro-market-regime-analyzer-macro_regime_analyzer)
-  - [10. MT5 Risk Management & Position Sizing Engine (`risk_management_dashboard/`)](#10-mt5-risk-management--position-sizing-engine-risk_management_dashboard)
+  - [10. MT5 Risk Management & Position Sizing Engine (`mt5-risk-management-dashboard`)](#10-mt5-risk-management--position-sizing-engine-mt5-risk-management-dashboard)
 - [Jupyter Notebooks](#-jupyter-notebooks)
   - [Market Microstructure & Spreads](#market-microstructure--spreads)
   - [Interactive Price & Tick Charting](#interactive-price--tick-charting)
@@ -203,8 +203,8 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 
 ---
 
-### 10. MT5 Risk Management & Position Sizing Engine (`risk_management_dashboard/`)
-* **Location:** [`risk_management_dashboard/`](file:///d:/projects/metatrader5/risk_management_dashboard/README.md)
+### 10. MT5 Risk Management & Position Sizing Engine (`mt5-risk-management-dashboard`)
+* **Standalone Repository:** [![GitHub Repo](https://img.shields.io/badge/Repository-mt5--risk--management--dashboard-blue?logo=github)](https://github.com/ArtemVeremienko/mt5-risk-management-dashboard)
 * **Purpose:** Real-time multi-model position sizing screener and live order management dashboard for MetaTrader 5, powered by a fine-grained reactive **Solid.js + TypeScript** frontend and high-performance **FastAPI** backend.
 * **Key Features:**
   - **Fine-Grained Reactivity (Solid.js)**: Zero Virtual DOM overhead; 500ms streaming ticks directly patch exact DOM text nodes (`node.data = newPrice`).
@@ -212,18 +212,7 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
   - **Order Management Panel**: Real-time open positions tracking with 1-Click Close, Move to Break-Even (BE), 50% Partial Close, Inline SL/TP modifier, and Emergency Close All.
   - **Custom Screener UX**: 3-State column sorting (`▲` / `▼` / `↕`), Symbol Pinning (`📌`), and Drag & Drop reordering (`⠿`) with `localStorage` persistence.
   - **Sub-Second Turbo Mode**: 500ms streaming tick rate with 15-minute in-memory ADR/ATR TTL caching.
-* **Quick Run (Production)**:
-  ```powershell
-  uv run python -m risk_management_dashboard.run
-  ```
-* **Frontend Dev Mode (Vite HMR)**:
-  ```powershell
-  cd risk_management_dashboard/frontend && pnpm install && pnpm dev
-  ```
-* **Frontend Build**:
-  ```powershell
-  cd risk_management_dashboard/frontend && pnpm build
-  ```
+* **Repository Link:** [https://github.com/ArtemVeremienko/mt5-risk-management-dashboard](https://github.com/ArtemVeremienko/mt5-risk-management-dashboard)
 
 ---
 
