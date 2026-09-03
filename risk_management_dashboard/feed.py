@@ -10,6 +10,7 @@ Handles:
 7. Robust fallback/mock mode when MT5 terminal is offline
 """
 
+import os
 from datetime import datetime, timezone, timedelta
 import logging
 import threading
@@ -22,8 +23,10 @@ try:
 except ImportError:
     mt5 = None
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+_log_level = logging.DEBUG if (os.getenv("VERBOSE", "").lower() in ("1", "true", "yes") or os.getenv("LOG_LEVEL", "").upper() == "DEBUG") else logging.INFO
+logging.basicConfig(level=_log_level, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("RiskFeed")
+logger.setLevel(_log_level)
 
 
 # Fallback / Mock Data for offline testing
@@ -810,7 +813,7 @@ class MT5RiskFeed:
                         pnl_list = [round(pos["net_pnl"], 2) for pos in closed_positions]
                         
                         if pnl_list:
-                            logger.info(f"Loaded {len(pnl_list)} completed round-turn trades (from {len(deals)} deals) from MT5 history.")
+                            logger.debug(f"Loaded {len(pnl_list)} completed round-turn trades (from {len(deals)} deals) from MT5 history.")
                             self._cached_trades = pnl_list
                             self._cached_trade_records = closed_positions
                             return pnl_list

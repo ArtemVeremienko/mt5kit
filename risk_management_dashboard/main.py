@@ -18,6 +18,7 @@ def parse_args():
     parser.add_argument("--port", type=int, default=8000, help="Port to run server on (default: 8000)")
     parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
     parser.add_argument("--no-browser", action="store_true", help="Do not automatically open web browser")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose (DEBUG) logging")
     return parser.parse_args()
 
 
@@ -37,19 +38,27 @@ def main():
     print(f"  * Dynamic SL: 14-day D1 ADR presets (1/4 ADR, 1/3 ADR, 1/2 ADR, ATR)")
     print(f"  * Clamping: Broker volume min/step with effective risk calculation")
     print(f"  * Leverage: Margin health checks under deposit overrides")
+    print(f"  * Verbose Logging: {'Enabled' if args.verbose else 'Disabled'}")
     print("=" * 70)
+
+    import os
+    import logging
+    if args.verbose:
+        os.environ["VERBOSE"] = "1"
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger("RiskFeed").setLevel(logging.DEBUG)
+        logging.getLogger("RiskApp").setLevel(logging.DEBUG)
 
     if not args.no_browser:
         threading.Thread(target=open_browser, args=(url,), daemon=True).start()
 
-    import os
     app_target = "app:app" if os.path.exists("app.py") else "risk_management_dashboard.app:app"
     uvicorn.run(
         app_target,
         host=args.host,
         port=args.port,
         reload=args.reload,
-        log_level="info"
+        log_level="debug" if args.verbose else "info"
     )
 
 
