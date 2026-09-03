@@ -69,9 +69,14 @@ function createPreferences() {
     parseFloat(localStorage.getItem('mt5_max_risk_ceiling') || '2.50') || 2.50
   );
 
-  const [monthlyIncomeTarget, setMonthlyIncomeTargetSignal] = createSignal<number>(
-    parseFloat(localStorage.getItem('mt5_monthly_income_target') || '5000') || 5000
-  );
+  const storedTarget = localStorage.getItem('mt5_monthly_income_target');
+  let initialTarget = 1000;
+  if (storedTarget && storedTarget !== '5000') {
+    initialTarget = parseFloat(storedTarget) || 1000;
+  } else {
+    localStorage.setItem('mt5_monthly_income_target', '1000');
+  }
+  const [monthlyIncomeTarget, setMonthlyIncomeTargetSignal] = createSignal<number>(initialTarget);
 
   const setMonthlyIncomeTarget = (val: number) => {
     if (!isNaN(val) && val > 0) {

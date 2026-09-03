@@ -180,8 +180,9 @@ export const RiskConfigModal: Component<Props> = (props) => {
                   id="modal-monthly-target"
                   type="number"
                   class="control-input"
-                  step="500"
+                  step="250"
                   min="100"
+                  max="5000"
                   value={preferencesStore.monthlyIncomeTarget()}
                   onInput={(e) => {
                     const val = parseFloat(e.currentTarget.value);
@@ -189,14 +190,38 @@ export const RiskConfigModal: Component<Props> = (props) => {
                   }}
                 />
               </div>
-              <div class="preset-chips-row" style={{ 'margin-top': '6px' }}>
+              <div class="preset-chips-row" style={{ 'margin-top': '6px', display: 'flex', gap: '8px', 'flex-wrap': 'wrap' }}>
                 <button
                   type="button"
                   class="chip-snap-btn"
-                  classList={{ active: preferencesStore.monthlyIncomeTarget() === 2500 }}
-                  onClick={() => preferencesStore.setMonthlyIncomeTarget(2500)}
+                  classList={{ active: preferencesStore.monthlyIncomeTarget() === 1000 }}
+                  onClick={() => preferencesStore.setMonthlyIncomeTarget(1000)}
                 >
-                  $2,500
+                  $1,000
+                </button>
+                <button
+                  type="button"
+                  class="chip-snap-btn"
+                  classList={{ active: preferencesStore.monthlyIncomeTarget() === 2000 }}
+                  onClick={() => preferencesStore.setMonthlyIncomeTarget(2000)}
+                >
+                  $2,000
+                </button>
+                <button
+                  type="button"
+                  class="chip-snap-btn"
+                  classList={{ active: preferencesStore.monthlyIncomeTarget() === 3000 }}
+                  onClick={() => preferencesStore.setMonthlyIncomeTarget(3000)}
+                >
+                  $3,000
+                </button>
+                <button
+                  type="button"
+                  class="chip-snap-btn"
+                  classList={{ active: preferencesStore.monthlyIncomeTarget() === 4000 }}
+                  onClick={() => preferencesStore.setMonthlyIncomeTarget(4000)}
+                >
+                  $4,000
                 </button>
                 <button
                   type="button"
@@ -205,22 +230,6 @@ export const RiskConfigModal: Component<Props> = (props) => {
                   onClick={() => preferencesStore.setMonthlyIncomeTarget(5000)}
                 >
                   $5,000
-                </button>
-                <button
-                  type="button"
-                  class="chip-snap-btn"
-                  classList={{ active: preferencesStore.monthlyIncomeTarget() === 10000 }}
-                  onClick={() => preferencesStore.setMonthlyIncomeTarget(10000)}
-                >
-                  $10,000
-                </button>
-                <button
-                  type="button"
-                  class="chip-snap-btn"
-                  classList={{ active: preferencesStore.monthlyIncomeTarget() === 20000 }}
-                  onClick={() => preferencesStore.setMonthlyIncomeTarget(20000)}
-                >
-                  $20,000
                 </button>
               </div>
               <span class="form-help-text">
