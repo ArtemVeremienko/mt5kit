@@ -164,6 +164,72 @@ export const RiskConfigModal: Component<Props> = (props) => {
               </span>
             </div>
 
+            {/* Monthly Profit Target Goal */}
+            <div class="form-group">
+              <div class="control-label-row">
+                <label class="form-label" for="modal-monthly-target">
+                  MONTHLY PROFIT TARGET ($):
+                </label>
+                <span class="control-value-tag font-mono">
+                  Goal: ${preferencesStore.monthlyIncomeTarget().toLocaleString()}
+                </span>
+              </div>
+              <div class="input-with-symbol">
+                <span class="currency-prefix">$</span>
+                <input
+                  id="modal-monthly-target"
+                  type="number"
+                  class="control-input"
+                  step="500"
+                  min="100"
+                  value={preferencesStore.monthlyIncomeTarget()}
+                  onInput={(e) => {
+                    const val = parseFloat(e.currentTarget.value);
+                    if (!isNaN(val) && val > 0) preferencesStore.setMonthlyIncomeTarget(val);
+                  }}
+                />
+              </div>
+              <div class="preset-chips-row" style={{ 'margin-top': '6px' }}>
+                <button
+                  type="button"
+                  class="chip-snap-btn"
+                  classList={{ active: preferencesStore.monthlyIncomeTarget() === 2500 }}
+                  onClick={() => preferencesStore.setMonthlyIncomeTarget(2500)}
+                >
+                  $2,500
+                </button>
+                <button
+                  type="button"
+                  class="chip-snap-btn"
+                  classList={{ active: preferencesStore.monthlyIncomeTarget() === 5000 }}
+                  onClick={() => preferencesStore.setMonthlyIncomeTarget(5000)}
+                >
+                  $5,000
+                </button>
+                <button
+                  type="button"
+                  class="chip-snap-btn"
+                  classList={{ active: preferencesStore.monthlyIncomeTarget() === 10000 }}
+                  onClick={() => preferencesStore.setMonthlyIncomeTarget(10000)}
+                >
+                  $10,000
+                </button>
+                <button
+                  type="button"
+                  class="chip-snap-btn"
+                  classList={{ active: preferencesStore.monthlyIncomeTarget() === 20000 }}
+                  onClick={() => preferencesStore.setMonthlyIncomeTarget(20000)}
+                >
+                  $20,000
+                </button>
+              </div>
+              <span class="form-help-text">
+                Target monthly income goal used to track Month-to-Date (MTD) R progress in the header strategy telemetry.
+              </span>
+            </div>
+
+            <div class="modal-section-divider" />
+
             {/* Risk Sizing Model */}
             <div class="form-group">
               <div class="control-label-row">

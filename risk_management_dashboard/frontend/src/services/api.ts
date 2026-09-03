@@ -41,7 +41,6 @@ export const api = {
   async fetchInitialCalculate(payload: CalculateApiPayload): Promise<{
     results: Array<{ spec: SymbolSpec }>;
     trade_stats: TradeStats;
-    sample_info: SampleSizeInfo;
   }> {
     const res = await fetch('/api/calculate', {
       method: 'POST',

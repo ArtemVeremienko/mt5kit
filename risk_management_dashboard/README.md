@@ -5,6 +5,7 @@ An enterprise-grade, high-frequency risk management and real-time position sizin
 > 📚 **Documentation**:
 > - [🤖 AGENTS.md](./AGENTS.md) — Autonomous agent & developer guidelines, state architecture, reactivity rules, and design tokens.
 > - [🖥️ FRONTEND.md](./FRONTEND.md) — Detailed frontend architecture, component tree, execution safety ergonomics, and WebSocket API specs.
+> - [🏗️ ARCHITECTURE.md](./ARCHITECTURE.md) — Deep dive into backend concurrency, ThreadPoolExecutor workers, MT5 RLock synchronization, and trade aggregation.
 
 ---
 
@@ -12,7 +13,7 @@ An enterprise-grade, high-frequency risk management and real-time position sizin
 
 1. **⚡ Fine-Grained Reactive Frontend (Solid.js + Vite + TypeScript)**:
    - **Zero Virtual DOM**: Uses pure Solid Signals (`createSignal`, `createMemo`) with microsecond direct Text/Attr node bindings (`node.data = newPrice`).
-   - **Sub-Second 500ms Turbo Mode**: Streams live ticks and account balance directly over WebSocket with zero continuous HTTP recalculation round-trips.
+   - **Sub-Second 250ms Turbo Mode**: Streams live ticks and account balance directly over WebSocket with zero continuous HTTP recalculation round-trips.
    - **Interactive Screener Customization**:
      - **3-State Sorting**: Cycle headers through `Ascending (▲)` ➔ `Descending (▼)` ➔ `Default/None (↕)`.
      - **Symbol Pinning (`📌`)**: Lock favorite assets to the top of the matrix with `localStorage` persistence.
@@ -42,6 +43,62 @@ An enterprise-grade, high-frequency risk management and real-time position sizin
    - Displays mathematical **Exact Lot** (e.g. `0.0053`) alongside broker **Executable Lot** (e.g. `0.01`).
    - Automatically computes **Effective Risk %** when minimum lot clamping increases risk exposure.
    - Real-time margin utilization % with status alerts (`healthy` / `warning` / `exceeded`).
+
+---
+
+## 🏛️ Backend Concurrency & Threading Architecture
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for full technical documentation.
+
+```mermaid
+flowchart TB
+    subgraph ClientLayer ["Browser / Frontend (Solid.js)"]
+        UI["SolidJS Client\n(Reconnecting WebSocket Stream)"]
+    end
+
+    subgraph MainThread ["Main Thread — Asyncio Event Loop (FastAPI / Uvicorn)"]
+        FastAPI["FastAPI App & HTTP REST Router"]
+        WS_Streamer["client_streamer() Task\n(250ms Turbo / 2000ms Normal Interval)"]
+        VolCacheTask["volatility_cache_task\n(15-min Background ADR/ATR Refresh)"]
+    end
+
+    subgraph ThreadPool ["Asyncio Default ThreadPoolExecutor (min(32, CPU + 4) Workers)"]
+        Worker1["Worker Thread 1\nget_market_symbols()"]
+        Worker2["Worker Thread 2\nget_open_positions()"]
+        Worker3["Worker Thread 3\nfetch_closed_deals_history() (5s Heartbeat)"]
+        Worker4["Worker Thread N\nOrder Execution / Close / Modify"]
+    end
+
+    subgraph SyncLayer ["Thread Safety & IPC Serialization"]
+        MT5Lock["self._mt5_lock = threading.RLock()\nSerializes C-API Access (< 1ms per call)"]
+    end
+
+    subgraph MT5Layer ["External Process — MetaTrader 5 Terminal"]
+        MT5Terminal["terminal64.exe\n(Shared Memory IPC / Named Pipes)"]
+    end
+
+    %% Connections
+    UI <-->|"WebSocket JSON Framing\n(/ws/live)"| FastAPI
+    FastAPI --> WS_Streamer
+    FastAPI --> VolCacheTask
+
+    WS_Streamer -->|"await asyncio.to_thread(...)"| Worker1
+    WS_Streamer -->|"await asyncio.to_thread(...)"| Worker2
+    WS_Streamer -.->|"every 5s: asyncio.to_thread(...)"| Worker3
+    VolCacheTask -->|"asyncio.to_thread(...)"| Worker4
+
+    Worker1 --> MT5Lock
+    Worker2 --> MT5Lock
+    Worker3 --> MT5Lock
+    Worker4 --> MT5Lock
+
+    MT5Lock <-->|"MetaTrader5 Python C-Extension (IPC)"| MT5Terminal
+```
+
+### Concurrency Characteristics:
+* **Zero Main Loop Blocking**: FastAPI's main async thread is never blocked by MT5 C-extension calls; all IPC queries are dispatched via `asyncio.to_thread(...)`.
+* **MT5 IPC Thread Safety**: A dedicated re-entrant lock (`threading.RLock()`) ensures all C-extension calls are serialized conflict-free.
+* **Positions vs. Deals Aggregation**: The dashboard aggregates raw execution deals by `position_id` into true round-turn completed trades, providing mathematically sound sample statistics for Kelly & Optimal $f$ sizing.
 
 ---
 

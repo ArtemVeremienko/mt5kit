@@ -174,7 +174,8 @@ async def get_symbols():
 async def get_trade_stats_payload() -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Fetches closed deals history, groups by position_id, and computes JSON-serializable TradeStats."""
     trades_pnl = await asyncio.to_thread(feed.fetch_closed_deals_history)
-    stats = calculate_trade_statistics(trades_pnl)
+    trade_records = getattr(feed, "_cached_trade_records", None)
+    stats = calculate_trade_statistics(trades_pnl, trades_records=trade_records)
     stats_dict = dataclasses.asdict(stats)
     return stats_dict, stats_dict.get("sample_info", {})
 
@@ -198,7 +199,8 @@ async def calculate_risk_matrix(req: CalculationRequest):
     Decoupled from slow IPC queries with fast in-memory execution.
     """
     trades_pnl = await asyncio.to_thread(feed.fetch_closed_deals_history)
-    trade_stats = calculate_trade_statistics(trades_pnl)
+    trade_records = getattr(feed, "_cached_trade_records", None)
+    trade_stats = calculate_trade_statistics(trades_pnl, trades_records=trade_records)
     symbols_specs = await asyncio.to_thread(feed.get_market_symbols)
     
     if req.symbols:
@@ -302,7 +304,6 @@ async def calculate_risk_matrix(req: CalculationRequest):
 
     return {
         "trade_stats": trade_stats,
-        "sample_info": trade_stats.sample_info,
         "results": results,
         "summary": {
             "total_symbols": len(results),

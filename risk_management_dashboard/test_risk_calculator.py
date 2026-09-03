@@ -792,5 +792,31 @@ def test_bulk_be_and_tp1_profitability_filtering():
         feed_module.mt5 = orig_mt5
 
 
+def test_rmultiple_expectancy_and_monthly_metrics():
+    """Verify calculation of expectancy_r, total_r, and MTD monthly_r."""
+    import time
+    from risk_management_dashboard.risk_calculator import calculate_trade_statistics
+
+    # 1. 50% WR, 1.5 Payoff -> Expectancy = (0.50 * 1.5) - 0.50 = +0.25 R
+    stats_override = calculate_trade_statistics(override_win_rate=0.50, override_payoff_ratio=1.5, override_total_trades=100)
+    assert abs(stats_override.expectancy_r - 0.25) < 1e-4
+
+    # 2. PnL list: 2 wins of +$60, 2 losses of -$40 -> Net +$40. Avg loss = $40. Total R = 40 / 40 = +1.0 R
+    pnl = [60.0, -40.0, 60.0, -40.0]
+    now_ts = time.time()
+    records = [
+        {"net_pnl": 60.0, "time": now_ts},
+        {"net_pnl": -40.0, "time": now_ts},
+        {"net_pnl": 60.0, "time": now_ts},
+        {"net_pnl": -40.0, "time": now_ts},
+    ]
+    stats_real = calculate_trade_statistics(trades_pnl=pnl, trades_records=records)
+    assert stats_real.expectancy_r == 0.25
+    assert stats_real.total_r == 1.0
+    assert stats_real.monthly_trades == 4
+    assert stats_real.monthly_pnl == 40.0
+    assert stats_real.monthly_r == 1.0
+
+
 
 

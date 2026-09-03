@@ -13,6 +13,8 @@ export interface AccountSummary {
   login: number;
   account_type?: string;
   is_live?: boolean;
+  trade_mode?: 'Demo' | 'Real' | 'Contest';
+  is_real?: boolean;
 }
 
 export interface StepRule {
@@ -164,6 +166,11 @@ export interface TradeStats {
   kelly_half: number;
   kelly_quarter: number;
   sample_info?: SampleSizeInfo;
+  expectancy_r?: number;
+  total_r?: number;
+  monthly_r?: number;
+  monthly_trades?: number;
+  monthly_pnl?: number;
 }
 
 export interface ToastMessage {

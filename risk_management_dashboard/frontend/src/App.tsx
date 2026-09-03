@@ -71,9 +71,6 @@ export const App: Component = () => {
       });
 
       marketStore.setTradeStats(calcData.trade_stats);
-      if (calcData.sample_info) {
-        marketStore.setSampleInfo(calcData.sample_info);
-      }
       if (calcData.results && calcData.results.length > 0) {
         marketStore.setRawSymbols(calcData.results.map((r) => r.spec));
       }

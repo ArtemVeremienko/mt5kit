@@ -84,10 +84,33 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
   const rrRatioTag = createMemo(() => formatRrRatio(preferencesStore.rrRatio()));
 
   // Structured Strategy summary tags
-  const tradesCountTag = createMemo(() => `${tradeStats().total_trades || 0} Trades`);
-  const winRateTag = createMemo(() => `${((tradeStats().win_rate || 0) * 100).toFixed(0)}% WR`);
-  const profitFactorTag = createMemo(() => `PF ${(tradeStats().profit_factor || 0).toFixed(2)}`);
-  const halfKellyTag = createMemo(() => `½K ${((tradeStats().kelly_half || 0) * 100).toFixed(1)}%`);
+
+  const expVal = createMemo(() => tradeStats().expectancy_r ?? 0);
+  const expectancyTag = createMemo(() => `Exp: ${expVal() >= 0 ? '+' : ''}${expVal().toFixed(2)}R`);
+
+  const monthlyRVal = createMemo(() => tradeStats().monthly_r ?? 0);
+  const monthlyRTag = createMemo(() => `${monthlyRVal() >= 0 ? '+' : ''}${monthlyRVal().toFixed(1)}R/mo`);
+
+  const monthlyTargetVal = () => preferencesStore.monthlyIncomeTarget();
+  const monthlyPnlVal = () => tradeStats().monthly_pnl ?? 0;
+  const monthlyProgressPct = createMemo(() => {
+    const target = monthlyTargetVal();
+    if (!target || target <= 0) return 0;
+    return (monthlyPnlVal() / target) * 100;
+  });
+
+  const isRealAccount = createMemo(() => {
+    const acc = account();
+    if (acc.is_real !== undefined) return acc.is_real;
+    if (acc.trade_mode) return acc.trade_mode === 'Real';
+    const s = (acc.server || '').toLowerCase();
+    return !s.includes('demo') && !s.includes('simulated');
+  });
+
+  const connectionStatusLabel = createMemo(() => {
+    if (!isConnected()) return 'OFFLINE';
+    return isRealAccount() ? 'MT5 REAL' : 'MT5 DEMO';
+  });
 
   return (
     <header class="dashboard-header">
@@ -131,7 +154,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
 
       {/* Center Zone: Account Telemetry + Horizontal Dual Pills */}
       <div class="header-center-zone">
-        <div class="account-inline-metrics-container" ref={accountInfoRef}>
+        <div class="account-inline-metrics-container">
           <div class="account-inline-metrics">
             <div
               class="metric-mini-group clickable"
@@ -181,59 +204,7 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
               <span class="metric-mini-label">EQ</span>
               <span class="metric-mini-val font-mono">{formatCurrency(account().equity || 0.0)}</span>
             </div>
-
-            <button
-              type="button"
-              class="btn-account-info"
-              classList={{ active: isAccountInfoOpen() }}
-              onClick={() => setIsAccountInfoOpen(!isAccountInfoOpen())}
-              title="Click to view full MT5 Account Info (Leverage, Server, Login)"
-            >
-              <span class="account-info-icon">ℹ️</span>
-            </button>
           </div>
-
-          {/* Floating Account Details Popover */}
-          <Show when={isAccountInfoOpen()}>
-            <div class="account-info-popover">
-              <div class="acc-popover-header">
-                <div class="acc-popover-title-group">
-                  <span class="acc-popover-icon">👤</span>
-                  <span class="acc-popover-title">MT5 ACCOUNT TELEMETRY</span>
-                </div>
-                <span class="acc-popover-badge" classList={{ 'badge-live': isConnected() }}>
-                  {isConnected() ? 'MT5 LIVE' : 'OFFLINE'}
-                </span>
-              </div>
-
-              <div class="acc-popover-grid">
-                <div class="acc-popover-item">
-                  <span class="acc-popover-label">Login / ID</span>
-                  <span class="acc-popover-val font-mono">#{account().login || '—'}</span>
-                </div>
-                <div class="acc-popover-item">
-                  <span class="acc-popover-label">Account Name</span>
-                  <span class="acc-popover-val">{account().name || 'MT5 Trader'}</span>
-                </div>
-                <div class="acc-popover-item">
-                  <span class="acc-popover-label">Server / Broker</span>
-                  <span class="acc-popover-val font-mono">{account().server || 'MetaQuotes'}</span>
-                </div>
-                <div class="acc-popover-item">
-                  <span class="acc-popover-label">Account Type</span>
-                  <span class="acc-popover-val">{account().account_type || 'Hedge'}</span>
-                </div>
-                <div class="acc-popover-item">
-                  <span class="acc-popover-label">Base Currency</span>
-                  <span class="acc-popover-val font-mono">{account().currency || 'USD'}</span>
-                </div>
-                <div class="acc-popover-item">
-                  <span class="acc-popover-label">Leverage</span>
-                  <span class="acc-popover-val font-mono text-accent">1:{account().leverage || 2000}</span>
-                </div>
-              </div>
-            </div>
-          </Show>
         </div>
 
         {/* Horizontal Dual Pills */}
@@ -269,21 +240,19 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
             >
               <span class="pill-icon">📊</span>
               <div class="pill-content">
-                <span class="pill-chip chip-deals">{tradesCountTag()}</span>
-                <span class="pill-divider">|</span>
                 <span
-                  class="pill-chip chip-wr"
-                  classList={{
-                    'chip-wr-good': (tradeStats().win_rate || 0) >= 0.5,
-                    'chip-wr-sub': (tradeStats().win_rate || 0) < 0.5,
-                  }}
+                  class="pill-chip chip-exp"
+                  title="Mathematical Expectancy per trade: (WinRate × Payoff) - LossRate"
                 >
-                  {winRateTag()}
+                  {expectancyTag()}
                 </span>
                 <span class="pill-divider">|</span>
-                <span class="pill-chip chip-pf">{profitFactorTag()}</span>
-                <span class="pill-divider">|</span>
-                <span class="pill-chip chip-kelly">{halfKellyTag()}</span>
+                <span
+                  class="pill-chip chip-monthly-r"
+                  title={`Month-to-Date Realized R: ${monthlyRVal() >= 0 ? '+' : ''}${monthlyRVal().toFixed(2)}R (${tradeStats().monthly_trades || 0} trades this month)`}
+                >
+                  {monthlyRTag()}
+                </span>
               </div>
             </div>
 
@@ -307,6 +276,79 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
                   </span>
                 </div>
 
+                {/* Monthly Target Goal Card */}
+                <div
+                  style={{
+                    background: 'rgba(15, 23, 42, 0.75)',
+                    border: '1px solid rgba(51, 65, 85, 0.7)',
+                    'border-radius': '6px',
+                    padding: '8px 12px',
+                    'margin-bottom': '12px',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      'justify-content': 'space-between',
+                      'align-items': 'center',
+                      'font-size': '11px',
+                      'margin-bottom': '4px',
+                    }}
+                  >
+                    <span style={{ color: '#94a3b8', 'font-weight': '600' }}>
+                      MONTHLY INCOME GOAL
+                    </span>
+                    <span
+                      class="font-mono font-bold"
+                      style={{
+                        color: monthlyProgressPct() >= 100 ? '#10b981' : monthlyProgressPct() > 0 ? '#f59e0b' : '#ef4444',
+                      }}
+                    >
+                      {monthlyProgressPct().toFixed(0)}% Achieved
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      display: 'flex',
+                      'justify-content': 'space-between',
+                      'align-items': 'center',
+                      'font-size': '12px',
+                      'margin-bottom': '6px',
+                    }}
+                  >
+                    <span
+                      class="font-mono"
+                      classList={{
+                        'text-profit': monthlyPnlVal() >= 0,
+                        'text-loss': monthlyPnlVal() < 0,
+                      }}
+                    >
+                      MTD: {monthlyPnlVal() >= 0 ? '+' : '-'}{formatCurrency(Math.abs(monthlyPnlVal()))} ({monthlyRTag()})
+                    </span>
+                    <span class="font-mono text-neutral" style={{ 'font-size': '11px' }}>
+                      Target: {formatCurrency(preferencesStore.monthlyIncomeTarget())}
+                    </span>
+                  </div>
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '4px',
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      'border-radius': '2px',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${Math.min(100, Math.max(0, monthlyProgressPct()))}%`,
+                        height: '100%',
+                        background: monthlyProgressPct() >= 100 ? '#10b981' : '#3b82f6',
+                        transition: 'width 0.3s ease',
+                      }}
+                    />
+                  </div>
+                </div>
+
                 <div class="stats-popover-grid">
                   <div class="stats-popover-item">
                     <span class="stats-popover-label">Total Closed Trades</span>
@@ -325,12 +367,29 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
                     </span>
                   </div>
                   <div class="stats-popover-item">
-                    <span class="stats-popover-label">Profit Factor</span>
-                    <span class="stats-popover-val font-mono">{(tradeStats().profit_factor || 0).toFixed(2)}</span>
+                    <span class="stats-popover-label">Expectancy (Edge)</span>
+                    <span
+                      class="stats-popover-val font-mono font-bold"
+                      classList={{
+                        'text-profit': expVal() >= 0,
+                        'text-loss': expVal() < 0,
+                      }}
+                    >
+                      {expVal() >= 0 ? '+' : ''}{expVal().toFixed(2)} R
+                    </span>
                   </div>
                   <div class="stats-popover-item">
-                    <span class="stats-popover-label">Payoff Ratio (R:R)</span>
-                    <span class="stats-popover-val font-mono">{(tradeStats().payoff_ratio || 0).toFixed(2)}</span>
+                    <span class="stats-popover-label">Total Realized (All-Time)</span>
+                    <span
+                      class="stats-popover-val font-mono font-bold"
+                      classList={{
+                        'text-profit': (tradeStats().total_r || 0) >= 0,
+                        'text-loss': (tradeStats().total_r || 0) < 0,
+                      }}
+                    >
+                      {(tradeStats().total_r || 0) >= 0 ? '+' : ''}
+                      {(tradeStats().total_r || 0).toFixed(1)} R
+                    </span>
                   </div>
                   <div class="stats-popover-item">
                     <span class="stats-popover-label">Average Win / Loss</span>
@@ -345,6 +404,14 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
                     <span class="stats-popover-val font-mono text-accent font-bold">
                       {((tradeStats().kelly_half || 0) * 100).toFixed(2)}%
                     </span>
+                  </div>
+                  <div class="stats-popover-item">
+                    <span class="stats-popover-label">Profit Factor (Secondary)</span>
+                    <span class="stats-popover-val font-mono">{(tradeStats().profit_factor || 0).toFixed(2)}</span>
+                  </div>
+                  <div class="stats-popover-item">
+                    <span class="stats-popover-label">Payoff Ratio (R:R)</span>
+                    <span class="stats-popover-val font-mono">{(tradeStats().payoff_ratio || 0).toFixed(2)}</span>
                   </div>
                 </div>
 
@@ -388,14 +455,105 @@ export const HeaderMetricsBar: Component<Props> = (props) => {
           </span>
         </button>
 
-        {/* Pulsing Status Beacon */}
-        <div
-          class="connection-dot-beacon"
-          classList={{ connected: isConnected() }}
-          title={isConnected() ? `Connected: ${account().server || 'MT5 Live Feed'}` : 'Disconnected from MT5'}
-        >
-          <span class="beacon-pulse"></span>
-          <span class="beacon-core"></span>
+        {/* Connection Status Pill with Account Telemetry */}
+        <div class="connection-status-wrapper" ref={accountInfoRef}>
+          <button
+            type="button"
+            class="btn-connection-status"
+            classList={{
+              connected: isConnected(),
+              'mode-real': isConnected() && isRealAccount(),
+              'mode-demo': isConnected() && !isRealAccount(),
+              active: isAccountInfoOpen(),
+            }}
+            onClick={() => setIsAccountInfoOpen(!isAccountInfoOpen())}
+            title={
+              isConnected()
+                ? `Connected: ${account().server || 'MT5 Feed'} (${isRealAccount() ? 'Real Account' : 'Demo Account'}) · Click for Account Telemetry`
+                : 'Disconnected from MT5 · Click for details'
+            }
+          >
+            <span class="status-beacon-dot">
+              <span class="beacon-pulse"></span>
+              <span class="beacon-core"></span>
+            </span>
+            <span class="status-beacon-text">
+              {connectionStatusLabel()}
+            </span>
+          </button>
+
+          {/* Floating Account Details Popover */}
+          <Show when={isAccountInfoOpen()}>
+            <div class="account-info-popover right-aligned">
+              <div class="acc-popover-header">
+                <div class="acc-popover-title-group">
+                  <span class="acc-popover-icon">👤</span>
+                  <span class="acc-popover-title">MT5 ACCOUNT TELEMETRY</span>
+                </div>
+                <span
+                  class="acc-popover-badge"
+                  classList={{
+                    'badge-real': isConnected() && isRealAccount(),
+                    'badge-demo': isConnected() && !isRealAccount(),
+                    'badge-offline': !isConnected(),
+                  }}
+                >
+                  {!isConnected() ? 'OFFLINE' : isRealAccount() ? 'REAL ACCOUNT' : 'DEMO ACCOUNT'}
+                </span>
+              </div>
+
+              <div class="acc-popover-grid">
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Login / ID</span>
+                  <span class="acc-popover-val font-mono">#{account().login || '—'}</span>
+                </div>
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Trade Mode</span>
+                  <span
+                    class="acc-popover-val font-mono font-bold"
+                    classList={{
+                      'text-profit': isRealAccount(),
+                      'text-accent': !isRealAccount(),
+                    }}
+                  >
+                    {account().trade_mode || (isRealAccount() ? 'Real' : 'Demo')}
+                  </span>
+                </div>
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Account Name</span>
+                  <span class="acc-popover-val">{account().name || 'MT5 Trader'}</span>
+                </div>
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Server / Broker</span>
+                  <span class="acc-popover-val font-mono">{account().server || 'MetaQuotes'}</span>
+                </div>
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Account Type</span>
+                  <span class="acc-popover-val">{account().account_type || 'Hedge'}</span>
+                </div>
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Leverage</span>
+                  <span class="acc-popover-val font-mono text-accent">1:{account().leverage || 2000}</span>
+                </div>
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Base Currency</span>
+                  <span class="acc-popover-val font-mono">{account().currency || 'USD'}</span>
+                </div>
+                <div class="acc-popover-item">
+                  <span class="acc-popover-label">Feed Status</span>
+                  <span
+                    class="acc-popover-val font-mono"
+                    classList={{
+                      'text-profit': isConnected(),
+                      'text-loss': !isConnected(),
+                    }}
+                  >
+                    {isConnected() ? 'Active Stream' : 'Disconnected'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </Show>
         </div>
       </div>
     </header>

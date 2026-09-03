@@ -69,6 +69,17 @@ function createPreferences() {
     parseFloat(localStorage.getItem('mt5_max_risk_ceiling') || '2.50') || 2.50
   );
 
+  const [monthlyIncomeTarget, setMonthlyIncomeTargetSignal] = createSignal<number>(
+    parseFloat(localStorage.getItem('mt5_monthly_income_target') || '5000') || 5000
+  );
+
+  const setMonthlyIncomeTarget = (val: number) => {
+    if (!isNaN(val) && val > 0) {
+      setMonthlyIncomeTargetSignal(val);
+      localStorage.setItem('mt5_monthly_income_target', val.toString());
+    }
+  };
+
   const setMinRiskFloorPct = (val: number) => {
     if (!isNaN(val) && val > 0) {
       setMinRiskFloorPctSignal(val);
@@ -215,6 +226,8 @@ function createPreferences() {
     setRiskMethod,
     customRiskPct,
     setCustomRiskPct,
+    monthlyIncomeTarget,
+    setMonthlyIncomeTarget,
     minRiskFloorPct,
     setMinRiskFloorPct,
     maxRiskCeilingPct,

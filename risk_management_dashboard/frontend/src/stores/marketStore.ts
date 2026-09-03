@@ -9,8 +9,15 @@ export type SortDirection = 'none' | 'asc' | 'desc';
 
 function createMarketStore() {
   const [rawSymbols, setRawSymbols] = createSignal<SymbolSpec[]>([]);
-  const [tradeStats, setTradeStats] = createSignal<Partial<TradeStats>>({});
+  const [tradeStats, setTradeStatsSignal] = createSignal<Partial<TradeStats>>({});
   const [sampleInfo, setSampleInfo] = createSignal<SampleSizeInfo | undefined>(undefined);
+
+  const setTradeStats = (stats: Partial<TradeStats>) => {
+    setTradeStatsSignal(stats);
+    if (stats && stats.sample_info) {
+      setSampleInfo(stats.sample_info);
+    }
+  };
   const [selectedCategories, setSelectedCategories] = createSignal<string[]>([]);
   const [activeCategory, setActiveCategory] = createSignal<string>('All');
   const [searchQuery, setSearchQuery] = createSignal<string>('');

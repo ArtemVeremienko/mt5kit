@@ -214,8 +214,18 @@ class MT5RiskFeed:
                         else:
                             account_type = "Hedge"
 
+                        trade_mode_raw = getattr(acc, "trade_mode", 0)
+                        if trade_mode_raw == 2:
+                            trade_mode = "Real"
+                        elif trade_mode_raw == 1:
+                            trade_mode = "Contest"
+                        else:
+                            trade_mode = "Demo"
+
                         return {
                             "is_live": True,
+                            "trade_mode": trade_mode,
+                            "is_real": trade_mode_raw == 2,
                             "login": acc.login,
                             "server": acc.server,
                             "currency": acc.currency,
@@ -234,6 +244,8 @@ class MT5RiskFeed:
         # Fallback Mock Account
         return {
             "is_live": False,
+            "trade_mode": "Demo",
+            "is_real": False,
             "login": 88812345,
             "server": "Demo-Server (Simulated)",
             "currency": "USD",
@@ -800,6 +812,7 @@ class MT5RiskFeed:
                         if pnl_list:
                             logger.info(f"Loaded {len(pnl_list)} completed round-turn trades (from {len(deals)} deals) from MT5 history.")
                             self._cached_trades = pnl_list
+                            self._cached_trade_records = closed_positions
                             return pnl_list
                 except Exception as e:
                     logger.error(f"Error fetching history_deals_get: {e}")
@@ -807,6 +820,11 @@ class MT5RiskFeed:
         # Fallback mock trade history
         if not self._cached_trades:
             self._cached_trades = generate_mock_trades_pnl(count=185, win_rate=0.56, payoff_ratio=1.45)
+            now_ts = time.time()
+            self._cached_trade_records = [
+                {"net_pnl": p, "time": now_ts - (185 - i) * (86400 * 90 / 185), "is_closed": True}
+                for i, p in enumerate(self._cached_trades)
+            ]
         return self._cached_trades
 
     def set_custom_trades(self, pnl_list: List[float]):

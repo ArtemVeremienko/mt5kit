@@ -10,6 +10,7 @@ Implements:
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Dict, List, Optional, Tuple, Any
 import numpy as np
@@ -50,6 +51,11 @@ class TradeStats:
     kelly_half: float          # f* / 2
     kelly_quarter: float       # f* / 4
     sample_info: SampleSizeInfo
+    expectancy_r: float = 0.0  # (win_rate * payoff_ratio) - loss_rate
+    total_r: float = 0.0       # net_profit / avg_loss
+    monthly_r: float = 0.0     # monthly_pnl / avg_loss
+    monthly_trades: int = 0    # trades closed in current calendar month
+    monthly_pnl: float = 0.0   # net closed PnL in current calendar month
 
 
 @dataclass
@@ -161,10 +167,12 @@ def calculate_trade_statistics(
     trades_pnl: Optional[List[float]] = None,
     override_win_rate: Optional[float] = None,
     override_payoff_ratio: Optional[float] = None,
-    override_total_trades: Optional[int] = None
+    override_total_trades: Optional[int] = None,
+    trades_records: Optional[List[Dict[str, Any]]] = None
 ) -> TradeStats:
     """
-    Computes comprehensive trade statistics from a list of trade PnLs or manual override parameters.
+    Computes comprehensive trade statistics from a list of trade PnLs or manual override parameters,
+    including institutional R-multiple metrics (Expectancy per trade, Cumulative R, and Month-to-Date R).
     Optimized with vectorized NumPy boolean masks and aggregations.
     """
     if trades_pnl and len(trades_pnl) > 0:
@@ -226,6 +234,34 @@ def calculate_trade_statistics(
             
         sample_info = evaluate_sample_size(total_trades)
 
+    # R-Multiple metrics (Van Tharp standard: 1R = |Average Loss|)
+    expectancy_r = (win_rate * payoff_ratio) - loss_rate
+    total_r = (net_profit / avg_loss) if avg_loss > 0 else 0.0
+
+    monthly_trades = 0
+    monthly_pnl = 0.0
+    monthly_r = 0.0
+
+    if trades_records and len(trades_records) > 0:
+        now_utc = datetime.now(timezone.utc)
+        start_of_month_ts = datetime(now_utc.year, now_utc.month, 1, tzinfo=timezone.utc).timestamp()
+        mtd_trades = [r for r in trades_records if float(r.get("time", 0)) >= start_of_month_ts]
+        monthly_trades = len(mtd_trades)
+        if monthly_trades > 0:
+            monthly_pnl = float(sum(float(r.get("net_pnl", 0.0)) for r in mtd_trades))
+            monthly_r = (monthly_pnl / avg_loss) if avg_loss > 0 else 0.0
+    elif trades_pnl and len(trades_pnl) > 0:
+        # Fallback estimation for flat PnL arrays without timestamps (recent 25% of trades)
+        monthly_trades = min(len(trades_pnl), max(1, int(round(total_trades * 0.25))))
+        recent_pnl = trades_pnl[-monthly_trades:] if monthly_trades > 0 else []
+        monthly_pnl = float(sum(recent_pnl)) if recent_pnl else 0.0
+        monthly_r = (monthly_pnl / avg_loss) if avg_loss > 0 else 0.0
+    else:
+        # Default benchmark simulation profile: assume ~20 trades/month
+        monthly_trades = min(total_trades, 20)
+        monthly_r = monthly_trades * expectancy_r
+        monthly_pnl = monthly_r * avg_loss
+
     return TradeStats(
         total_trades=total_trades,
         winning_trades=winning_trades,
@@ -242,7 +278,12 @@ def calculate_trade_statistics(
         kelly_full=round(kelly_full, 4),
         kelly_half=round(kelly_half, 4),
         kelly_quarter=round(kelly_quarter, 4),
-        sample_info=sample_info
+        sample_info=sample_info,
+        expectancy_r=round(expectancy_r, 3),
+        total_r=round(total_r, 2),
+        monthly_r=round(monthly_r, 2),
+        monthly_trades=monthly_trades,
+        monthly_pnl=round(monthly_pnl, 2)
     )
 
 
