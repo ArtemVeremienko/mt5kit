@@ -58,7 +58,113 @@
 
 ---
 
-## 🎨 UI/UX & Ergonomics Polish
+## 🔒 Phase 2: Institutional Execution Safety & Dual-Arm Engine (P0 Priority)
+> 📚 **Reference Standards**: See [`docs/01_institutional_terminal_design.md`](./docs/01_institutional_terminal_design.md) & [`docs/03_matrix_execution_and_oms.md`](./docs/03_matrix_execution_and_oms.md)
+
+### 3. 🔒 Dual-Arm Safety State Machine
+- [ ] **Decaying Auto-Disarm Safety Gate**:
+  - Eliminate raw hair-trigger 1-click execution and quote-obsoleting blocking confirmation modals.
+  - First click on BUY or SELL transitions the symbol row into an explicit `ARMED` state with a 5.0-second auto-decay window.
+  - A visual decaying progress bar/ring renders beneath the button group indicating remaining armed dwell time.
+  - A second click while `ARMED` atomically claims execution and dispatches the order to the MT5 pre-trade risk engine.
+  - Orders auto-disarm immediately upon dispatch, on 5.0s timeout expiration, or when `Escape` is pressed.
+- [ ] **Anti-Double-Click & Debounce Interlock**:
+  - Atomic test-and-set claim token (`verify_and_claim_execution()`) in UI and backend preventing duplicate rapid-fire order dispatches during network jitter.
+- [ ] **Hotkey Focus Trapping & Safety Interlocks**:
+  - Suppress execution hotkeys whenever any input field (`.sl-input`, search bar, popover) has DOM focus.
+
+### 4. 🔘 5-State Institutional Execution Button Engine
+- [ ] **Canonical 5-State Button Lifecycle**:
+  - **State 1: Resting (Ghost / Outline)**: Subtle alpha-tinted border (`rgba(8, 153, 129, 0.15)` / `rgba(242, 54, 69, 0.15)`), preserving the 90-7-3 chromatic budget.
+  - **State 2: Armed**: High-contrast active outline with decaying countdown timer line.
+  - **State 3: Depressed**: Tactile mechanical feedback (`active` state, 1px translation).
+  - **State 4: In-Flight**: Immediate lock (`pointer-events: none`) with inline micro-spinner / shimmer while the IPC order packet routes through MT5.
+  - **State 5: Fill Flash**: 350–450ms hardware-accelerated pulse (`#34D399` on fill / `#F87171` on reject) decaying smoothly back to Resting.
+
+---
+
+## 🧠 Phase 3: Cognitive Ergonomics, Psychological De-Biasing & CVD (P1 Priority)
+> 📚 **Reference Standards**: See [`docs/01_institutional_terminal_design.md`](./docs/01_institutional_terminal_design.md) & [`docs/02_trading_psychology_and_ergonomics.md`](./docs/02_trading_psychology_and_ergonomics.md)
+
+### 5. 👁️ Emotional De-Biasing & Stealth PnL Mode
+- [ ] **Stealth PnL & Normalized $R$-Multiple HUD**:
+  - Saturated flashing raw dollar drawdowns trigger sympathetic nervous system (SNS) hyper-arousal and loss aversion ($\lambda \approx 2.25$).
+  - Add a Stealth PnL toggle button (`👁️` / `🕶️`) in the header metrics bar and global hotkey (`H`).
+  - Modes: **Standard Currency** (`-$28.86`), **Normalized R** (`-0.61 R`), and **Stealth Mask** (`***`).
+  - Persist stealth preference in `localStorage`.
+- [ ] **Tick Flash-Decay Micro-Animations**:
+  - Replace static DOM price replacements with 350ms GPU-accelerated tick flash-decay animations (`.price-flash-up`, `.price-flash-down`) utilizing composited layers (`opacity`, `transform`) without layout thrashing.
+- [ ] **Universal CVD Cyan/Amber Colorway**:
+  - Add Color Vision Deficiency (CVD) toggle in Settings:
+    - **Standard**: Pine Emerald (`#089981` / `#34D399`) & Crimson Coral (`#F23645` / `#F87171`).
+    - **Institutional CVD**: Electric Cyan (`#00B4D8`) & Warm Amber (`#FF8C00`).
+  - Update all semantic CSS variables (`--trade-buy`, `--trade-sell`, `--text-profit`, `--text-loss`).
+- [ ] **Input Floating-Point Precision & Form a11y Cleanup**:
+  - Enforce strict `.toFixed(1)` step precision across SL/TP calculation models to eliminate IEEE 754 floating-point leaks in the accessibility tree (e.g. `12.300000190734863` $\to$ `12.3`).
+  - Assign semantic `id` and `name` attributes to all form controls to eliminate Chromium accessibility warnings.
+
+---
+
+## 🛡️ Phase 4: Pre-Trade Risk Interlocks & Smart Liquidation (P1 Priority)
+
+### 6. 🚨 Pre-Trade Execution Safety Gatekeeper
+- [ ] **Spread Blowout Visual Warning & Soft Guard**:
+  - Track 14-day rolling median spread per instrument.
+  - Subtle amber highlight ring on `.spread-pill-mini` if current spread exceeds $2.0\times$ median spread (`⚠️ Spread Surge`).
+  - Require explicit double-arm confirmation before routing orders if spread exceeds $2.5\times$ median (rollover / news spike guard).
+- [ ] **Margin Health Pre-Flight Check**:
+  - Verify that `Required Margin <= Account Free Margin * 0.95` before allowing execution.
+  - Visually disable execution buttons with an explanatory tooltip if margin is insufficient.
+- [ ] **Max Risk Per Trade Safety Ceiling (Optional Setting)**:
+  - Configurable hard ceiling in Settings (e.g. max 2.0% risk) preventing oversized manual orders.
+
+### 7. 🚨 Smart Flatten vs. Close All (Configurable Liquidation Engine)
+- [ ] **Smart Flatten Mode**:
+  - Global user preference in Settings: `Emergency Action Mode` (`Close Positions Only` vs `Smart Flatten: Positions + Cancel Pending Orders`).
+  - **Close All Mode**: Exclusively liquidates open market positions (`mt5.positions_get()`).
+  - **Smart Flatten Mode**: Concurrently closes 100% of open positions AND deletes all active pending orders (`mt5.orders_get()`), guaranteeing true $0.00$ net exposure.
+  - UI reflection: Toolbar button and tooltip adapt dynamically (`🛑 Close All (N)` vs `🚨 Flatten All (N Pos + M Orders)`).
+
+---
+
+## 🌐 Phase 5: Portfolio Telemetry, Volatility & Layout Polish (P2 Priority)
+
+### 8. 📊 Real-Time Portfolio Heat & Exposure Telemetry
+- [ ] **Total Portfolio Heat Gauge**:
+  - Real-time sum of total open stop-loss risk in currency and account equity percentage:
+    $$\text{Portfolio Heat} = \sum_{k} |\text{OpenPrice}_k - \text{SL}_k| \times \text{Volume}_k \times \text{PipValue}_k$$
+- [ ] **Net Currency Exposure Breakdown**:
+  - Computes net long/short dollar exposure aggregated across base currencies (USD, EUR, GBP, JPY, AUD, CAD, CHF, NZD).
+- [ ] **Account HUD Telemetry Expansion**:
+  - Display Free Margin, Margin Level %, and session Daily Loss Limit progress bar in the top HUD.
+- [ ] **Responsive Header Layout (Media Queries)**:
+  - Add responsive rules for `<=1100px` and `<=1024px` viewports to collapse the strategy telemetry pill into an icon badge, preventing right-hand controls (`500ms`, `Settings`, `MT5 DEMO`) from being pushed off-screen.
+
+### 9. 🎨 Volatility & Interaction Micro-Polish
+- [ ] **Quick-Preset SL Hover Bar (cTrader Pattern)**:
+  - On hovering a symbol's SL box, display micro-chips (`[¼ ADR]`, `[½ ADR]`, `[1 ADR]`, `[1 ATR]`) for instant 1-click preset overrides without manual typing.
+- [ ] **Session ADR Exhaustion & Volatility Micro-Gauge (Matrix Column 3 Upgrade)**:
+  - **Quantitative Engine (`feed.py`)**:
+    - Query today's D1 bar (`mt5.copy_rates_from_pos(sym, TIMEFRAME_D1, 0, 1)`) to obtain real-time session extremes: $\text{Range}_{\text{today}} = \text{High}_{\text{today}} - \text{Low}_{\text{today}}$.
+    - Derive session metrics:
+      $$\text{Used \%} = \min\left(200\%, \frac{\text{Range}_{\text{today}}}{\text{ADR}_{14}} \times 100\%\right), \quad \text{Left}_{\text{pips}} = \max\left(0.0, \text{ADR}_{14} - \text{Range}_{\text{today}}\right)$$
+    - Compute directional projection limits:
+      - $\text{Room Up} = (\text{Low}_{\text{today}} + \text{ADR}_{14}) - \text{Current Price}$
+      - $\text{Room Down} = \text{Current Price} - (\text{High}_{\text{today}} - \text{ADR}_{14})$
+    - Stream `adr_left_pips`, `adr_used_pct`, `today_range_pips`, `room_up_pips`, and `room_down_pips` in 500ms WebSocket broadcasts.
+  - **Matrix Grid Micro-Gauge UI (`SymbolRow.tsx` & `index.css`)**:
+    - Transform Column 3 from a static string into a high-density stacked micro-gauge:
+      - **Top Line**: Tactile pips remaining (e.g. `42.5 p left`) with total ADR muted badge (`[68.4p]`).
+      - **Subtext Line**: Normalized session absorption (e.g. `38% used`).
+      - **Bottom Edge**: 3px hairline micro progress bar adhering to the 90-7-3 chromatic budget with 3 regime states:
+        - `0% – 70% Used`: Cool slate/cyan (`#64748b` / `#00b4d8`) $\implies$ *Healthy Trend Expansion*.
+        - `70% – 90% Used`: Muted functional amber (`#f59e0b`) $\implies$ *Mature Trend / Decelerating Momentum*.
+        - `≥ 90% Used`: Warning coral (`#f87171` or `#ff8c00`) with subtle `⚠️` badge $\implies$ *Statistical Exhaustion / Mean-Reversion Trap Warning*.
+    - Fixed 34px container height with strict `font-variant-numeric: tabular-nums` to eliminate layout shift.
+  - **Rich Telemetry Hover Tooltip**:
+    - Hovering the cell reveals session extremes (`Today: High 1.16450 · Low 1.15908 · Range 54.2p`) and directional headroom (`+18.2p to ADR High · -8.4p to ADR Low`).
+  - **Positions Blotter Exhaustion Warning (`PositionRow.tsx`)**:
+    - Display an amber/coral warning chip (`⚠️ ADR Cap`) next to open positions when their symbol exceeds $90\%$ ADR, alerting the operator that intraday Take-Profit targets have low statistical fulfillment probability without an overnight hold.
 - [x] **Risk Controls Capsule UX/UI**:
   - Improve UX/UI for `'Click to configure Working Capital, Risk Model, SL Presets, and R:R Ratio'` capsule with micro-badge chips.
   - Smart Working Capital display: If `Working Capital == Balance`, displays clean standard `BAL`; when overridden, replaces `BAL` with highlighted amber `WC` badge and detailed tooltip + modal jump.
@@ -69,36 +175,6 @@
 - [x] **Stop Loss Input Expansion & Tabular Numbers (Quantower Pattern)**:
   - Expanded SL input width (84px–100px) and removed internal browser spinner arrows (`-webkit-appearance: none`) to eliminate glyph clipping on large integers (`GOLD`, `#USSPX500`, `#Japan225`).
   - Strict vertical decimal alignment via `font-variant-numeric: tabular-nums`.
-- [ ] **Quick-Preset SL Hover Bar (cTrader Pattern)**:
-  - On hovering a symbol's SL box, display micro-chips (`[¼ ADR]`, `[½ ADR]`, `[1 ADR]`, `[1 ATR]`) for instant 1-click preset overrides without manual typing.
-- [ ] **Spread Volatility Alert Highlight (TradingView Pattern)**:
-  - Subtle amber highlight ring on `.spread-pill-mini` if current spread exceeds $2.0\times$ the symbol's 14-day median spread (rollover / news spike guard).
-- [ ] **Daily Session P&L Progress Bar (Quantower Pattern)**:
-  - Micro progress-bar embedded under the header `P&L` metric to track daily profit target or maximum daily drawdown limit.
-- [ ] **Hybrid Stacked Volatility Display in 14D ADR Column (Pips + % Subtext)**:
-  - Display primary tactile pips on top with normalized volatility `%` stacked as muted subtext beneath (e.g. `46.1 p` / `0.40%`).
-  - *Design Rationale*: Avoids a dangerous global `[Pips | %]` mode-switch during live execution, preventing fat-finger errors while providing cross-asset volatility comparison (Forex, Crypto, Indices, Commodities). Multi-unit conversion (`pips` ↔ `price` ↔ `%` ↔ `$ cash`) remains available inside the deep-dive/popover sizing modal.
-
----
-
-## 🛡️ Phase 2: Pre-Trade Safety & Portfolio Telemetry (P1 Priority)
-
-### 3. 🛡️ Pre-Trade Execution Safety Gatekeeper
-- [ ] **Anti-Double-Click Debounce**:
-  - 3.0-second safety window on 1-Click execution buttons to prevent accidental duplicate order submissions.
-- [ ] **Spread Blowout Visual Warning / Soft Guard**:
-  - Amber visual badge and confirmation alert if current spread exceeds $2.5\times$ the 14-day median spread (e.g. news spikes, illiquid rollover).
-- [ ] **Margin Health Pre-Flight Check**:
-  - Pre-calculates margin requirements before order dispatch; disables execution if free margin is insufficient.
-- [ ] **Max Risk Per Trade Safety Ceiling (Optional Setting)**:
-  - User-configurable hard ceiling in Settings (e.g. max 2.0% risk) that prevents oversized manual trades.
-
-### 4. 🌐 Real-Time Portfolio Heat & Exposure Telemetry
-- [ ] **Total Portfolio Heat Gauge**:
-  - Real-time sum of total open stop-loss risk in currency and account percentage:
-    $$\text{Portfolio Heat} = \sum_{k} |\text{OpenPrice}_k - \text{SL}_k| \times \text{Volume}_k \times \text{PipValue}_k$$
-- [ ] **Net Currency Exposure Breakdown**:
-  - Computes net long/short dollar exposure aggregated across base currencies (USD, EUR, GBP, JPY, AUD, CAD, CHF, NZD).
 
 ---
 
