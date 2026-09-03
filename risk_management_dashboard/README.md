@@ -6,7 +6,7 @@ An enterprise-grade, high-frequency risk management and real-time position sizin
 > - [📖 Master Documentation Index (docs/INDEX.md)](./docs/INDEX.md) — Exhaustive research monographs, terminal design systems, cognitive ergonomics, and MT5 engineering.
 > - [⚡ Quick Start & Implementation Cheat Sheet (docs/QUICK_START.md)](./docs/QUICK_START.md) — Executive summary, 90-7-3 chromatic cheat sheet, and production readiness checklist.
 > - [🤖 AGENTS.md](./AGENTS.md) — Autonomous agent & developer guidelines, state architecture, reactivity rules, and design tokens.
-> - [🖥️ FRONTEND.md](./FRONTEND.md) — Detailed frontend architecture, component tree, execution safety ergonomics, and WebSocket API specs.
+> - [🖥️ Frontend Architecture & Ergonomics (frontend/README.md)](./frontend/README.md) — Detailed frontend architecture, component tree, execution safety ergonomics, and WebSocket API specs.
 > - [🏗️ ARCHITECTURE.md](./ARCHITECTURE.md) — Deep dive into backend concurrency, ThreadPoolExecutor workers, MT5 RLock synchronization, and trade aggregation.
 
 ---
