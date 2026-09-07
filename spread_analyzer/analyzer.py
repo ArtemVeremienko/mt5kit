@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 SpreadUnitType = Literal["standard", "points", "price"]
+SpreadMetricMode = Literal["median", "mean"]
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,36 @@ class SymbolSpreadMetrics:
     p95_spread: float
     total_ticks: int
     sampled_minutes: int
+    spread_bps: float = 0.0
+    spread_to_vol_pct: float = 0.0
+    avg_daily_volatility: float = 0.0
+    avg_daily_volatility_pct: float = 0.0
+    metric_basis: str = "median"
+    is_24_7: bool = False
+
+
+def is_24_7_symbol(symbol: str, path: str = "", description: str = "") -> bool:
+    """
+    Detects whether a symbol trades 24/7 (e.g. Cryptocurrency).
+    Returns False for standard market symbols (Forex, Metals, Indices, Equities)
+    which close over the weekend.
+    """
+    s_upper = symbol.upper()
+    p_upper = path.upper()
+    d_upper = description.upper()
+
+    if "CRYPTO" in p_upper or "CRYPTO" in d_upper or "BITCOIN" in d_upper or "ETHEREUM" in d_upper:
+        return True
+
+    crypto_coins = (
+        "BTC", "ETH", "SOL", "XRP", "DOGE", "LTC", "BNB", "ADA", "DOT", "AVAX",
+        "LINK", "MATIC", "SHIB", "UNI", "BCH", "TRX", "NEAR", "XLM", "ATOM",
+    )
+    for coin in crypto_coins:
+        if s_upper.startswith(coin) or s_upper.endswith(coin):
+            return True
+
+    return False
 
 
 def determine_spread_unit(
@@ -72,9 +103,12 @@ def process_ticks_and_resample(
     point: float,
     digits: int,
     unit_type: SpreadUnitType = "standard",
+    is_24_7: bool = False,
+    metric_mode: SpreadMetricMode = "median",
 ) -> Tuple[pd.DataFrame, SymbolSpreadMetrics]:
     """
     Vectorized calculation of tick spreads and aggregation into 1-minute intervals.
+    For standard symbols (is_24_7=False), filters out weekend ticks (Saturday and Sunday before 21:00 UTC).
 
     Returns:
         resampled_m1: pd.DataFrame with index (datetime in UTC) and columns
@@ -99,10 +133,28 @@ def process_ticks_and_resample(
         raise ValueError(f"No valid bid/ask quotes found for symbol '{symbol}'.")
 
     valid_spread_raw = spread_raw[valid_mask]
+    valid_bids = bids[valid_mask]
     valid_time_msc = time_msc[valid_mask]
 
     # Vectorized unit scaling
     spreads_scaled = valid_spread_raw / unit_cfg.scale
+
+    # Convert epoch ms to UTC pandas datetime
+    datetimes = pd.to_datetime(valid_time_msc, unit="ms", utc=True)
+
+    # For standard symbols, remove any stray weekend ticks (Saturday all day, Sunday before 21:00 UTC)
+    if not is_24_7:
+        weekdays = datetimes.weekday
+        hours = datetimes.hour
+        # 5 = Saturday, 6 = Sunday
+        trading_mask = ~((weekdays == 5) | ((weekdays == 6) & (hours < 21)))
+        datetimes = datetimes[trading_mask]
+        spreads_scaled = spreads_scaled[trading_mask]
+        valid_bids = valid_bids[trading_mask]
+        valid_spread_raw = valid_spread_raw[trading_mask]
+
+        if len(spreads_scaled) == 0:
+            raise ValueError(f"No trading hour quotes found for symbol '{symbol}'.")
 
     # Compute overall statistical metrics strictly via NumPy vectorized functions
     min_spread = float(np.min(spreads_scaled))
@@ -112,9 +164,25 @@ def process_ticks_and_resample(
     p95_spread = float(np.percentile(spreads_scaled, 95.0))
     total_ticks = int(len(spreads_scaled))
 
-    # Resample to 1-minute intervals
-    # Convert epoch ms to UTC pandas datetime
-    datetimes = pd.to_datetime(valid_time_msc, unit="ms", utc=True)
+    # Execution Efficiency Metrics
+    mean_price = float(np.mean(valid_bids))
+    mean_spread_raw = float(np.mean(valid_spread_raw))
+    median_spread_raw = float(np.median(valid_spread_raw))
+
+    # Intraday traders (8:00 - 22:00) experience median spread as baseline;
+    # mean reflects all-hours cost including rollover/news spikes.
+    spread_ref = median_spread_raw if metric_mode == "median" else mean_spread_raw
+    spread_bps = (spread_ref / mean_price * 10000.0) if mean_price > 0.0 else 0.0
+
+    # 2. Tick-Derived Daily Volatility & Spread / Vol Ratio (%)
+    # Group ticks by calendar date to compute daily range (max_bid - min_bid)
+    df_daily = pd.DataFrame({"bid": valid_bids, "date": datetimes.date})
+    daily_ranges = df_daily.groupby("date")["bid"].agg(lambda s: float(np.ptp(s)))
+    valid_ranges = daily_ranges[daily_ranges > 0.0]
+    avg_daily_vol_raw = float(valid_ranges.mean()) if len(valid_ranges) > 0 else 0.0
+    spread_to_vol_pct = (spread_ref / avg_daily_vol_raw * 100.0) if avg_daily_vol_raw > 0.0 else 0.0
+    avg_daily_vol_scaled = avg_daily_vol_raw / unit_cfg.scale
+    avg_daily_vol_pct = (avg_daily_vol_raw / mean_price * 100.0) if mean_price > 0.0 else 0.0
 
     df_ticks = pd.DataFrame({
         "datetime": datetimes,
@@ -130,7 +198,7 @@ def process_ticks_and_resample(
         count="count",
     )
 
-    # Drop non-trading/weekend minutes where no ticks occurred
+    # Drop non-trading minutes where no ticks occurred
     resampled.dropna(subset=["avg"], inplace=True)
     sampled_minutes = int(len(resampled))
 
@@ -144,6 +212,12 @@ def process_ticks_and_resample(
         p95_spread=p95_spread,
         total_ticks=total_ticks,
         sampled_minutes=sampled_minutes,
+        spread_bps=spread_bps,
+        spread_to_vol_pct=spread_to_vol_pct,
+        avg_daily_volatility=avg_daily_vol_scaled,
+        avg_daily_volatility_pct=avg_daily_vol_pct,
+        metric_basis=metric_mode,
+        is_24_7=is_24_7,
     )
 
     return resampled, metrics

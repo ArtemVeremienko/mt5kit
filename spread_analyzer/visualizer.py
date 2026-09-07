@@ -7,9 +7,10 @@ and comprehensive comparative tables.
 
 from __future__ import annotations
 
+from datetime import datetime
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -118,6 +119,7 @@ def build_symbol_area_figure(
             linecolor="#4B5563",
             zeroline=False,
             rangeslider=dict(visible=False),
+            rangebreaks=[dict(bounds=["sat", "mon"])] if not getattr(metrics, "is_24_7", False) else None,
         ),
         yaxis=dict(
             title=f"Spread ({unit})",
@@ -137,7 +139,9 @@ def generate_html_report(
     symbols_data: Dict[str, Tuple[pd.DataFrame, SymbolSpreadMetrics]],
     output_path: Path,
     account_tag: str,
-    lookback_days: int,
+    lookback_days: int = 14,
+    start_dt: Optional[datetime] = None,
+    end_dt: Optional[datetime] = None,
 ) -> Path:
     """
     Generates a unified, responsive HTML report containing:
@@ -159,23 +163,48 @@ def generate_html_report(
     # Build Table Rows
     table_rows_html = []
     for m in sorted(metrics_list, key=lambda x: x.symbol):
+        # Spread in Basis Points (bps): < 1.0 green, 1.0-5.0 amber, > 5.0 red
+        if m.spread_bps < 1.0:
+            bps_badge = f'<span class="px-2 py-0.5 rounded text-xs bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 font-mono font-medium">{m.spread_bps:.2f} bps</span>'
+        elif m.spread_bps <= 5.0:
+            bps_badge = f'<span class="px-2 py-0.5 rounded text-xs bg-amber-950/80 text-amber-400 border border-amber-800/60 font-mono font-medium">{m.spread_bps:.2f} bps</span>'
+        else:
+            bps_badge = f'<span class="px-2 py-0.5 rounded text-xs bg-rose-950/80 text-rose-400 border border-rose-800/60 font-mono font-medium">{m.spread_bps:.2f} bps</span>'
+
+        # Spread / Vol (%): < 2.0% green, 2.0-5.0% amber, > 5.0% red
+        if m.spread_to_vol_pct < 2.0:
+            vol_badge = f'<span class="px-2 py-0.5 rounded text-xs bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 font-mono font-medium">{m.spread_to_vol_pct:.2f}%</span>'
+        elif m.spread_to_vol_pct <= 5.0:
+            vol_badge = f'<span class="px-2 py-0.5 rounded text-xs bg-amber-950/80 text-amber-400 border border-amber-800/60 font-mono font-medium">{m.spread_to_vol_pct:.2f}%</span>'
+        else:
+            vol_badge = f'<span class="px-2 py-0.5 rounded text-xs bg-rose-950/80 text-rose-400 border border-rose-800/60 font-mono font-medium">{m.spread_to_vol_pct:.2f}%</span>'
+
         row = f"""
         <tr onclick="selectSymbol('{m.symbol}')" class="cursor-pointer hover:bg-gray-800 transition">
-            <td class="px-4 py-3 font-semibold text-blue-400">{m.symbol}</td>
-            <td class="px-4 py-3 text-gray-400">{m.unit}</td>
-            <td class="px-4 py-3 text-green-400 font-mono">{m.min_spread:.2f}</td>
-            <td class="px-4 py-3 text-amber-400 font-mono font-medium">{m.avg_spread:.2f}</td>
-            <td class="px-4 py-3 text-red-400 font-mono">{m.max_spread:.2f}</td>
-            <td class="px-4 py-3 text-gray-300 font-mono">{m.median_spread:.2f}</td>
-            <td class="px-4 py-3 text-gray-300 font-mono">{m.p95_spread:.2f}</td>
-            <td class="px-4 py-3 text-gray-400 font-mono">{m.total_ticks:,}</td>
-            <td class="px-4 py-3 text-gray-400 font-mono">{m.sampled_minutes:,}</td>
+            <td class="px-4 py-3 font-semibold text-blue-400" data-val="{m.symbol}">{m.symbol}</td>
+            <td class="px-4 py-3 text-gray-400" data-val="{m.unit}">{m.unit}</td>
+            <td class="px-4 py-3 text-green-400 font-mono" data-val="{m.min_spread}">{m.min_spread:.2f}</td>
+            <td class="px-4 py-3 text-gray-300 font-mono" data-val="{m.median_spread}">{m.median_spread:.2f}</td>
+            <td class="px-4 py-3 text-amber-400 font-mono font-medium" data-val="{m.avg_spread}">{m.avg_spread:.2f}</td>
+            <td class="px-4 py-3 text-gray-300 font-mono" data-val="{m.p95_spread}">{m.p95_spread:.2f}</td>
+            <td class="px-4 py-3 text-red-400 font-mono" data-val="{m.max_spread}">{m.max_spread:.2f}</td>
+            <td class="px-4 py-3" data-val="{m.spread_bps}">{bps_badge}</td>
+            <td class="px-4 py-3" data-val="{m.spread_to_vol_pct}">{vol_badge}</td>
+            <td class="px-4 py-3 text-gray-300 font-mono cursor-help" title="{m.avg_daily_volatility:.1f} {m.unit}" data-val="{m.avg_daily_volatility_pct}">{m.avg_daily_volatility_pct:.2f}%</td>
+            <td class="px-4 py-3 text-gray-400 font-mono" data-val="{m.total_ticks}">{m.total_ticks:,}</td>
+            <td class="px-4 py-3 text-gray-400 font-mono" data-val="{m.sampled_minutes}">{m.sampled_minutes:,}</td>
         </tr>
         """
         table_rows_html.append(row)
 
     first_symbol = metrics_list[0].symbol if metrics_list else ""
     chart_specs_json = json.dumps(chart_specs)
+
+    metric_basis = getattr(metrics_list[0], "metric_basis", "median") if metrics_list else "median"
+
+    range_label = f"{lookback_days} Calendar Days"
+    if start_dt and end_dt:
+        range_label = f"{start_dt.strftime('%Y-%m-%d %H:%M')} &rarr; {end_dt.strftime('%Y-%m-%d %H:%M')} UTC"
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -194,6 +223,14 @@ def generate_html_report(
         }}
         .font-mono {{
             font-family: 'JetBrains Mono', monospace;
+        }}
+        .sort-th {{
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.15s ease;
+        }}
+        .sort-th:hover {{
+            color: #FFFFFF !important;
         }}
     </style>
 </head>
@@ -216,8 +253,13 @@ def generate_html_report(
                 </div>
                 <div class="h-6 w-px bg-gray-800"></div>
                 <div>
-                    <span class="text-gray-500 block">LOOKBACK</span>
-                    <span class="text-gray-200 font-semibold">{lookback_days} Calendar Days</span>
+                    <span class="text-gray-500 block">DATE RANGE (UTC)</span>
+                    <span class="text-gray-200 font-semibold">{range_label}</span>
+                </div>
+                <div class="h-6 w-px bg-gray-800"></div>
+                <div>
+                    <span class="text-gray-500 block">EXECUTION METRIC</span>
+                    <span class="text-gray-200 font-semibold uppercase text-cyan-400">{metric_basis}</span>
                 </div>
             </div>
         </div>
@@ -227,7 +269,7 @@ def generate_html_report(
             <div class="p-5 border-b border-gray-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <div>
                     <h2 class="text-lg font-semibold text-white">Comprehensive Symbol Summary</h2>
-                    <p class="text-xs text-gray-400">Click any row to display its 1-minute resolution area chart below</p>
+                    <p class="text-xs text-gray-400">Click any column header to sort • Click any row to view its 1-minute area chart</p>
                 </div>
                 <div class="text-xs text-gray-400">
                     <span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500 mr-1"></span>Min
@@ -236,21 +278,24 @@ def generate_html_report(
                 </div>
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm border-collapse">
+                <table id="summaryTable" class="w-full text-left text-sm border-collapse">
                     <thead class="bg-gray-950/80 text-xs uppercase text-gray-400 font-semibold border-b border-gray-800">
                         <tr>
-                            <th class="px-4 py-3">Symbol</th>
-                            <th class="px-4 py-3">Unit</th>
-                            <th class="px-4 py-3 text-green-400">Min Spread</th>
-                            <th class="px-4 py-3 text-amber-400">Avg Spread</th>
-                            <th class="px-4 py-3 text-red-400">Max Spread</th>
-                            <th class="px-4 py-3">Median</th>
-                            <th class="px-4 py-3">P95 (Spike Filter)</th>
-                            <th class="px-4 py-3">Total Ticks</th>
-                            <th class="px-4 py-3">M1 Bars</th>
+                            <th onclick="sortTable(0)" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">Symbol <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(1)" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">Unit <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(2)" class="sort-th px-4 py-3 text-green-400"><span class="flex items-center gap-1.5">Min Spread <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(3)" class="sort-th px-4 py-3 text-gray-300"><span class="flex items-center gap-1.5">Median <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(4)" class="sort-th px-4 py-3 text-amber-400"><span class="flex items-center gap-1.5">Avg Spread <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(5)" class="sort-th px-4 py-3 text-gray-300"><span class="flex items-center gap-1.5">P95 <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(6)" class="sort-th px-4 py-3 text-red-400"><span class="flex items-center gap-1.5">Max Spread <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(7)" class="sort-th px-4 py-3 text-cyan-400" title="Spread in Basis Points = ({metric_basis} Spread / Price) * 10,000"><span class="flex items-center gap-1.5">Spread (bps) <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(8)" class="sort-th px-4 py-3 text-cyan-400" title="Spread as % of Daily Volatility = ({metric_basis} Spread / Daily Range) * 100%"><span class="flex items-center gap-1.5">Spread / Vol <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(9)" class="sort-th px-4 py-3" title="Average Daily Range as % of Price = (Daily Range / Price) * 100% (hover cells for raw pips/cents)"><span class="flex items-center gap-1.5">Daily Vol (%) <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(10)" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">Total Ticks <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(11)" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">M1 Bars <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-800/60">
+                    <tbody id="summaryTableBody" class="divide-y divide-gray-800/60">
                         {"".join(table_rows_html)}
                     </tbody>
                 </table>
@@ -285,6 +330,8 @@ def generate_html_report(
     <script>
         const chartSpecs = {chart_specs_json};
         let currentSymbol = '{first_symbol}';
+        let currentSortCol = null;
+        let currentSortAsc = true;
 
         function renderChart(symbol) {{
             const spec = chartSpecs[symbol];
@@ -303,11 +350,65 @@ def generate_html_report(
             renderChart(symbol);
         }}
 
-        // Initialize first chart on load
+        function sortTable(colIdx) {{
+            const table = document.getElementById('summaryTable');
+            const tbody = document.getElementById('summaryTableBody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const headers = table.querySelectorAll('th');
+
+            if (currentSortCol === colIdx) {{
+                currentSortAsc = !currentSortAsc;
+            }} else {{
+                currentSortCol = colIdx;
+                currentSortAsc = true;
+            }}
+
+            headers.forEach((th, idx) => {{
+                const icon = th.querySelector('.sort-icon');
+                if (idx === colIdx) {{
+                    th.classList.add('text-blue-400');
+                    if (icon) {{
+                        icon.textContent = currentSortAsc ? '▲' : '▼';
+                        icon.classList.remove('text-gray-600');
+                        icon.classList.add('text-blue-400');
+                    }}
+                }} else {{
+                    th.classList.remove('text-blue-400');
+                    if (icon) {{
+                        icon.textContent = '↕';
+                        icon.classList.remove('text-blue-400');
+                        icon.classList.add('text-gray-600');
+                    }}
+                }}
+            }});
+
+            rows.sort((a, b) => {{
+                const cellA = a.children[colIdx];
+                const cellB = b.children[colIdx];
+                const rawA = cellA.getAttribute('data-val') !== null ? cellA.getAttribute('data-val') : cellA.innerText.trim();
+                const rawB = cellB.getAttribute('data-val') !== null ? cellB.getAttribute('data-val') : cellB.innerText.trim();
+
+                const numA = parseFloat(rawA);
+                const numB = parseFloat(rawB);
+
+                let cmp;
+                if (!isNaN(numA) && !isNaN(numB) && !isNaN(Number(rawA)) && !isNaN(Number(rawB))) {{
+                    cmp = numA - numB;
+                }} else {{
+                    cmp = String(rawA).localeCompare(String(rawB));
+                }}
+                return currentSortAsc ? cmp : -cmp;
+            }});
+
+            rows.forEach(r => tbody.appendChild(r));
+        }}
+
+        // Initialize first chart and initial Symbol sort on load
         window.addEventListener('DOMContentLoaded', () => {{
             if (currentSymbol) {{
                 renderChart(currentSymbol);
             }}
+            sortTable(0);
         }});
     </script>
 </body>

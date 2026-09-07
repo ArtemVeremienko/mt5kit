@@ -11,15 +11,17 @@ import argparse
 import csv
 import logging
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
 from spread_analyzer.analyzer import (
+    SpreadMetricMode,
     SpreadUnitType,
     SymbolSpreadMetrics,
+    is_24_7_symbol,
     process_ticks_and_resample,
 )
 from spread_analyzer.fetcher import MT5Session
@@ -42,20 +44,77 @@ CYAN = "\033[96m"
 GRAY = "\033[90m"
 
 
+def parse_datetime_str(dt_str: str, is_end_of_day: bool = False) -> datetime:
+    """Parses date string in 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM' format."""
+    dt_str = dt_str.strip()
+    try:
+        d = datetime.strptime(dt_str, "%Y-%m-%d").date()
+        t = time(23, 59, 59) if is_end_of_day else time(0, 0, 0)
+        return datetime.combine(d, t, tzinfo=timezone.utc)
+    except ValueError:
+        pass
+
+    try:
+        dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+        return dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        pass
+
+    dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+    return dt.replace(tzinfo=timezone.utc)
+
+
+def resolve_date_range(
+    days: int = 14,
+    start_arg: Optional[str] = None,
+    end_arg: Optional[str] = None,
+) -> Tuple[datetime, datetime]:
+    """
+    Computes date range aligned from start of the day (00:00:00 UTC) to current time.
+    - Default start_dt: (today - days) at 00:00:00 UTC
+    - Default end_dt: current UTC time
+    """
+    now_utc = datetime.now(timezone.utc)
+
+    if end_arg:
+        end_dt = parse_datetime_str(end_arg, is_end_of_day=True)
+    else:
+        end_dt = now_utc
+
+    if start_arg:
+        start_dt = parse_datetime_str(start_arg, is_end_of_day=False)
+    else:
+        start_date = end_dt.date() - timedelta(days=days)
+        start_dt = datetime.combine(start_date, time(0, 0, 0), tzinfo=timezone.utc)
+
+    return start_dt, end_dt
+
+
 def print_terminal_table(
     metrics_list: List[SymbolSpreadMetrics],
     account_tag: str,
+    start_dt: datetime,
+    end_dt: datetime,
     days: int,
     unit_type: str,
+    metric_mode: str = "median",
 ) -> None:
-    """Renders an aligned, color-coded terminal summary table."""
+    """Renders an aligned, color-coded terminal summary table with execution friction metrics."""
     print(f"\n{BOLD}{CYAN}=== METATRADER 5 SPREAD ANALYSIS SUMMARY ==={RESET}")
     print(f"{GRAY}Broker / Account : {BOLD}{account_tag}{RESET}")
-    print(f"{GRAY}Lookback Window  : {BOLD}{days} days{RESET}")
-    print(f"{GRAY}Spread Unit Mode : {BOLD}{unit_type}{RESET}\n")
+    print(f"{GRAY}Date Range (UTC) : {BOLD}{start_dt.strftime('%Y-%m-%d %H:%M')} to {end_dt.strftime('%Y-%m-%d %H:%M')} UTC{RESET} ({days} days lookback)")
+    print(f"{GRAY}Spread Unit Mode : {BOLD}{unit_type}{RESET}")
+    metric_desc = "optimal for intraday trading 8-22:00 (outlier-free)" if metric_mode == "median" else "all-hours expected cost (includes rollover spikes)"
+    print(f"{GRAY}Execution Metric : {BOLD}{metric_mode.upper()}{RESET} ({metric_desc})\n")
 
-    headers = ["Symbol", "Unit", "Min", "Avg", "Max", "Median", "P95", "Ticks", "M1 Bars"]
-    col_widths = [10, 8, 9, 9, 10, 9, 9, 12, 10]
+    bps_header = f"Spread(bps)[{metric_mode[:3]}]"
+    vol_header = f"Spread/Vol[{metric_mode[:3]}]"
+
+    headers = [
+        "Symbol", "Unit", "Min", "Median", "Avg", "P95", "Max",
+        bps_header, vol_header, "DailyVol(%)", "Ticks", "M1 Bars"
+    ]
+    col_widths = [10, 7, 8, 8, 8, 8, 9, 16, 16, 12, 12, 9]
 
     header_line = "  ".join(f"{h:<{w}}" for h, w in zip(headers, col_widths))
     sep_line = "  ".join("-" * w for w in col_widths)
@@ -64,16 +123,26 @@ def print_terminal_table(
     print(f"{GRAY}{sep_line}{RESET}")
 
     for m in sorted(metrics_list, key=lambda x: x.symbol):
+        # Efficiency color coding:
+        # Spread (bps): < 1.0 bps green, 1.0-5.0 bps orange, > 5.0 bps red
+        bps_color = GREEN if m.spread_bps < 1.0 else (ORANGE if m.spread_bps <= 5.0 else RED)
+
+        # Spread/Vol (%): < 2.0% green, 2.0%-5.0% orange, > 5.0% red
+        vol_color = GREEN if m.spread_to_vol_pct < 2.0 else (ORANGE if m.spread_to_vol_pct <= 5.0 else RED)
+
         row_str = (
             f"{BOLD}{m.symbol:<10}{RESET}  "
-            f"{m.unit:<8}  "
-            f"{GREEN}{m.min_spread:<9.2f}{RESET}  "
-            f"{ORANGE}{m.avg_spread:<9.2f}{RESET}  "
-            f"{RED}{m.max_spread:<10.2f}{RESET}  "
-            f"{m.median_spread:<9.2f}  "
-            f"{m.p95_spread:<9.2f}  "
+            f"{m.unit:<7}  "
+            f"{GREEN}{m.min_spread:<8.2f}{RESET}  "
+            f"{m.median_spread:<8.2f}  "
+            f"{ORANGE}{m.avg_spread:<8.2f}{RESET}  "
+            f"{m.p95_spread:<8.2f}  "
+            f"{RED}{m.max_spread:<9.2f}{RESET}  "
+            f"{bps_color}{m.spread_bps:<16.2f}{RESET}  "
+            f"{vol_color}{f'{m.spread_to_vol_pct:.2f}%':<16}  "
+            f"{f'{m.avg_daily_volatility_pct:.2f}%':<12}  "
             f"{m.total_ticks:<12,d}  "
-            f"{m.sampled_minutes:<10,d}"
+            f"{m.sampled_minutes:<9,d}"
         )
         print(row_str)
 
@@ -87,10 +156,15 @@ def export_csv(metrics_list: List[SymbolSpreadMetrics], csv_path: Path) -> Path:
         "symbol",
         "unit",
         "min_spread",
-        "avg_spread",
-        "max_spread",
         "median_spread",
+        "avg_spread",
         "p95_spread",
+        "max_spread",
+        "metric_basis",
+        "spread_bps",
+        "spread_to_vol_pct",
+        "avg_daily_volatility_pct",
+        "avg_daily_volatility",
         "total_ticks",
         "sampled_minutes",
     ]
@@ -103,10 +177,15 @@ def export_csv(metrics_list: List[SymbolSpreadMetrics], csv_path: Path) -> Path:
                 "symbol": m.symbol,
                 "unit": m.unit,
                 "min_spread": round(m.min_spread, 4),
-                "avg_spread": round(m.avg_spread, 4),
-                "max_spread": round(m.max_spread, 4),
                 "median_spread": round(m.median_spread, 4),
+                "avg_spread": round(m.avg_spread, 4),
                 "p95_spread": round(m.p95_spread, 4),
+                "max_spread": round(m.max_spread, 4),
+                "metric_basis": getattr(m, "metric_basis", "median"),
+                "spread_bps": round(m.spread_bps, 4),
+                "spread_to_vol_pct": round(m.spread_to_vol_pct, 4),
+                "avg_daily_volatility_pct": round(m.avg_daily_volatility_pct, 4),
+                "avg_daily_volatility": round(m.avg_daily_volatility, 4),
                 "total_ticks": m.total_ticks,
                 "sampled_minutes": m.sampled_minutes,
             })
@@ -132,6 +211,26 @@ def parse_arguments() -> argparse.Namespace:
         type=int,
         default=14,
         help="Lookback duration in calendar days (default: 14 for 2 weeks).",
+    )
+    parser.add_argument(
+        "--start",
+        type=str,
+        default=None,
+        help="Custom start date/time (YYYY-MM-DD or 'YYYY-MM-DD HH:MM'). Defaults to today - N days at 00:00:00 UTC.",
+    )
+    parser.add_argument(
+        "--end",
+        type=str,
+        default=None,
+        help="Custom end date/time (YYYY-MM-DD or 'YYYY-MM-DD HH:MM'). Defaults to current time.",
+    )
+    parser.add_argument(
+        "--metric",
+        "-m",
+        type=str,
+        choices=["median", "mean"],
+        default="median",
+        help="Spread metric basis for bps and spread/vol calculations: 'median' (default, recommended for intraday trading 8-22:00) or 'mean' (all-hours expected cost).",
     )
     parser.add_argument(
         "--unit",
@@ -171,6 +270,7 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> int:
     args = parse_arguments()
     unit_type: SpreadUnitType = args.unit
+    metric_mode: SpreadMetricMode = args.metric
 
     session = MT5Session()
     try:
@@ -197,14 +297,29 @@ def main() -> int:
 
         logger.info(f"Symbols to analyze ({len(symbol_list)}): {', '.join(symbol_list)}")
 
-        end_dt = datetime.now(timezone.utc)
-        start_dt = end_dt - timedelta(days=args.days)
-        print(start_dt, end_dt)
+        # Resolve start_dt (00:00:00 UTC) and end_dt (now / end of day)
+        start_dt, end_dt = resolve_date_range(
+            days=args.days,
+            start_arg=args.start,
+            end_arg=args.end,
+        )
+        logger.info(
+            f"Analysis window: {start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC "
+            f"-> {end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC"
+        )
+        metric_tag = "intraday standard (outlier-free)" if metric_mode == "median" else "all-hours standard (includes rollover spikes)"
+        logger.info(f"Execution metric basis: {metric_mode.upper()} ({metric_tag})")
+
         symbols_data: Dict[str, Tuple[pd.DataFrame, SymbolSpreadMetrics]] = {}
 
         for sym in symbol_list:
             try:
                 specs = session.get_symbol_specs(sym)
+                is_crypto = is_24_7_symbol(
+                    symbol=sym,
+                    path=specs.get("path", ""),
+                    description=specs.get("description", ""),
+                )
                 ticks = session.fetch_ticks(sym, start_dt, end_dt)
                 df_m1, metrics = process_ticks_and_resample(
                     ticks=ticks,
@@ -212,6 +327,8 @@ def main() -> int:
                     point=specs["point"],
                     digits=specs["digits"],
                     unit_type=unit_type,
+                    is_24_7=is_crypto,
+                    metric_mode=metric_mode,
                 )
                 symbols_data[sym] = (df_m1, metrics)
             except Exception as e:
@@ -225,7 +342,9 @@ def main() -> int:
         metrics_list = [m for _, m in symbols_data.values()]
 
         # 1. Print formatted terminal table
-        print_terminal_table(metrics_list, account_tag, args.days, unit_type)
+        print_terminal_table(
+            metrics_list, account_tag, start_dt, end_dt, args.days, unit_type, metric_mode=metric_mode
+        )
 
         # 2. Export CSV
         if not args.no_csv:
@@ -235,7 +354,14 @@ def main() -> int:
         # 3. Generate HTML report
         if not args.no_html:
             html_path = target_dir / "spread_analysis_report.html"
-            generate_html_report(symbols_data, html_path, account_tag, args.days)
+            generate_html_report(
+                symbols_data=symbols_data,
+                output_path=html_path,
+                account_tag=account_tag,
+                lookback_days=args.days,
+                start_dt=start_dt,
+                end_dt=end_dt,
+            )
             logger.info(f"Interactive HTML report generated: {html_path.resolve()}")
 
         return 0

@@ -8,6 +8,7 @@ import pytest
 
 from spread_analyzer.analyzer import (
     determine_spread_unit,
+    is_24_7_symbol,
     process_ticks_and_resample,
     SymbolSpreadMetrics,
 )
@@ -15,7 +16,7 @@ from spread_analyzer.visualizer import (
     build_symbol_area_figure,
     generate_html_report,
 )
-from spread_analyzer.main import export_csv
+from spread_analyzer.main import export_csv, resolve_date_range, parse_datetime_str
 
 
 def make_mock_ticks(
@@ -127,6 +128,11 @@ def test_process_ticks_and_resample_accuracy():
     assert pytest.approx(row1["avg"], rel=1e-3) == 3.5
     assert row1["count"] == 60
 
+    # Execution efficiency assertions
+    assert metrics.spread_bps > 0.0
+    # Average spread is 0.000275 on price ~1.1000 -> approx 2.5 bps
+    assert 2.0 < metrics.spread_bps < 3.0
+
 
 def test_visualizer_and_report_generation(tmp_path: Path):
     base_ms = 1700000000000
@@ -170,3 +176,113 @@ def test_visualizer_and_report_generation(tmp_path: Path):
     df_csv = pd.read_csv(csv_file)
     assert len(df_csv) == 1
     assert df_csv.iloc[0]["symbol"] == "EURUSD"
+    assert "avg_daily_volatility_pct" in df_csv.columns
+    assert "avg_daily_volatility" in df_csv.columns
+
+
+def test_resolve_date_range_day_boundary():
+    # Default 14 days
+    start_dt, end_dt = resolve_date_range(days=14)
+    # Verify start_dt is floored to 00:00:00 UTC
+    assert start_dt.hour == 0
+    assert start_dt.minute == 0
+    assert start_dt.second == 0
+    assert start_dt.tzinfo == timezone.utc
+    assert end_dt.tzinfo == timezone.utc
+
+    # Custom start and end
+    start_c, end_c = resolve_date_range(days=5, start_arg="2026-08-01", end_arg="2026-08-05")
+    assert start_c == datetime(2026, 8, 1, 0, 0, 0, tzinfo=timezone.utc)
+    assert end_c == datetime(2026, 8, 5, 23, 59, 59, tzinfo=timezone.utc)
+
+
+def test_is_24_7_symbol_detection():
+    assert is_24_7_symbol("BTCUSD") is True
+    assert is_24_7_symbol("ETHUSD") is True
+    assert is_24_7_symbol("SOLUSDT") is True
+    assert is_24_7_symbol("MYCOIN", path="Crypto\\Tokens\\MYCOIN") is True
+    assert is_24_7_symbol("EURUSD", path="Forex\\Majors\\EURUSD") is False
+    assert is_24_7_symbol("XAUUSD", path="Commodities\\Metals\\XAUUSD") is False
+    assert is_24_7_symbol("US500", path="Indices\\US500") is False
+
+
+def test_weekend_tick_filtering_and_chart_rangebreaks():
+    # Friday 23:50 UTC (weekday 4)
+    fri_dt = datetime(2026, 8, 28, 23, 50, tzinfo=timezone.utc)
+    fri_ms = int(fri_dt.timestamp() * 1000)
+
+    # Saturday 12:00 UTC (weekday 5)
+    sat_dt = datetime(2026, 8, 29, 12, 0, tzinfo=timezone.utc)
+    sat_ms = int(sat_dt.timestamp() * 1000)
+
+    # Monday 02:00 UTC (weekday 0)
+    mon_dt = datetime(2026, 8, 31, 2, 0, tzinfo=timezone.utc)
+    mon_ms = int(mon_dt.timestamp() * 1000)
+
+    ticks_fri = make_mock_ticks(fri_ms, 5, np.array([0.00015]*5))
+    ticks_sat = make_mock_ticks(sat_ms, 5, np.array([0.00099]*5)) # stray weekend tick
+    ticks_mon = make_mock_ticks(mon_ms, 5, np.array([0.00020]*5))
+
+    combined_ticks = np.concatenate([ticks_fri, ticks_sat, ticks_mon])
+
+    # 1. Standard symbol (EURUSD): Saturday ticks filtered out
+    df_std, m_std = process_ticks_and_resample(
+        ticks=combined_ticks,
+        symbol="EURUSD",
+        point=0.00001,
+        digits=5,
+        unit_type="standard",
+        is_24_7=False,
+    )
+    assert m_std.total_ticks == 10  # 5 fri + 5 mon (sat filtered out)
+    assert pytest.approx(m_std.max_spread, rel=1e-3) == 2.0  # 0.00020 / 0.0001 = 2.0 pips (not the 9.9 sat spike)
+
+    # Area figure has rangebreaks
+    fig_std = build_symbol_area_figure(df_std, m_std)
+    assert fig_std.layout.xaxis.rangebreaks is not None
+    assert list(fig_std.layout.xaxis.rangebreaks[0].bounds) == ["sat", "mon"]
+
+    # 2. Crypto symbol (BTCUSD): Saturday ticks preserved 24/7
+    df_crypto, m_crypto = process_ticks_and_resample(
+        ticks=combined_ticks,
+        symbol="BTCUSD",
+        point=0.01,
+        digits=2,
+        unit_type="standard",
+        is_24_7=True,
+    )
+    assert m_crypto.total_ticks == 15  # All 15 ticks kept
+    fig_crypto = build_symbol_area_figure(df_crypto, m_crypto)
+    assert not fig_crypto.layout.xaxis.rangebreaks
+
+
+def test_metric_mode_median_vs_mean():
+    base_ms = 1700000000000
+    # 9 normal ticks with spread 0.00010, 1 spike tick with spread 0.00100 (10x spike)
+    spreads = np.array([0.00010] * 9 + [0.00100])
+    ticks = make_mock_ticks(base_ms, 10, spreads, interval_ms=1000)
+
+    # 1. Median mode (optimal for intraday trading, immune to spike)
+    _, m_med = process_ticks_and_resample(
+        ticks=ticks,
+        symbol="EURUSD",
+        point=0.00001,
+        digits=5,
+        metric_mode="median",
+    )
+    assert m_med.metric_basis == "median"
+
+    # 2. Mean mode (includes spike)
+    _, m_mean = process_ticks_and_resample(
+        ticks=ticks,
+        symbol="EURUSD",
+        point=0.00001,
+        digits=5,
+        metric_mode="mean",
+    )
+    assert m_mean.metric_basis == "mean"
+
+    # Median spread bps is strictly lower than mean spread bps due to the spike
+    assert m_med.spread_bps < m_mean.spread_bps
+    assert pytest.approx(m_med.spread_bps, rel=1e-2) == (0.00010 / 1.1000) * 10000.0
+    assert pytest.approx(m_mean.spread_bps, rel=1e-2) == (0.00019 / 1.1000) * 10000.0

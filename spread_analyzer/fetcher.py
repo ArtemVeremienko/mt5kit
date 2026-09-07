@@ -100,6 +100,7 @@ class MT5Session:
             "currency_base": getattr(info, "currency_base", ""),
             "currency_profit": getattr(info, "currency_profit", ""),
             "description": getattr(info, "description", symbol),
+            "path": getattr(info, "path", ""),
         }
 
     def fetch_ticks(
