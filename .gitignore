@@ -19,7 +19,9 @@ htmlcov/
 !**/frontend/index.html
 **/output/
 **/reports/
+spread_analyzer/output/
 *.log
+*.csv
 
 # Node & Build Outputs
 node_modules/

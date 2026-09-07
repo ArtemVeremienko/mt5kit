@@ -22,7 +22,7 @@
     "JAPAN225",
     "JPN225"
   ],
-  "WTI": ["WTI", "USOIL", "CL", "CRUDE", "WTI.cash", "LIGHTCRUDE", "XTIUSD"],
-  "BRENT": ["BRENT", "UKOIL", "EB", "BRENT.cash", "UKBRENT", "XBRUSD"],
+  "WTI": ["WTI", "USOIL", "CL", "CRUDE", "USOUSD", "LIGHTCRUDE", "XTIUSD"],
+  "BRENT": ["BRENT", "UKOIL", "EB", "UKOUSD", "UKBRENT", "XBRUSD"],
   "NATGAS": ["NATGAS", "NAT.GAS", "NG", "GAS", "XNGUSD", "NGAS"]
 }

@@ -165,11 +165,11 @@ def generate_html_report(
     for m in sorted(metrics_list, key=lambda x: x.symbol):
         # Spread in Basis Points (bps): < 1.0 green, 1.0-5.0 amber, > 5.0 red
         if m.spread_bps < 1.0:
-            bps_badge = f'<span class="px-2 py-0.5 rounded text-xs bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 font-mono font-medium">{m.spread_bps:.2f} bps</span>'
+            bps_badge = f'<span class="px-2 py-0.5 rounded text-xs bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 font-mono font-medium whitespace-nowrap">{m.spread_bps:.2f} bps</span>'
         elif m.spread_bps <= 5.0:
-            bps_badge = f'<span class="px-2 py-0.5 rounded text-xs bg-amber-950/80 text-amber-400 border border-amber-800/60 font-mono font-medium">{m.spread_bps:.2f} bps</span>'
+            bps_badge = f'<span class="px-2 py-0.5 rounded text-xs bg-amber-950/80 text-amber-400 border border-amber-800/60 font-mono font-medium whitespace-nowrap">{m.spread_bps:.2f} bps</span>'
         else:
-            bps_badge = f'<span class="px-2 py-0.5 rounded text-xs bg-rose-950/80 text-rose-400 border border-rose-800/60 font-mono font-medium">{m.spread_bps:.2f} bps</span>'
+            bps_badge = f'<span class="px-2 py-0.5 rounded text-xs bg-rose-950/80 text-rose-400 border border-rose-800/60 font-mono font-medium whitespace-nowrap">{m.spread_bps:.2f} bps</span>'
 
         # Spread / Vol (%): < 2.0% green, 2.0-5.0% amber, > 5.0% red
         if m.spread_to_vol_pct < 2.0:
@@ -232,11 +232,26 @@ def generate_html_report(
         .sort-th:hover {{
             color: #FFFFFF !important;
         }}
+        /* Sleek horizontal scrollbar for wide tables */
+        .custom-scrollbar::-webkit-scrollbar {{
+            height: 6px;
+        }}
+        .custom-scrollbar::-webkit-scrollbar-track {{
+            background: #0B0F19;
+            border-radius: 4px;
+        }}
+        .custom-scrollbar::-webkit-scrollbar-thumb {{
+            background: #1F2937;
+            border-radius: 4px;
+        }}
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {{
+            background: #374151;
+        }}
     </style>
 </head>
 <body class="text-gray-200 min-h-screen p-4 md:p-8">
 
-    <div class="max-w-7xl mx-auto space-y-6">
+    <div class="max-w-[1440px] mx-auto space-y-6">
         <!-- Header -->
         <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-800 pb-5 gap-4">
             <div>
@@ -277,7 +292,7 @@ def generate_html_report(
                     <span class="inline-block w-2.5 h-2.5 rounded-full bg-red-500 ml-3 mr-1"></span>Max
                 </div>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto custom-scrollbar">
                 <table id="summaryTable" class="w-full text-left text-sm border-collapse">
                     <thead class="bg-gray-950/80 text-xs uppercase text-gray-400 font-semibold border-b border-gray-800">
                         <tr>
@@ -288,9 +303,9 @@ def generate_html_report(
                             <th onclick="sortTable(4)" class="sort-th px-4 py-3 text-amber-400"><span class="flex items-center gap-1.5">Avg Spread <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
                             <th onclick="sortTable(5)" class="sort-th px-4 py-3 text-gray-300"><span class="flex items-center gap-1.5">P95 <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
                             <th onclick="sortTable(6)" class="sort-th px-4 py-3 text-red-400"><span class="flex items-center gap-1.5">Max Spread <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(7)" class="sort-th px-4 py-3 text-cyan-400" title="Spread in Basis Points = ({metric_basis} Spread / Price) * 10,000"><span class="flex items-center gap-1.5">Spread (bps) <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(8)" class="sort-th px-4 py-3 text-cyan-400" title="Spread as % of Daily Volatility = ({metric_basis} Spread / Daily Range) * 100%"><span class="flex items-center gap-1.5">Spread / Vol <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(9)" class="sort-th px-4 py-3" title="Average Daily Range as % of Price = (Daily Range / Price) * 100% (hover cells for raw pips/cents)"><span class="flex items-center gap-1.5">Daily Vol (%) <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(7)" class="sort-th px-4 py-3 text-cyan-400 whitespace-nowrap min-w-[115px]" title="Spread in Basis Points = ({metric_basis} Spread / Price) * 10,000"><span class="flex items-center gap-1.5">Spread (bps) <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(8)" class="sort-th px-4 py-3 text-cyan-400 whitespace-nowrap min-w-[110px]" title="Spread as % of Daily Volatility = ({metric_basis} Spread / Daily Range) * 100%"><span class="flex items-center gap-1.5">Spread / Vol <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(9)" class="sort-th px-4 py-3 whitespace-nowrap min-w-[110px]" title="Average Daily Range as % of Price = (Daily Range / Price) * 100% (hover cells for raw pips/cents)"><span class="flex items-center gap-1.5">Daily Vol (%) <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
                             <th onclick="sortTable(10)" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">Total Ticks <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
                             <th onclick="sortTable(11)" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">M1 Bars <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
                         </tr>

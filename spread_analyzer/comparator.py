@@ -441,13 +441,13 @@ def generate_comparison_html(
 
         card = f"""
         <div class="p-4 rounded-xl border {border_cls} flex flex-col justify-between space-y-3">
-            <div class="flex items-center justify-between">
-                <div>
+            <div class="flex items-center justify-between gap-2">
+                <div class="min-w-0 flex-1">
                     <span class="text-[11px] text-gray-500 font-mono block">RANK #{idx}</span>
-                    <span class="text-sm font-bold text-white tracking-tight">{trophy}{s.broker_tag}</span>
+                    <span class="text-sm font-bold text-white tracking-tight truncate block" title="{s.broker_tag}">{trophy}{s.broker_tag}</span>
                 </div>
-                <div class="text-right">
-                    <span class="px-2.5 py-1 rounded text-xs font-bold font-mono border {score_badge_cls}">
+                <div class="flex-shrink-0 text-right">
+                    <span class="px-2.5 py-1 rounded text-xs font-bold font-mono border whitespace-nowrap inline-block {score_badge_cls}">
                         {s.avg_points:.2f} PTS/SYM
                     </span>
                 </div>
@@ -494,20 +494,20 @@ def generate_comparison_html(
 
             row = f"""
             <tr class="hover:bg-gray-800/60 transition {row_bg}">
-                <td class="px-4 py-3 font-bold text-blue-400 font-mono whitespace-nowrap" data-val="{g.canonical_symbol}">{g.canonical_symbol}</td>
-                <td class="px-4 py-3 whitespace-nowrap" data-val="{r.rank}">{rank_badge}</td>
-                <td class="px-4 py-3 whitespace-nowrap" data-val="{r.broker_tag}">{broker_name} <span class="text-xs text-gray-500 ml-1 font-mono">({r.symbol})</span></td>
-                <td class="px-4 py-3 text-gray-400" data-val="{r.unit}">{r.unit}</td>
-                <td class="px-4 py-3 text-green-400 font-mono" data-val="{r.min_spread}">{r.min_spread:.2f}</td>
-                <td class="px-4 py-3 text-gray-300 font-mono" data-val="{r.median_spread}">{r.median_spread:.2f}</td>
-                <td class="px-4 py-3 text-amber-400 font-mono" data-val="{r.avg_spread}">{r.avg_spread:.2f}</td>
-                <td class="px-4 py-3 text-gray-300 font-mono" data-val="{r.p95_spread}">{r.p95_spread:.2f}</td>
-                <td class="px-4 py-3 text-red-400 font-mono" data-val="{r.max_spread}">{r.max_spread:.2f}</td>
-                <td class="px-4 py-3 text-cyan-400 font-mono font-bold" data-val="{r.spread_bps}">{r.spread_bps:.2f} bps</td>
-                <td class="px-4 py-3 text-cyan-400 font-mono" data-val="{r.spread_to_vol_pct}">{r.spread_to_vol_pct:.2f}%</td>
-                <td class="px-4 py-3 text-gray-300 font-mono cursor-help" title="{r.avg_daily_volatility:.1f} {r.unit}" data-val="{r.avg_daily_volatility_pct}">{r.avg_daily_volatility_pct:.2f}%</td>
-                <td class="px-4 py-3 font-mono font-bold text-amber-300" data-val="{r.composite_score}">{r.composite_score:.2f}</td>
-                <td class="px-4 py-3" data-val="{r.savings_vs_worst_bps}">{savings_cell}</td>
+                <td class="px-3 py-2.5 font-bold text-blue-400 font-mono whitespace-nowrap" data-val="{g.canonical_symbol}">{g.canonical_symbol}</td>
+                <td class="px-3 py-2.5 whitespace-nowrap" data-val="{r.rank}">{rank_badge}</td>
+                <td class="px-3 py-2.5 whitespace-nowrap" data-val="{r.broker_tag}">{broker_name} <span class="text-xs text-gray-500 ml-1 font-mono">({r.symbol})</span></td>
+                <td class="px-3 py-2.5 text-gray-400" data-val="{r.unit}">{r.unit}</td>
+                <td class="px-3 py-2.5 text-green-400 font-mono" data-val="{r.min_spread}">{r.min_spread:.2f}</td>
+                <td class="px-3 py-2.5 text-gray-300 font-mono" data-val="{r.median_spread}">{r.median_spread:.2f}</td>
+                <td class="px-3 py-2.5 text-amber-400 font-mono" data-val="{r.avg_spread}">{r.avg_spread:.2f}</td>
+                <td class="px-3 py-2.5 text-gray-300 font-mono" data-val="{r.p95_spread}">{r.p95_spread:.2f}</td>
+                <td class="px-3 py-2.5 text-red-400 font-mono" data-val="{r.max_spread}">{r.max_spread:.2f}</td>
+                <td class="px-3 py-2.5 text-cyan-400 font-mono font-bold whitespace-nowrap" data-val="{r.spread_bps}">{r.spread_bps:.2f} bps</td>
+                <td class="px-3 py-2.5 text-cyan-400 font-mono" data-val="{r.spread_to_vol_pct}">{r.spread_to_vol_pct:.2f}%</td>
+                <td class="px-3 py-2.5 text-gray-300 font-mono cursor-help" title="{r.avg_daily_volatility:.1f} {r.unit}" data-val="{r.avg_daily_volatility_pct}">{r.avg_daily_volatility_pct:.2f}%</td>
+                <td class="px-3 py-2.5 font-mono font-bold text-amber-300" data-val="{r.composite_score}">{r.composite_score:.2f}</td>
+                <td class="px-3 py-2.5" data-val="{r.savings_vs_worst_bps}">{savings_cell}</td>
             </tr>
             """
             rows_html.append(row)
@@ -537,10 +537,25 @@ def generate_comparison_html(
         .sort-th:hover {{
             color: #FFFFFF !important;
         }}
+        /* Sleek horizontal scrollbar for wide tables */
+        .custom-scrollbar::-webkit-scrollbar {{
+            height: 6px;
+        }}
+        .custom-scrollbar::-webkit-scrollbar-track {{
+            background: #0B0F19;
+            border-radius: 4px;
+        }}
+        .custom-scrollbar::-webkit-scrollbar-thumb {{
+            background: #1F2937;
+            border-radius: 4px;
+        }}
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {{
+            background: #374151;
+        }}
     </style>
 </head>
 <body class="text-gray-200 min-h-screen p-4 md:p-8">
-    <div class="max-w-7xl mx-auto space-y-6">
+    <div class="max-w-[1440px] mx-auto space-y-6">
         <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-800 pb-5 gap-4">
             <div>
                 <div class="flex items-center gap-3">
@@ -557,7 +572,7 @@ def generate_comparison_html(
 
         <div>
             <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-3">Broker Win Leaderboard</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {''.join(leaderboard_html)}
             </div>
         </div>
@@ -577,24 +592,24 @@ def generate_comparison_html(
                 <h2 class="text-base font-semibold text-white">Grouped Head-to-Head Comparisons</h2>
                 <p class="text-xs text-gray-400">Click any column header to sort</p>
             </div>
-            <div class="overflow-x-auto">
-                <table id="comparisonTable" class="w-full text-left text-sm border-collapse">
-                    <thead class="bg-gray-950/80 text-xs uppercase text-gray-400 font-semibold border-b border-gray-800">
+            <div class="overflow-x-auto custom-scrollbar">
+                <table id="comparisonTable" class="w-full text-left text-xs border-collapse">
+                    <thead class="bg-gray-950/80 uppercase text-gray-400 font-semibold border-b border-gray-800">
                         <tr>
-                            <th onclick="sortTable(0)" class="sort-th px-4 py-3 whitespace-nowrap"><span class="flex items-center gap-1">Canonical <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(1)" class="sort-th px-4 py-3 whitespace-nowrap min-w-[85px]"><span class="flex items-center gap-1">Rank <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(2)" class="sort-th px-4 py-3 whitespace-nowrap"><span class="flex items-center gap-1">Broker Account <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(3)" class="sort-th px-4 py-3"><span class="flex items-center gap-1">Unit <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(4)" class="sort-th px-4 py-3 text-green-400"><span class="flex items-center gap-1">Min <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(5)" class="sort-th px-4 py-3 text-gray-300"><span class="flex items-center gap-1">Median <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(6)" class="sort-th px-4 py-3 text-amber-400"><span class="flex items-center gap-1">Avg <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(7)" class="sort-th px-4 py-3 text-gray-300"><span class="flex items-center gap-1">P95 <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(8)" class="sort-th px-4 py-3 text-red-400"><span class="flex items-center gap-1">Max <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(9)" class="sort-th px-4 py-3 text-cyan-400"><span class="flex items-center gap-1">Spread (bps) <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(10)" class="sort-th px-4 py-3 text-cyan-400"><span class="flex items-center gap-1">Spread / Vol <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(11)" class="sort-th px-4 py-3"><span class="flex items-center gap-1">Daily Vol (%) <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(12)" class="sort-th px-4 py-3 text-amber-300"><span class="flex items-center gap-1">Score <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(13)" class="sort-th px-4 py-3 text-emerald-400"><span class="flex items-center gap-1">Savings <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(0)" class="sort-th px-3 py-2.5 whitespace-nowrap"><span class="flex items-center gap-1">Canonical <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(1)" class="sort-th px-3 py-2.5 whitespace-nowrap min-w-[75px]"><span class="flex items-center gap-1">Rank <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(2)" class="sort-th px-3 py-2.5 whitespace-nowrap"><span class="flex items-center gap-1">Broker Account <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(3)" class="sort-th px-3 py-2.5 whitespace-nowrap"><span class="flex items-center gap-1">Unit <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(4)" class="sort-th px-3 py-2.5 text-green-400 whitespace-nowrap"><span class="flex items-center gap-1">Min <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(5)" class="sort-th px-3 py-2.5 text-gray-300 whitespace-nowrap"><span class="flex items-center gap-1">Median <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(6)" class="sort-th px-3 py-2.5 text-amber-400 whitespace-nowrap"><span class="flex items-center gap-1">Avg <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(7)" class="sort-th px-3 py-2.5 text-gray-300 whitespace-nowrap"><span class="flex items-center gap-1">P95 <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(8)" class="sort-th px-3 py-2.5 text-red-400 whitespace-nowrap"><span class="flex items-center gap-1">Max <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(9)" class="sort-th px-3 py-2.5 text-cyan-400 whitespace-nowrap"><span class="flex items-center gap-1">Spread (bps) <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(10)" class="sort-th px-3 py-2.5 text-cyan-400 whitespace-nowrap"><span class="flex items-center gap-1">Spread / Vol <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(11)" class="sort-th px-3 py-2.5 whitespace-nowrap"><span class="flex items-center gap-1">Daily Vol (%) <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(12)" class="sort-th px-3 py-2.5 text-amber-300 whitespace-nowrap"><span class="flex items-center gap-1">Score <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
+                            <th onclick="sortTable(13)" class="sort-th px-3 py-2.5 text-emerald-400 whitespace-nowrap"><span class="flex items-center gap-1">Savings <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
                         </tr>
                     </thead>
                     <tbody id="comparisonTableBody" class="divide-y divide-gray-800/60">
