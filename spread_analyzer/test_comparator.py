@@ -38,6 +38,14 @@ def test_symbol_mappings_and_normalization(tmp_path: Path):
     assert normalize_symbol("SP500Cash", reverse_map) == "US500"
     assert normalize_symbol("BTCUSD_SPOT", reverse_map) == "BTCUSD"
 
+    # Test unmapped symbols used as-is (with and without broker noise)
+    assert normalize_symbol("EURUSD", reverse_map) == "EURUSD"
+    assert normalize_symbol("EURUSDm", reverse_map) == "EURUSD"
+    assert normalize_symbol("#EURUSD", reverse_map) == "EURUSD"
+    assert normalize_symbol("GBPUSD.pro", reverse_map) == "GBPUSD"
+    assert normalize_symbol("USDJPY.a", reverse_map) == "USDJPY"
+    assert normalize_symbol("GBPJPY", reverse_map) == "GBPJPY"
+
 
 def test_cross_broker_comparison_and_scoring(tmp_path: Path):
     mappings = {"XAUUSD": ["XAUUSD", "GOLD"]}

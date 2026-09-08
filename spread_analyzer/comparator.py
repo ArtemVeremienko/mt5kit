@@ -106,10 +106,10 @@ def normalize_symbol(symbol: str, reverse_map: Dict[str, str]) -> str:
     """
     Resolves a broker's symbol into its canonical symbol using multi-tier matching:
     1. Tier 1: Exact uppercase match in reverse_map.
-    2. Tier 2: Suffix/Prefix stripping (e.g. 'Cash', '.raw', '#', etc.) checked against reverse_map.
-    3. Tier 3: Longest alias substring matching (checks if any known alias with length >= 4
-       is contained within the symbol, or if the symbol is contained within an alias).
-    4. Fallback: Generic noise stripping.
+    2. Tier 2: Suffix/Prefix stripping checked against reverse_map.
+    3. Tier 3: Longest alias substring matching (aliases with length >= 4).
+    4. Tier 4: Fallback as-is: strips common broker noise (#, ., .raw, .pro, etc.)
+       and returns the clean symbol directly if not present in reverse_map.
     """
     s_upper = symbol.strip().upper()
 
@@ -117,18 +117,17 @@ def normalize_symbol(symbol: str, reverse_map: Dict[str, str]) -> str:
     if s_upper in reverse_map:
         return reverse_map[s_upper]
 
-    # Tier 2: Common broker suffix & prefix stripping checked against reverse_map
-    s_clean = s_upper
-    for suffix in (".RAW", ".PRO", ".A", ".CASH", "CASH", "SPOT", ".M", "M"):
+    # Strip prefix noise (#, .)
+    s_clean = s_upper.lstrip("#.")
+    if s_clean in reverse_map:
+        return reverse_map[s_clean]
+
+    # Tier 2: Common broker suffix stripping checked against reverse_map
+    for suffix in (".RAW", ".PRO", ".A", ".CASH", "CASH", "_SPOT", "SPOT", ".M", "M"):
         if s_clean.endswith(suffix):
             cand = s_clean[:-len(suffix)]
             if cand in reverse_map:
                 return reverse_map[cand]
-
-    if s_clean.startswith("#") or s_clean.startswith("."):
-        cand = s_clean[1:]
-        if cand in reverse_map:
-            return reverse_map[cand]
 
     # Tier 3: Substring matching against reverse_map aliases
     # Sort aliases by length descending so longer, more specific matches win (e.g. 'USNDAQ100' before 'US100')
@@ -142,15 +141,16 @@ def normalize_symbol(symbol: str, reverse_map: Dict[str, str]) -> str:
         candidate_matches.sort(key=lambda x: x[0], reverse=True)
         return candidate_matches[0][1]
 
-    # Tier 4: Fallback generic noise stripping
-    for suffix in (".RAW", ".PRO", ".A", ".CASH", "CASH"):
+    # Tier 4: Fallback as-is: strip standard broker noise and return clean symbol directly
+    for suffix in (".RAW", ".PRO", ".A", ".CASH", "CASH", "_SPOT", "SPOT", ".M"):
         if s_clean.endswith(suffix):
             return s_clean[:-len(suffix)]
 
-    if s_clean.startswith("#") or s_clean.startswith("."):
-        return s_clean[1:]
+    # Forex micro/mini suffix 'm' on standard 6-char currency pairs (e.g. EURUSDm -> EURUSD)
+    if len(s_clean) == 7 and s_clean.endswith("M") and s_clean[:6].isalpha():
+        return s_clean[:-1]
 
-    return s_upper
+    return s_clean
 
 
 def discover_summary_files(base_dir: Path) -> List[Tuple[str, Path]]:
