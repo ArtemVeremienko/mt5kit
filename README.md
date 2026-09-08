@@ -19,7 +19,7 @@ A comprehensive suite of production-grade Python analytics engines, high-perform
   - [9. Macro Market Regime Analyzer (`macro_regime_analyzer/`)](#9-macro-market-regime-analyzer-macro_regime_analyzer)
   - [10. MT5 Risk Management & Position Sizing Engine (`mt5-risk-management-dashboard`)](#10-mt5-risk-management--position-sizing-engine-mt5-risk-management-dashboard)
   - [11. Multi-Asset Spread Analyzer & Cross-Broker Comparator (`spread_analyzer/`)](#11-multi-asset-spread-analyzer--cross-broker-comparator-spread_analyzer)
-- [Jupyter Notebooks](#-jupyter-notebooks)
+- [Jupyter Notebooks (`notebooks/`)](#-jupyter-notebooks-notebooks)
   - [Market Microstructure & Spreads](#market-microstructure--spreads)
   - [Interactive Price & Tick Charting](#interactive-price--tick-charting)
   - [Quantitative & Market Profile Analytics](#quantitative--market-profile-analytics)
@@ -237,14 +237,14 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 
 ---
 
-## 📓 Jupyter Notebooks
+## 📓 Jupyter Notebooks (`notebooks/`)
 
 ### Market Microstructure & Spreads
 
 | Notebook | Description | Key Focus |
 |---|---|---|
-| [`1min_spread_chart.ipynb`](1min_spread_chart.ipynb) | **1-Minute Resolution Spread Analysis & Bar Chart** | Computes 1-minute average bid-ask spreads over a strict 1-day boundary (00:00:00–23:59:59) with adaptive unit scaling (`pips`, `cents`, `points`) and collision-free legend formatting. |
-| [`session_liquidity_volatility_heatmap.ipynb`](session_liquidity_volatility_heatmap.ipynb) | **24-Hour Cumulative Session Liquidity & Volatility Heatmap** | Aggregates 24-hour profiles over Day/Week/Month periods for spreads, volatility, and execution efficiency across global sessions (Asian, London, NY, Rollover) with robust outlier saturation. |
+| [`1min_spread_chart.ipynb`](notebooks/1min_spread_chart.ipynb) | **1-Minute Resolution Spread Analysis & Bar Chart** | Computes 1-minute average bid-ask spreads over a strict 1-day boundary (00:00:00–23:59:59) with adaptive unit scaling (`pips`, `cents`, `points`) and collision-free legend formatting. |
+| [`session_liquidity_volatility_heatmap.ipynb`](notebooks/session_liquidity_volatility_heatmap.ipynb) | **24-Hour Cumulative Session Liquidity & Volatility Heatmap** | Aggregates 24-hour profiles over Day/Week/Month periods for spreads, volatility, and execution efficiency across global sessions (Asian, London, NY, Rollover) with robust outlier saturation. |
 
 ---
 
@@ -252,9 +252,8 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 
 | Notebook | Description | Key Focus |
 |---|---|---|
-| [`candlestick_chart_interactive.ipynb`](candlestick_chart_interactive.ipynb) | **Second-Based Candlestick Chart (Plotly)** | Resamples raw MT5 tick data into sub-minute/second-based OHLC candlesticks (`1s`, `5s`, `10s`) with synchronized tick volume histograms and range sliders. |
-| [`tick_chart_interactive.ipynb`](tick_chart_interactive.ipynb) | **Interactive Tick Price & Spread Dashboard** | Full-day interactive Plotly chart showing synchronized Bid/Ask step lines, real-time spread subplots, rich tooltips, and zoom/pan controls. |
-| [`historical_view.ipynb`](historical_view.ipynb) | **Multi-Timeframe Historical Candlestick Explorer** | Fetches historical price action from 2–5 years ago across H1 (macro 3-day context), M5 (intraday), and M1 (microstructure) timeframes. |
+| [`candlestick_chart_interactive.ipynb`](notebooks/candlestick_chart_interactive.ipynb) | **Second-Based Candlestick Chart (Plotly)** | Resamples raw MT5 tick data into sub-minute/second-based OHLC candlesticks (`1s`, `5s`, `10s`) with synchronized tick volume histograms and range sliders. |
+| [`tick_chart_interactive.ipynb`](notebooks/tick_chart_interactive.ipynb) | **Interactive Tick Price & Spread Dashboard** | Full-day interactive Plotly chart showing synchronized Bid/Ask step lines, real-time spread subplots, rich tooltips, and zoom/pan controls. |
 
 ---
 
@@ -262,8 +261,8 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 
 | Notebook | Description | Key Focus |
 |---|---|---|
-| [`cross_asset_correlation_cointegration_screener.ipynb`](cross_asset_correlation_cointegration_screener.ipynb) | **Cross-Asset Correlation & Cointegration Divergence Screener** | Quantitative pairs trading and statistical arbitrage engine using Engle-Granger two-step regression, Augmented Dickey-Fuller (ADF) stationarity tests, half-life of mean reversion, and rolling Z-score spread divergence signals. |
-| [`tpo_profile_interactive.ipynb`](tpo_profile_interactive.ipynb) | **TPO (Time Price Opportunity) Market Profile** | Calculates TPO price distribution, Point of Control (POC), and Value Area High/Low (VAH/VAL ~70% volume range) alongside interactive Plotly price action charts. |
+| [`cross_asset_correlation_cointegration_screener.ipynb`](notebooks/cross_asset_correlation_cointegration_screener.ipynb) | **Cross-Asset Correlation & Cointegration Divergence Screener** | Quantitative pairs trading and statistical arbitrage engine using Engle-Granger two-step regression, Augmented Dickey-Fuller (ADF) stationarity tests, half-life of mean reversion, and rolling Z-score spread divergence signals. |
+| [`tpo_profile_interactive.ipynb`](notebooks/tpo_profile_interactive.ipynb) | **TPO (Time Price Opportunity) Market Profile** | Calculates TPO price distribution, Point of Control (POC), and Value Area High/Low (VAH/VAL ~70% volume range) alongside interactive Plotly price action charts. |
 
 ---
 
@@ -375,13 +374,14 @@ metatrader5/
 │   ├── test_comparator.py                   # Unit tests for cross-broker comparator
 │   └── README.md                            # Module documentation
 │
-├── 1min_spread_chart.ipynb                  # 1-minute spread analysis with collision-free legends
-├── candlestick_chart_interactive.ipynb      # Sub-minute / second-based candlestick chart (1s/5s/10s)
-├── cross_asset_correlation_cointegration_screener.ipynb # Cointegration, ADF test & pairs trading screener
-├── historical_view.ipynb                    # Multi-timeframe historical charts (H1/M5/M1)
-├── session_liquidity_volatility_heatmap.ipynb # 24h session liquidity, volatility & efficiency heatmaps
-├── tick_chart_interactive.ipynb             # Interactive Plotly tick & spread timeline
-├── tpo_profile_interactive.ipynb            # TPO Market Profile, POC & Value Area (VAH/VAL)
+├── notebooks/                               # Quantitative & exploratory Jupyter notebooks
+│   ├── 1min_spread_chart.ipynb              # 1-minute spread analysis with collision-free legends
+│   ├── candlestick_chart_interactive.ipynb  # Sub-minute / second-based candlestick chart (1s/5s/10s)
+│   ├── cross_asset_correlation_cointegration_screener.ipynb # Cointegration, ADF test & pairs trading screener
+│   ├── session_liquidity_volatility_heatmap.ipynb # 24h session liquidity, volatility & efficiency heatmaps
+│   ├── tick_chart_interactive.ipynb         # Interactive Plotly tick & spread timeline
+│   ├── tpo_profile_interactive.ipynb        # TPO Market Profile, POC & Value Area (VAH/VAL)
+│   └── README.md                            # Notebooks index & quickstart guide
 ├── pyproject.toml                           # Python project metadata & dependencies
 ├── LICENSE                                  # MIT License
 └── README.md                                # Main project documentation
