@@ -13,6 +13,7 @@ ranks brokers per symbol, and outputs:
 import csv
 import json
 import logging
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
@@ -44,14 +45,16 @@ class BrokerSymbolRecord:
     max_spread: float
     metric_basis: str
     spread_bps: float
-    spread_to_vol_pct: float
-    avg_daily_volatility_pct: float
-    avg_daily_volatility: float
-    total_ticks: int
-    sampled_minutes: int
+    spread_to_vol_pct: float = 0.0
+    avg_daily_volatility_pct: float = 0.0
+    avg_daily_volatility: float = 0.0
+    total_ticks: int = 0
+    sampled_minutes: int = 0
     composite_score: float = 0.0
     rank: int = 0
     savings_vs_worst_bps: float = 0.0
+    delta_vs_winner_bps: float = 0.0
+    winner_lead_bps: float = 0.0
 
 
 @dataclass
@@ -74,6 +77,7 @@ class CanonicalComparisonGroup:
     winner: Optional[BrokerSymbolRecord] = None
     runner_up: Optional[BrokerSymbolRecord] = None
     bps_difference: float = 0.0
+    winner_lead_bps: float = 0.0
 
 
 def load_symbol_mappings(mapping_file: Path) -> Dict[str, str]:
@@ -166,8 +170,6 @@ def parse_summary_csv(
     broker_tag: str,
     csv_path: Path,
     reverse_map: Dict[str, str],
-    w_bps: float = 0.5,
-    w_vol: float = 0.5,
 ) -> List[BrokerSymbolRecord]:
     records = []
     with open(csv_path, "r", encoding="utf-8") as f:
@@ -193,7 +195,6 @@ def parse_summary_csv(
             m1_bars = int(float(row.get("sampled_minutes", 0)))
 
             canonical = normalize_symbol(sym, reverse_map)
-            composite = (w_bps * spread_bps) + (w_vol * spread_to_vol_pct)
 
             record = BrokerSymbolRecord(
                 broker_tag=broker_tag,
@@ -212,7 +213,7 @@ def parse_summary_csv(
                 avg_daily_volatility=daily_vol,
                 total_ticks=ticks,
                 sampled_minutes=m1_bars,
-                composite_score=composite,
+                composite_score=spread_bps,
             )
             records.append(record)
 
@@ -222,8 +223,6 @@ def parse_summary_csv(
 def run_cross_broker_comparison(
     output_dir: Path,
     mappings_file: Path,
-    w_bps: float = 0.5,
-    w_vol: float = 0.5,
 ) -> Tuple[List[CanonicalComparisonGroup], Dict[str, BrokerLeaderboardStats]]:
     reverse_map = load_symbol_mappings(mappings_file)
     files = discover_summary_files(output_dir)
@@ -235,7 +234,7 @@ def run_cross_broker_comparison(
     all_records: List[BrokerSymbolRecord] = []
     broker_tags: set = set()
     for broker_tag, csv_path in files:
-        recs = parse_summary_csv(broker_tag, csv_path, reverse_map, w_bps=w_bps, w_vol=w_vol)
+        recs = parse_summary_csv(broker_tag, csv_path, reverse_map)
         all_records.extend(recs)
         broker_tags.add(broker_tag)
         logger.info(f"Loaded {len(recs)} symbols from [{broker_tag}]")
@@ -255,14 +254,26 @@ def run_cross_broker_comparison(
     }
 
     for canonical, recs in sorted(grouped.items()):
-        recs_sorted = sorted(recs, key=lambda x: (x.composite_score, x.spread_bps, x.median_spread))
+        # Sort purely by Spread in Basis Points (bps), then median spread as tie-breaker
+        recs_sorted = sorted(recs, key=lambda x: (x.spread_bps, x.median_spread))
 
-        worst_bps = max((r.spread_bps for r in recs_sorted), default=0.0)
         is_contested = (len(recs_sorted) > 1)
+        winner = recs_sorted[0] if recs_sorted else None
+        runner_up = recs_sorted[1] if len(recs_sorted) > 1 else None
+        winner_lead = (runner_up.spread_bps - winner.spread_bps) if (winner and runner_up) else 0.0
 
         for rank_idx, r in enumerate(recs_sorted, start=1):
             r.rank = rank_idx
-            r.savings_vs_worst_bps = max(0.0, worst_bps - r.spread_bps)
+            r.composite_score = r.spread_bps
+            r.winner_lead_bps = winner_lead
+
+            if rank_idx == 1:
+                r.delta_vs_winner_bps = 0.0
+                r.savings_vs_worst_bps = winner_lead  # preserve for backwards compatibility
+            else:
+                # Negative delta representing deficit vs winner
+                r.delta_vs_winner_bps = winner.spread_bps - r.spread_bps
+                r.savings_vs_worst_bps = 0.0
 
             stats = leaderboard[r.broker_tag]
             stats.total_symbols += 1
@@ -281,16 +292,13 @@ def run_cross_broker_comparison(
                 else:
                     stats.other_places += 1
 
-        winner = recs_sorted[0] if recs_sorted else None
-        runner_up = recs_sorted[1] if len(recs_sorted) > 1 else None
-        bps_diff = (runner_up.spread_bps - winner.spread_bps) if (winner and runner_up) else 0.0
-
         group = CanonicalComparisonGroup(
             canonical_symbol=canonical,
             records=recs_sorted,
             winner=winner,
             runner_up=runner_up,
-            bps_difference=bps_diff,
+            bps_difference=winner_lead,
+            winner_lead_bps=winner_lead,
         )
         comparison_groups.append(group)
 
@@ -307,11 +315,9 @@ def run_cross_broker_comparison(
 def print_comparison_terminal(
     groups: List[CanonicalComparisonGroup],
     leaderboard: Dict[str, BrokerLeaderboardStats],
-    w_bps: float = 0.5,
-    w_vol: float = 0.5,
 ) -> None:
     print(f"\n{BOLD}{CYAN}=== CROSS-BROKER SPREAD COMPARISON SUMMARY ==={RESET}")
-    print(f"{GRAY}Scoring Formula : {BOLD}{int(w_bps*100)}% Spread(bps) + {int(w_vol*100)}% Spread/Vol(%){RESET} (Lower Score = Better Execution)")
+    print(f"{GRAY}Execution Metric: {BOLD}Spread (bps){RESET} (Lower = Better Execution; Lowest Wins Rank #1 🏆)")
     print(f"{GRAY}Points Formula  : {BOLD}1st: 10 pts, 2nd: 6 pts, 3rd: 4 pts, 4th: 2 pts, 5th: 1 pt{RESET} (Ranked by Avg Points/Symbol)")
 
     # Win & Points Leaderboard
@@ -330,8 +336,8 @@ def print_comparison_terminal(
         )
 
     h_sym, h_rnk, h_brk, h_unt = "CANONICAL", "RANK", "BROKER ACCOUNT", "UNIT"
-    h_med, h_avg, h_bps, h_vol, h_scr, h_svg = "MEDIAN", "AVG", "BPS", "VOL%", "SCORE", "SAVINGS"
-    print(f"\n{BOLD}{h_sym:<10}  {h_rnk:<5}  {h_brk:<35}  {h_unt:<6}  {h_med:<8}  {h_avg:<8}  {h_bps:<8}  {h_vol:<8}  {h_scr:<8}  {h_svg:<10}{RESET}")
+    h_med, h_avg, h_p95, h_bps, h_dlt = "MEDIAN", "AVG", "P95", "SPREAD(BPS)", "DELTA VS #1"
+    print(f"\n{BOLD}{h_sym:<10}  {h_rnk:<5}  {h_brk:<35}  {h_unt:<6}  {h_med:<8}  {h_avg:<8}  {h_p95:<8}  {h_bps:<12}  {h_dlt:<22}{RESET}")
     print(f"{GRAY}{'-'*115}{RESET}")
 
     for g in groups:
@@ -340,14 +346,15 @@ def print_comparison_terminal(
             if r.rank == 1:
                 rank_str = f"{GREEN}{BOLD}#1 [BEST]{RESET}"
                 broker_str = f"{GREEN}{BOLD}{r.broker_tag:<35}{RESET}"
+                delta_str = f"{GREEN}+ {r.winner_lead_bps:.2f} bps lead{RESET}" if is_contested else f"{GREEN}🏆 Best{RESET}"
             elif r.rank == 2:
                 rank_str = f"{ORANGE}#2{RESET}"
                 broker_str = f"{r.broker_tag:<35}"
+                delta_str = f"{ORANGE}{r.delta_vs_winner_bps:.2f} bps{RESET}"
             else:
                 rank_str = f"{GRAY}#{r.rank}{RESET}"
                 broker_str = f"{GRAY}{r.broker_tag:<35}{RESET}"
-
-            savings_str = f"{GREEN}+{r.savings_vs_worst_bps:.2f} bps{RESET}" if (r.rank == 1 and is_contested) else "-"
+                delta_str = f"{RED}{r.delta_vs_winner_bps:.2f} bps{RESET}"
 
             print(
                 f"{BOLD}{g.canonical_symbol:<10}{RESET}  "
@@ -356,10 +363,9 @@ def print_comparison_terminal(
                 f"{r.unit:<6}  "
                 f"{r.median_spread:<8.2f}  "
                 f"{r.avg_spread:<8.2f}  "
-                f"{r.spread_bps:<8.2f}  "
-                f"{r.spread_to_vol_pct:<8.2f}  "
-                f"{BOLD}{r.composite_score:<8.2f}{RESET}  "
-                f"{savings_str:<10}"
+                f"{r.p95_spread:<8.2f}  "
+                f"{BOLD}{r.spread_bps:<12.2f}{RESET}  "
+                f"{delta_str:<22}"
             )
         print(f"{GRAY}{'.' * 115}{RESET}")
     print()
@@ -380,11 +386,8 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
         "p95_spread",
         "max_spread",
         "spread_bps",
-        "spread_to_vol_pct",
-        "avg_daily_volatility_pct",
-        "avg_daily_volatility",
-        "composite_score",
-        "savings_vs_worst_bps",
+        "delta_vs_winner_bps",
+        "winner_lead_bps",
         "total_ticks",
         "sampled_minutes",
     ]
@@ -407,11 +410,8 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
                     "p95_spread": r.p95_spread,
                     "max_spread": r.max_spread,
                     "spread_bps": round(r.spread_bps, 4),
-                    "spread_to_vol_pct": round(r.spread_to_vol_pct, 4),
-                    "avg_daily_volatility_pct": round(r.avg_daily_volatility_pct, 4),
-                    "avg_daily_volatility": round(r.avg_daily_volatility, 4),
-                    "composite_score": round(r.composite_score, 4),
-                    "savings_vs_worst_bps": round(r.savings_vs_worst_bps, 4),
+                    "delta_vs_winner_bps": round(r.delta_vs_winner_bps, 4),
+                    "winner_lead_bps": round(r.winner_lead_bps, 4),
                     "total_ticks": r.total_ticks,
                     "sampled_minutes": r.sampled_minutes,
                 })
@@ -422,274 +422,93 @@ def generate_comparison_html(
     groups: List[CanonicalComparisonGroup],
     leaderboard: Dict[str, BrokerLeaderboardStats],
     output_path: Path,
-    w_bps: float = 0.5,
-    w_vol: float = 0.5,
 ) -> Path:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    """
+    Generates a decoupled cross-broker comparison package:
+    - report_data.json: Structured JSON comparison data (leaderboard + groups)
+    - report_data.js: Script shim assigning window.__REPORT_DATA__ for local file:// viewing
+    - index.html (or specified output_path): Static Alpine.js comparison dashboard copied from templates
+    """
+    if output_path.suffix.lower() == ".html":
+        output_dir = output_path.parent
+        html_file = output_path
+    else:
+        output_dir = output_path
+        html_file = output_dir / "index.html"
 
-    leaderboard_html = []
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    leaderboard_data = []
     sorted_leaderboard = sorted(
         leaderboard.values(),
         key=lambda x: (x.avg_points, x.total_points, x.first_places),
         reverse=True
     )
-    for idx, s in enumerate(sorted_leaderboard, start=1):
-        is_first = (idx == 1)
-        border_cls = "border-amber-500/50 bg-gray-900/90 shadow-lg shadow-amber-500/5" if is_first else "border-gray-800 bg-gray-900/60"
-        score_badge_cls = "bg-amber-500/20 text-amber-400 border-amber-500/40" if is_first else "bg-gray-800 text-gray-300 border-gray-700"
-        trophy = "🏆 " if is_first else ""
+    for s in sorted_leaderboard:
+        leaderboard_data.append({
+            "broker_tag": s.broker_tag,
+            "total_points": round(float(s.total_points), 2),
+            "contested_symbols": int(s.contested_symbols),
+            "avg_points": round(float(s.avg_points), 4),
+            "first_places": int(s.first_places),
+            "second_places": int(s.second_places),
+            "third_places": int(s.third_places),
+            "other_places": int(s.other_places),
+            "total_symbols": int(s.total_symbols),
+        })
 
-        card = f"""
-        <div class="p-4 rounded-xl border {border_cls} flex flex-col justify-between space-y-3">
-            <div class="flex items-center justify-between gap-2">
-                <div class="min-w-0 flex-1">
-                    <span class="text-[11px] text-gray-500 font-mono block">RANK #{idx}</span>
-                    <span class="text-sm font-bold text-white tracking-tight truncate block" title="{s.broker_tag}">{trophy}{s.broker_tag}</span>
-                </div>
-                <div class="flex-shrink-0 text-right">
-                    <span class="px-2.5 py-1 rounded text-xs font-bold font-mono border whitespace-nowrap inline-block {score_badge_cls}">
-                        {s.avg_points:.2f} PTS/SYM
-                    </span>
-                </div>
-            </div>
-
-            <!-- Medals & Places Breakdown -->
-            <div class="grid grid-cols-4 gap-1.5 pt-2 border-t border-gray-800/80 text-center font-mono text-xs">
-                <div class="bg-gray-950/60 py-1.5 rounded border border-gray-800/50">
-                    <span class="text-gray-500 block text-[10px]">🥇 1ST</span>
-                    <span class="text-emerald-400 font-bold">{s.first_places}</span>
-                </div>
-                <div class="bg-gray-950/60 py-1.5 rounded border border-gray-800/50">
-                    <span class="text-gray-500 block text-[10px]">🥈 2ND</span>
-                    <span class="text-amber-400 font-bold">{s.second_places}</span>
-                </div>
-                <div class="bg-gray-950/60 py-1.5 rounded border border-gray-800/50">
-                    <span class="text-gray-500 block text-[10px]">🥉 3RD</span>
-                    <span class="text-orange-400 font-bold">{s.third_places}</span>
-                </div>
-                <div class="bg-gray-950/60 py-1.5 rounded border border-gray-800/50">
-                    <span class="text-gray-500 block text-[10px]">TOTAL</span>
-                    <span class="text-white font-bold">{s.total_points:.0f}</span>
-                </div>
-            </div>
-
-            <div class="text-[11px] text-gray-400 font-mono flex justify-between">
-                <span>Contested symbols: <strong class="text-gray-200">{s.contested_symbols}</strong></span>
-                <span>Total offered: <strong class="text-gray-400">{s.total_symbols}</strong></span>
-            </div>
-        </div>
-        """
-        leaderboard_html.append(card)
-
-    rows_html = []
+    groups_data = []
     for g in groups:
-        is_contested = len(g.records) > 1
+        records_data = []
         for r in g.records:
-            is_win = (r.rank == 1)
-            rank_badge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 font-mono font-bold whitespace-nowrap">#1 🏆</span>' if is_win else f'<span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 font-mono whitespace-nowrap">#{r.rank}</span>'
-            row_bg = "bg-emerald-950/10" if is_win else ""
-            broker_name = f"<span class='font-semibold text-white'>{r.broker_tag}</span>" if is_win else f"<span class='text-gray-400'>{r.broker_tag}</span>"
+            records_data.append({
+                "broker_tag": r.broker_tag,
+                "symbol": r.symbol,
+                "canonical_symbol": r.canonical_symbol,
+                "unit": r.unit,
+                "min_spread": round(float(r.min_spread), 4),
+                "median_spread": round(float(r.median_spread), 4),
+                "avg_spread": round(float(r.avg_spread), 4),
+                "p95_spread": round(float(r.p95_spread), 4),
+                "max_spread": round(float(r.max_spread), 4),
+                "metric_basis": r.metric_basis,
+                "spread_bps": round(float(r.spread_bps), 4),
+                "rank": int(r.rank),
+                "delta_vs_winner_bps": round(float(r.delta_vs_winner_bps), 4),
+                "winner_lead_bps": round(float(r.winner_lead_bps), 4),
+                "total_ticks": int(r.total_ticks),
+                "sampled_minutes": int(r.sampled_minutes),
+            })
+        groups_data.append({
+            "canonical_symbol": g.canonical_symbol,
+            "records": records_data,
+            "winner_lead_bps": round(float(g.winner_lead_bps), 4),
+        })
 
-            savings_cell = f"<span class='text-emerald-400 font-mono font-bold whitespace-nowrap'>+{r.savings_vs_worst_bps:.2f} bps</span>" if (is_win and is_contested) else "<span class='text-gray-600 font-mono'>-</span>"
+    report_data = {
+        "metric": "Spread (bps)",
+        "leaderboard": leaderboard_data,
+        "groups": groups_data,
+    }
 
-            row = f"""
-            <tr class="hover:bg-gray-800/60 transition {row_bg}">
-                <td class="px-3 py-2.5 font-bold text-blue-400 font-mono whitespace-nowrap" data-val="{g.canonical_symbol}">{g.canonical_symbol}</td>
-                <td class="px-3 py-2.5 whitespace-nowrap" data-val="{r.rank}">{rank_badge}</td>
-                <td class="px-3 py-2.5 whitespace-nowrap" data-val="{r.broker_tag}">{broker_name} <span class="text-xs text-gray-500 ml-1 font-mono">({r.symbol})</span></td>
-                <td class="px-3 py-2.5 text-gray-400" data-val="{r.unit}">{r.unit}</td>
-                <td class="px-3 py-2.5 text-green-400 font-mono" data-val="{r.min_spread}">{r.min_spread:.2f}</td>
-                <td class="px-3 py-2.5 text-gray-300 font-mono" data-val="{r.median_spread}">{r.median_spread:.2f}</td>
-                <td class="px-3 py-2.5 text-amber-400 font-mono" data-val="{r.avg_spread}">{r.avg_spread:.2f}</td>
-                <td class="px-3 py-2.5 text-gray-300 font-mono" data-val="{r.p95_spread}">{r.p95_spread:.2f}</td>
-                <td class="px-3 py-2.5 text-red-400 font-mono" data-val="{r.max_spread}">{r.max_spread:.2f}</td>
-                <td class="px-3 py-2.5 text-cyan-400 font-mono font-bold whitespace-nowrap" data-val="{r.spread_bps}">{r.spread_bps:.2f} bps</td>
-                <td class="px-3 py-2.5 text-cyan-400 font-mono" data-val="{r.spread_to_vol_pct}">{r.spread_to_vol_pct:.2f}%</td>
-                <td class="px-3 py-2.5 text-gray-300 font-mono cursor-help" title="{r.avg_daily_volatility:.1f} {r.unit}" data-val="{r.avg_daily_volatility_pct}">{r.avg_daily_volatility_pct:.2f}%</td>
-                <td class="px-3 py-2.5 font-mono font-bold text-amber-300" data-val="{r.composite_score}">{r.composite_score:.2f}</td>
-                <td class="px-3 py-2.5" data-val="{r.savings_vs_worst_bps}">{savings_cell}</td>
-            </tr>
-            """
-            rows_html.append(row)
+    # 1. Write report_data.json
+    json_path = output_dir / "report_data.json"
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(report_data, f, indent=2)
 
-    html_content = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MetaTrader 5 Cross-Broker Spread Comparison</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>
-        body {{
-            font-family: 'Inter', sans-serif;
-            background-color: #0B0F19;
-        }}
-        .font-mono {{
-            font-family: 'JetBrains Mono', monospace;
-        }}
-        .sort-th {{
-            cursor: pointer;
-            user-select: none;
-            transition: color 0.15s ease;
-        }}
-        .sort-th:hover {{
-            color: #FFFFFF !important;
-        }}
-        /* Sleek horizontal scrollbar for wide tables */
-        .custom-scrollbar::-webkit-scrollbar {{
-            height: 6px;
-        }}
-        .custom-scrollbar::-webkit-scrollbar-track {{
-            background: #0B0F19;
-            border-radius: 4px;
-        }}
-        .custom-scrollbar::-webkit-scrollbar-thumb {{
-            background: #1F2937;
-            border-radius: 4px;
-        }}
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover {{
-            background: #374151;
-        }}
-    </style>
-</head>
-<body class="text-gray-200 min-h-screen p-4 md:p-8">
-    <div class="max-w-[1440px] mx-auto space-y-6">
-        <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-800 pb-5 gap-4">
-            <div>
-                <div class="flex items-center gap-3">
-                    <h1 class="text-2xl md:text-3xl font-bold tracking-tight text-white">Cross-Broker Spread Comparison</h1>
-                    <span class="px-2.5 py-0.5 rounded text-xs font-semibold bg-emerald-900/60 text-emerald-400 border border-emerald-700/50">Multi-Broker Benchmarking</span>
-                </div>
-                <p class="text-sm text-gray-400 mt-1">Evaluating execution friction across MetaTrader 5 accounts</p>
-            </div>
-            <div class="text-xs font-mono bg-gray-900/80 px-4 py-2.5 rounded-lg border border-gray-800 space-y-1">
-                <div><span class="text-gray-500">SCORING FORMULA:</span> <span class="text-cyan-400 font-bold">{int(w_bps*100)}% bps + {int(w_vol*100)}% vol_ratio</span></div>
-                <div><span class="text-gray-500">CRITERION:</span> <span class="text-gray-300">Lowest Composite Score Wins (Rank #1 🏆)</span></div>
-            </div>
-        </div>
+    # 2. Write report_data.js for offline file:// double-click compatibility
+    js_path = output_dir / "report_data.js"
+    json_str = json.dumps(report_data)
+    with open(js_path, "w", encoding="utf-8") as f:
+        f.write(f"window.__REPORT_DATA__ = {json_str};\n")
 
-        <div>
-            <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-3">Broker Win Leaderboard</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {''.join(leaderboard_html)}
-            </div>
-        </div>
+    # 3. Copy static Alpine.js template
+    template_path = Path(__file__).parent / "templates" / "broker_comparison.html"
+    if template_path.exists():
+        shutil.copy2(template_path, html_file)
+    else:
+        raise FileNotFoundError(f"Template not found at: {template_path}")
 
-        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-gray-900/60 p-4 rounded-xl border border-gray-800">
-            <div class="relative w-full sm:w-80">
-                <input type="text" id="symbolSearch" onkeyup="filterTable()" placeholder="Search symbol (e.g. EURUSD, GOLD)..." class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 font-mono">
-            </div>
-            <div class="text-xs text-gray-400">
-                <span class="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 mr-1"></span>Winner (Rank #1)
-                <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 ml-3 mr-1"></span>Runner-up
-            </div>
-        </div>
+    return html_file
 
-        <div class="bg-gray-900/60 rounded-xl border border-gray-800 overflow-hidden shadow-xl">
-            <div class="p-4 border-b border-gray-800 flex items-center justify-between">
-                <h2 class="text-base font-semibold text-white">Grouped Head-to-Head Comparisons</h2>
-                <p class="text-xs text-gray-400">Click any column header to sort</p>
-            </div>
-            <div class="overflow-x-auto custom-scrollbar">
-                <table id="comparisonTable" class="w-full text-left text-xs border-collapse">
-                    <thead class="bg-gray-950/80 uppercase text-gray-400 font-semibold border-b border-gray-800">
-                        <tr>
-                            <th onclick="sortTable(0)" class="sort-th px-3 py-2.5 whitespace-nowrap"><span class="flex items-center gap-1">Canonical <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(1)" class="sort-th px-3 py-2.5 whitespace-nowrap min-w-[75px]"><span class="flex items-center gap-1">Rank <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(2)" class="sort-th px-3 py-2.5 whitespace-nowrap"><span class="flex items-center gap-1">Broker Account <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(3)" class="sort-th px-3 py-2.5 whitespace-nowrap"><span class="flex items-center gap-1">Unit <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(4)" class="sort-th px-3 py-2.5 text-green-400 whitespace-nowrap"><span class="flex items-center gap-1">Min <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(5)" class="sort-th px-3 py-2.5 text-gray-300 whitespace-nowrap"><span class="flex items-center gap-1">Median <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(6)" class="sort-th px-3 py-2.5 text-amber-400 whitespace-nowrap"><span class="flex items-center gap-1">Avg <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(7)" class="sort-th px-3 py-2.5 text-gray-300 whitespace-nowrap"><span class="flex items-center gap-1">P95 <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(8)" class="sort-th px-3 py-2.5 text-red-400 whitespace-nowrap"><span class="flex items-center gap-1">Max <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(9)" class="sort-th px-3 py-2.5 text-cyan-400 whitespace-nowrap"><span class="flex items-center gap-1">Spread (bps) <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(10)" class="sort-th px-3 py-2.5 text-cyan-400 whitespace-nowrap"><span class="flex items-center gap-1">Spread / Vol <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(11)" class="sort-th px-3 py-2.5 whitespace-nowrap"><span class="flex items-center gap-1">Daily Vol (%) <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(12)" class="sort-th px-3 py-2.5 text-amber-300 whitespace-nowrap"><span class="flex items-center gap-1">Score <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                            <th onclick="sortTable(13)" class="sort-th px-3 py-2.5 text-emerald-400 whitespace-nowrap"><span class="flex items-center gap-1">Savings <span class="sort-icon text-gray-600 text-[10px]">↕</span></span></th>
-                        </tr>
-                    </thead>
-                    <tbody id="comparisonTableBody" class="divide-y divide-gray-800/60">
-                        {''.join(rows_html)}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div class="text-center text-xs text-gray-500 pt-4 pb-6">
-            Generated with MetaTrader 5 Cross-Broker Comparator • High-frequency quantitative analytics
-        </div>
-    </div>
-
-    <script>
-        let currentSortCol = null;
-        let currentSortAsc = true;
-
-        function sortTable(colIndex) {{
-            const table = document.getElementById('comparisonTable');
-            const tbody = document.getElementById('comparisonTableBody');
-            const rows = Array.from(tbody.querySelectorAll('tr'));
-            const headers = table.querySelectorAll('.sort-th');
-
-            if (currentSortCol === colIndex) {{
-                currentSortAsc = !currentSortAsc;
-            }} else {{
-                currentSortCol = colIndex;
-                currentSortAsc = true;
-            }}
-
-            headers.forEach((th, idx) => {{
-                const icon = th.querySelector('.sort-icon');
-                if (idx === colIndex) {{
-                    icon.textContent = currentSortAsc ? '▲' : '▼';
-                    icon.classList.remove('text-gray-600');
-                    icon.classList.add('text-blue-400');
-                }} else {{
-                    icon.textContent = '↕';
-                    icon.classList.remove('text-blue-400');
-                    icon.classList.add('text-gray-600');
-                }}
-            }});
-
-            rows.sort((a, b) => {{
-                const cellA = a.children[colIndex];
-                const cellB = b.children[colIndex];
-
-                const valA = cellA.getAttribute('data-val') !== null ? cellA.getAttribute('data-val') : cellA.innerText.trim();
-                const valB = cellB.getAttribute('data-val') !== null ? cellB.getAttribute('data-val') : cellB.innerText.trim();
-
-                const numA = parseFloat(valA);
-                const numB = parseFloat(valB);
-
-                if (!isNaN(numA) && !isNaN(numB)) {{
-                    return currentSortAsc ? numA - numB : numB - numA;
-                }}
-                return currentSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
-            }});
-
-            rows.forEach(r => tbody.appendChild(r));
-        }}
-
-        function filterTable() {{
-            const query = document.getElementById('symbolSearch').value.toUpperCase();
-            const rows = document.querySelectorAll('#comparisonTableBody tr');
-            rows.forEach(row => {{
-                const canonical = row.children[0].innerText.toUpperCase();
-                const broker = row.children[2].innerText.toUpperCase();
-                if (canonical.includes(query) || broker.includes(query)) {{
-                    row.style.display = '';
-                }} else {{
-                    row.style.display = 'none';
-                }}
-            }});
-        }}
-    </script>
-</body>
-</html>
-"""
-    output_path.write_text(html_content, encoding="utf-8")
-    return output_path
 

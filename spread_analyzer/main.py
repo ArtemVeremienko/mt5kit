@@ -351,9 +351,9 @@ def main() -> int:
             csv_path = target_dir / "spread_summary.csv"
             export_csv(metrics_list, csv_path)
 
-        # 3. Generate HTML report
+        # 3. Generate HTML dashboard and JSON data
         if not args.no_html:
-            html_path = target_dir / "spread_analysis_report.html"
+            html_path = target_dir / "index.html"
             generate_html_report(
                 symbols_data=symbols_data,
                 output_path=html_path,
@@ -362,7 +362,7 @@ def main() -> int:
                 start_dt=start_dt,
                 end_dt=end_dt,
             )
-            logger.info(f"Interactive HTML report generated: {html_path.resolve()}")
+            logger.info(f"Interactive dashboard generated: {html_path.resolve()} (with report_data.json & report_data.js)")
 
         return 0
 

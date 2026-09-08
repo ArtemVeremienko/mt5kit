@@ -17,7 +17,7 @@ A high-performance Python analytics and visualization engine for MetaTrader 5 to
   - **Max Spread**: Red (`#EF4444`, background layer)
 - **Multi-Unit Scaling**: Supports standard market units (Pips for Forex, Cents for Commodities/Metals, Points for Indices/Crypto), raw points, or quote currency price.
 - **Broker / Account Subdirectory Partitioning**: Reports and CSV summaries are automatically saved under an account-specific directory (e.g. `spread_analyzer/output/{BrokerName}_{AccountNumber}/`), preventing report collisions across multiple accounts and brokers.
-- **Unified Interactive HTML Dashboard**: Contains an interactive symbol selector dropdown to switch charts seamlessly and an all-symbol comparative table with min, median, avg, p95, and max spreads.
+- **Unified Interactive HTML Dashboard & Data Output**: Outputs `index.html`, `report_data.json`, and `report_data.js` into the target directory. Powered by Alpine.js and Plotly, the dashboard features interactive symbol switching, view toggling (Floating Range Bars and Step Corridor), responsive column sorting, search filtering, and drag-and-drop JSON file loading.
 - **Terminal Summary & CSV Export**: Outputs an aligned, colorized terminal table and exports a clean `spread_summary.csv`.
 
 ---
@@ -91,11 +91,8 @@ python -m spread_analyzer.main --tag "RoboForex_Live_ECN"
 Compare spread metrics across different brokers and accounts by scanning all generated `spread_summary.csv` reports:
 
 ```bash
-# Run comparison with default 50% Spread (bps) + 50% Spread / Vol (%) composite score:
+# Run comparison across all broker runs:
 python -m spread_analyzer.compare
-
-# Custom scoring weights (e.g. 70% Spread bps, 30% Vol ratio):
-python -m spread_analyzer.compare --w-bps 0.7 --w-vol 0.3
 
 # Custom symbol mapping JSON or custom output directory:
 python -m spread_analyzer.compare --output-dir spread_analyzer/output --mappings spread_analyzer/symbol_mappings.json
@@ -103,12 +100,12 @@ python -m spread_analyzer.compare --output-dir spread_analyzer/output --mappings
 
 ### Key Comparison Capabilities:
 - **Automatic Broker Discovery**: Scans all subdirectories under `spread_analyzer/output/` for `spread_summary.csv`.
-- **Multi-Tier Symbol Aliasing ([`symbol_mappings.json`](file:///d:/projects/metatrader5/spread_analyzer/symbol_mappings.json))**: Automatically maps broker-specific tickers into canonical instruments using a 4-tier resolution pipeline:
+- **Multi-Tier Symbol Aliasing ([`symbol_mappings.json`](symbol_mappings.json))**: Automatically maps broker-specific tickers into canonical instruments using a 4-tier resolution pipeline:
   1. *Tier 1*: Exact dictionary lookup.
   2. *Tier 2*: Broker suffix/prefix stripping (`Cash`, `Spot`, `.raw`, `.pro`, `#`, etc.).
   3. *Tier 3*: Longest alias substring matching (min length $\ge 4$) to safely match embedded roots like `US500Cash` $\to$ `US500` or `DE40Cash` $\to$ `GER40`.
   4. *Tier 4*: Fallback generic noise stripping.
-- **Instrument-Level Winner Scoring**: Computes $\text{Score} = 0.5 \times \text{Spread (bps)} + 0.5 \times \text{Spread / Vol (\%)}$. The broker with the lowest score is awarded **Rank #1 🏆 (Best Broker)** for that instrument.
+- **Instrument-Level Winner Scoring**: Evaluates execution directly on pure **`Spread (bps)`** (normalized spread as basis points of price). The broker with the lowest spread in basis points is awarded **Rank #1 🏆 (Best Broker)** for that instrument.
 - **All-Places Olympic / Grand Prix Performance Leaderboard**: Instead of counting only 1st-place wins, the overall leaderboard considers performance across all positions on contested instruments:
   - **1st place**: 10 pts
   - **2nd place**: 6 pts
@@ -116,9 +113,11 @@ python -m spread_analyzer.compare --output-dir spread_analyzer/output --mappings
   - **4th place**: 2 pts
   - **5th place**: 1 pt
   - **Normalized Ranking**: Ranked by **Average Points per Contested Symbol** ($\frac{\text{Total Points}}{\text{Contested Symbols}}$), ensuring consistent podium finishers (e.g. winning ten 2nd places) are rewarded fairly, and brokers testing fewer or more symbols compete on an equal footing.
-- **Spread Savings Calculation**: Displays the exact basis point savings (+X.XX bps) achieved by using the top broker over the worst broker for contested instruments.
-- **Multi-Broker HTML Dashboard**: Outputs [`spread_analyzer/output/broker_comparison.html`](file:///d:/projects/metatrader5/spread_analyzer/output/broker_comparison.html) featuring rich leaderboard cards with medal counts (🥇, 🥈, 🥉), search filtering, and sortable head-to-head comparison tables.
-- **Cross-Broker Summary CSV**: Exports [`spread_analyzer/output/broker_comparison.csv`](file:///d:/projects/metatrader5/spread_analyzer/output/broker_comparison.csv).
+- **Winner-Baseline Delta Calculation (`Delta vs #1`)**: Uses the **Rank #1 Winner** as the optimal execution benchmark:
+  - **Rank #1 Winner**: Displays `🏆 Best (+X.XX lead)` showing the exact margin over the runner-up.
+  - **Runners-Up (#2, #3, ...)**: Displays `-X.XX bps` representing the exact execution cost penalty / drag suffered compared to using the best broker.
+- **Multi-Broker HTML Dashboard**: Outputs [`index.html`](output/index.html) (with `report_data.json` and `report_data.js`) featuring rich leaderboard cards with medal counts (🥇, 🥈, 🥉), live search filtering, sortable head-to-head comparison tables powered by Alpine.js, and drag-and-drop JSON file loading.
+- **Cross-Broker Summary CSV**: Exports [`output/broker_comparison.csv`](output/broker_comparison.csv).
 
 
 ---

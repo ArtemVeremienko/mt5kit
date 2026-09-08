@@ -69,8 +69,6 @@ def test_cross_broker_comparison_and_scoring(tmp_path: Path):
     groups, leaderboard = run_cross_broker_comparison(
         output_dir=output_dir,
         mappings_file=map_file,
-        w_bps=0.5,
-        w_vol=0.5,
     )
 
     assert len(groups) == 1
@@ -78,17 +76,19 @@ def test_cross_broker_comparison_and_scoring(tmp_path: Path):
     assert g.canonical_symbol == "XAUUSD"
     assert len(g.records) == 2
 
-    # Verify Broker A won (lower composite score)
+    # Verify Broker A won (lower spread bps: 0.10 vs 0.30)
     assert g.winner.broker_tag == "BrokerA_1001"
     assert g.winner.rank == 1
-    assert pytest.approx(g.winner.composite_score, rel=1e-3) == 0.10
+    assert pytest.approx(g.winner.spread_bps, rel=1e-3) == 0.10
 
     assert g.runner_up.broker_tag == "BrokerB_2002"
     assert g.runner_up.rank == 2
-    assert pytest.approx(g.runner_up.composite_score, rel=1e-3) == 0.30
+    assert pytest.approx(g.runner_up.spread_bps, rel=1e-3) == 0.30
 
-    # Verify savings
-    assert pytest.approx(g.winner.savings_vs_worst_bps, rel=1e-3) == 0.20
+    # Verify winner lead (+0.20 bps) and runner-up deficit (-0.20 bps)
+    assert pytest.approx(g.winner.winner_lead_bps, rel=1e-3) == 0.20
+    assert pytest.approx(g.winner.delta_vs_winner_bps, rel=1e-3) == 0.0
+    assert pytest.approx(g.runner_up.delta_vs_winner_bps, rel=1e-3) == -0.20
 
     # Verify leaderboard points: Broker A = 10 pts (1st), Broker B = 6 pts (2nd)
     assert leaderboard["BrokerA_1001"].first_places == 1
@@ -111,9 +111,21 @@ def test_cross_broker_comparison_and_scoring(tmp_path: Path):
     out_html = tmp_path / "comparison.html"
     generate_comparison_html(groups, leaderboard, out_html)
     assert out_html.exists()
+    json_file = tmp_path / "report_data.json"
+    js_file = tmp_path / "report_data.js"
+    assert json_file.exists()
+    assert js_file.exists()
+
+    json_data = json.loads(json_file.read_text(encoding="utf-8"))
+    broker_tags = [b["broker_tag"] for b in json_data["leaderboard"]]
+    assert "BrokerA_1001" in broker_tags
+    assert "BrokerB_2002" in broker_tags
+    assert json_data["leaderboard"][0]["avg_points"] == 10.0
+    assert len(json_data["groups"]) == 1
+    assert json_data["groups"][0]["canonical_symbol"] == "XAUUSD"
+
     html_text = out_html.read_text(encoding="utf-8")
     assert "Cross-Broker Spread Comparison" in html_text
-    assert "BrokerA_1001" in html_text
-    assert "BrokerB_2002" in html_text
-    assert "10.00 PTS/SYM" in html_text
+    assert "report_data.js" in html_text
+
 

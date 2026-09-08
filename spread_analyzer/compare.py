@@ -39,22 +39,10 @@ def parse_args() -> argparse.Namespace:
         help="Path to JSON file containing canonical symbol aliases",
     )
     parser.add_argument(
-        "--w-bps",
-        type=float,
-        default=0.5,
-        help="Weight for Spread (bps) in composite score calculation (0.0 to 1.0)",
-    )
-    parser.add_argument(
-        "--w-vol",
-        type=float,
-        default=0.5,
-        help="Weight for Spread / Vol (%%) in composite score calculation (0.0 to 1.0)",
-    )
-    parser.add_argument(
         "--save-html",
         type=Path,
         default=None,
-        help="Path to save interactive HTML comparison dashboard (default: <output-dir>/broker_comparison.html)",
+        help="Path to save interactive HTML comparison dashboard (default: <output-dir>/index.html)",
     )
     parser.add_argument(
         "--save-csv",
@@ -87,13 +75,11 @@ def main() -> None:
 
     logger.info(f"Scanning for broker runs in: {output_dir}")
     logger.info(f"Using symbol mappings: {mappings_file}")
-    logger.info(f"Composite weights: {int(args.w_bps * 100)}% Spread(bps) + {int(args.w_vol * 100)}% Spread/Vol(%)")
+    logger.info("Execution metric: Spread (bps) — lowest spread wins Rank #1")
 
     groups, leaderboard = run_cross_broker_comparison(
         output_dir=output_dir,
         mappings_file=mappings_file,
-        w_bps=args.w_bps,
-        w_vol=args.w_vol,
     )
 
     if not groups:
@@ -101,7 +87,7 @@ def main() -> None:
         sys.exit(1)
 
     # 1. Terminal Table Output
-    print_comparison_terminal(groups, leaderboard, w_bps=args.w_bps, w_vol=args.w_vol)
+    print_comparison_terminal(groups, leaderboard)
 
     # 2. CSV Export
     if not args.no_csv:
@@ -111,9 +97,9 @@ def main() -> None:
 
     # 3. HTML Dashboard Generation
     if not args.no_html:
-        html_path = args.save_html or (output_dir / "broker_comparison.html")
-        generate_comparison_html(groups, leaderboard, html_path, w_bps=args.w_bps, w_vol=args.w_vol)
-        logger.info(f"Exported comparison HTML dashboard: {html_path}")
+        html_path = args.save_html or (output_dir / "index.html")
+        generate_comparison_html(groups, leaderboard, html_path)
+        logger.info(f"Exported comparison dashboard: {html_path} (with report_data.json & report_data.js)")
 
 
 if __name__ == "__main__":

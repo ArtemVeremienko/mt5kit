@@ -10,8 +10,8 @@
   "USDCAD": ["USDCAD", "USDCADm", "USDCAD.a", "USDCAD.raw"],
   "USDCHF": ["USDCHF", "USDCHFm", "USDCHF.a", "USDCHF.raw"],
   "NZDUSD": ["NZDUSD", "NZDUSDm", "NZDUSD.a", "NZDUSD.raw"],
-  "US500": ["US500", "#USSPX500", "SPX500", "US500Cash", "SP500", "USA500"],
-  "US100": ["US100", "#USNDAQ100", "NDX100", "NAS100", "USTEC", "USA100"],
+  "SP500": ["US500", "#USSPX500", "SPX500", "US500Cash", "SP500", "USA500"],
+  "NASDAQ": ["US100", "#USNDAQ100", "NDX100", "NAS100", "USTEC", "USA100"],
   "US30": ["US30", "#US30", "DJ30", "US30Cash", "USA30", "WALLST30"],
   "GER40": ["GER40", "#Germany40", "DE40", "GER40Cash", "DAX40", "GERMANY40"],
   "JP225": [

@@ -1,6 +1,7 @@
 """Unit test suite for spread_analyzer module."""
 
 from datetime import datetime, timezone
+import json
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -173,14 +174,22 @@ def test_visualizer_and_report_generation(tmp_path: Path):
         lookback_days=14,
     )
     assert html_file.exists()
+    json_file = tmp_path / "report_data.json"
+    js_file = tmp_path / "report_data.js"
+    assert json_file.exists()
+    assert js_file.exists()
+
+    json_data = json.loads(json_file.read_text(encoding="utf-8"))
+    assert json_data["account_tag"] == "TestBroker_12345"
+    assert json_data["symbols"][0]["symbol"] == "EURUSD"
+    assert "EURUSD" in json_data["charts"]
+    assert len(json_data["charts"]["EURUSD"]["times"]) > 0
+
     content = html_file.read_text(encoding="utf-8")
-    assert "EURUSD" in content
-    assert "TestBroker_12345" in content
     assert "Comprehensive Symbol Summary" in content
-    assert "viewBtnRangeBars" in content
-    assert "viewBtnStepCorridor" in content
     assert "range_bars" in content
     assert "step_corridor" in content
+    assert "report_data.js" in content
 
     # Test CSV export
     csv_file = tmp_path / "summary.csv"

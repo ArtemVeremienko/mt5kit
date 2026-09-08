@@ -18,6 +18,7 @@ A comprehensive suite of production-grade Python analytics engines, high-perform
   - [8. Asset Behavior Profiler & Exit Recommender (`regime_exit_recommender/`)](#8-asset-behavior-profiler--exit-recommender-regime_exit_recommender)
   - [9. Macro Market Regime Analyzer (`macro_regime_analyzer/`)](#9-macro-market-regime-analyzer-macro_regime_analyzer)
   - [10. MT5 Risk Management & Position Sizing Engine (`mt5-risk-management-dashboard`)](#10-mt5-risk-management--position-sizing-engine-mt5-risk-management-dashboard)
+  - [11. Multi-Asset Spread Analyzer & Cross-Broker Comparator (`spread_analyzer/`)](#11-multi-asset-spread-analyzer--cross-broker-comparator-spread_analyzer)
 - [Jupyter Notebooks](#-jupyter-notebooks)
   - [Market Microstructure & Spreads](#market-microstructure--spreads)
   - [Interactive Price & Tick Charting](#interactive-price--tick-charting)
@@ -49,7 +50,7 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 ## 📦 Standalone Modules
 
 ### 1. Session Candles & Liquidity Sweeps Dashboard (`session_candles/`)
-* **Location:** [`session_candles/`](file:///d:/projects/metatrader5/session_candles/README.md)
+* **Location:** [`session_candles/`](session_candles/README.md)
 * **Purpose:** Resamples intraday MetaTrader 5 data into **3 Session Candles per day** (Asia, Europe, America) or **Merged M5 Session Ranges with Liquidity Sweeps**, featuring custom session coloring, hollow/filled candle aesthetics, and live 1-minute market data streaming powered by **TradingView Lightweight Charts v4** and **FastAPI**.
 * **Key Features:**
   - **3 Distinct Daily Trading Sessions (Broker Server Time)**:
@@ -73,7 +74,7 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 ---
 
 ### 2. Trading Chart with Region Selection Preview (`chart_preview/`)
-* **Location:** [`chart_preview/`](file:///d:/projects/metatrader5/chart_preview/README.md)
+* **Location:** [`chart_preview/`](chart_preview/README.md)
 * **Purpose:** A high-performance web charting application featuring an interactive region selection tool that allows traders to drag-select any time span on the main chart to instantly spawn a draggable, resizable sub-chart preview loaded with high-resolution candles or tick streams.
 * **Key Features:**
   - **TradingView Lightweight Charts v4 Main Chart**: Candlestick, Heikin-Ashi, Line, Area, and Bar series with SMA 200, EMA 50, and Volume histograms.
@@ -89,7 +90,7 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 ---
 
 ### 3. Custom Timeframe & Tick Chart (`custom_timeframe_chart/`)
-* **Location:** [`custom_timeframe_chart/`](file:///d:/projects/metatrader5/custom_timeframe_chart/README.md)
+* **Location:** [`custom_timeframe_chart/`](custom_timeframe_chart/README.md)
 * **Purpose:** An interactive web charting dashboard supporting arbitrary **sub-minute second timeframes** (e.g. `1s`, `5s`, `15s`, `30s`, `45s`) and **tick-based cluster candles** (e.g. `10t`, `50t`, `100t`, `500t`), alongside standard minute and hourly timeframes.
 * **Key Features:**
   - **Second-Based Candles (`Xs`)**: Resamples raw tick streams into uniform $N$-second OHLCV bars.
@@ -105,7 +106,7 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 ---
 
 ### 4. Trading Range Analyzer (`trading_range_analyzer/`)
-* **Location:** [`trading_range_analyzer/`](file:///d:/projects/metatrader5/trading_range_analyzer/README.md)
+* **Location:** [`trading_range_analyzer/`](trading_range_analyzer/README.md)
 * **Purpose:** Detects, measures, and visually verifies **horizontal consolidation trading ranges** (support/resistance corridors, sideways channel boxes, and balance zones) across multiple symbols and timeframes.
 * **Key Features:**
   - **Scale-of-View Normalization**: Automatically normalizes measurements across micro (M1/M5: 5–15 pips), intraday (H1: 30–70 pips), and macro (D1: 150–350 pips) views with asset-specific pip scaling.
@@ -127,7 +128,7 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 ---
 
 ### 5. Best Working Hours & Volatility Analyzer (`best_working_hours_analyzer/`)
-* **Location:** [`best_working_hours_analyzer/`](file:///d:/projects/metatrader5/best_working_hours_analyzer/README.md)
+* **Location:** [`best_working_hours_analyzer/`](best_working_hours_analyzer/README.md)
 * **Purpose:** Identifies the highest-probability trading hours and peak volatility windows for any instrument, converted and normalized into your **Local Machine Timezone** (or UTC/custom IANA timezones).
 * **Key Features:**
   - **Contiguous Peak Window Clustering**: Evaluates rolling 2h–4h contiguous windows (e.g., European Open, US Overlap).
@@ -142,13 +143,13 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 ---
 
 ### 6. Data Feed Quality Analyzer (`feed_quality_analyzer/`)
-* **Location:** [`feed_quality_analyzer/`](file:///d:/projects/metatrader5/feed_quality_analyzer/README.md)
+* **Location:** [`feed_quality_analyzer/`](feed_quality_analyzer/README.md)
 * **Purpose:** Analyzes broker feed integrity and data continuity across macro M1 bars and micro tick streams to detect quote dropouts, server disconnects, freeze periods, and spread spikes.
 * **Key Features:**
   - **Dual-Layer Evaluation**: Detects missing M1 candle blocks and sub-second tick silence gaps ($> 15\text{s}$).
   - **Session & Working Hours Masking**: Filters out weekend closures and exchange maintenance breaks (e.g. CME/NYMEX daily breaks) with optional `--work-hours auto` session detection.
   - **Comprehensive Quality Scoring**: Calculates composite data quality (0–100%) and uptime completeness metrics.
-  - **Plotly HTML Dashboard**: Generates an interactive timeline chart with weekend gap slicing (`rangebreaks`) saved to [`feed_quality_analyzer/index.html`](file:///d:/projects/metatrader5/feed_quality_analyzer/index.html).
+  - **Plotly HTML Dashboard**: Generates an interactive timeline chart with weekend gap slicing (`rangebreaks`) saved to [`feed_quality_analyzer/index.html`](feed_quality_analyzer/index.html).
 * **Quick Run:**
   ```powershell
   uv run python feed_quality_analyzer/feed_quality_analyzer.py --symbols EURUSD XAUUSD .USTECHCash WTI --days 2 --work-hours auto
@@ -157,7 +158,7 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 ---
 
 ### 7. Multi-Timeframe History Viewer (`history_viewer/`)
-* **Location:** [`history_viewer/`](file:///d:/projects/metatrader5/history_viewer/README.md)
+* **Location:** [`history_viewer/`](history_viewer/README.md)
 * **Purpose:** Multi-timeframe context and tick replay dashboard centered on any arbitrary historical date.
 * **Key Features:**
   - **3x3 Subplot Grid**: Daily (D1) context (~3 months) in Row 1 Col 1; Hourly (H1) context (10 days) in Row 1 Cols 2–3; 3-trading-day Tick Bid/Ask lines in Rows 2–3 Cols 1–3 with independent zoom & pan.
@@ -174,13 +175,13 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 ---
 
 ### 8. Asset Behavior Profiler & Exit Recommender (`regime_exit_recommender/`)
-* **Location:** [`regime_exit_recommender/`](file:///d:/projects/metatrader5/regime_exit_recommender/README.md)
+* **Location:** [`regime_exit_recommender/`](regime_exit_recommender/README.md)
 * **Purpose:** Multi-month historical behavior profiling and empirical exit strategy calibration engine for MetaTrader 5 instruments. Decomposes individual trading days into 4 canonical day regimes (Range, Semi-Trend, V-Shape Reversal, Strong Trend) to compute empirical quantiles and recommend optimal position management rules (Fixed Target, Split Exit, Trailing Stop).
 * **Key Features:**
   - **4-Regime Market Taxonomy**: Range Day (Flat / Sideways), Semi-Trending Day (Swing / Channel), V-Shape Reversal Day (Two-Way Expansion), Strong Trend Day (Unidirectional Momentum).
   - **Empirical Quantile Calibration**: Calculates $p_{25}, p_{50}, p_{75}, p_{90}$ daily ranges and maximum adverse intraday pullbacks.
   - **60 FPS Hardware-Accelerated Charts**: Synchronized 3-pane Lightweight Charts viewer for H1 and D1 POC analysis.
-  - **Master Portfolio Overview Dashboard**: High-level comparison table across all assets saved to [`output/portfolio_overview.html`](file:///d:/projects/metatrader5/regime_exit_recommender/output/portfolio_overview.html).
+  - **Master Portfolio Overview Dashboard**: High-level comparison table across all assets saved to [`output/portfolio_overview.html`](regime_exit_recommender/output/portfolio_overview.html).
 * **Quick Run:**
   ```powershell
   uv run python -m regime_exit_recommender.main --symbols EURUSD,GBPUSD,USDJPY,XAUUSD --days 365
@@ -189,7 +190,7 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 ---
 
 ### 9. Macro Market Regime Analyzer (`macro_regime_analyzer/`)
-* **Location:** [`macro_regime_analyzer/`](file:///d:/projects/metatrader5/macro_regime_analyzer/README.md)
+* **Location:** [`macro_regime_analyzer/`](macro_regime_analyzer/README.md)
 * **Purpose:** Multi-year / temporal market cycle analyzer that segments asset history into continuous multi-day macro regimes (Bull Trend, Bear Trend, Trading Range, Volatile Chop) using a hybrid quantitative & market structure model.
 * **Key Features:**
   - **Solves Day-by-Day Isolation Bias**: Detects when alternating up/down days form a stationary horizontal trading range vs a persistent trend.
@@ -216,14 +217,34 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 
 ---
 
+### 11. Multi-Asset Spread Analyzer & Cross-Broker Comparator (`spread_analyzer/`)
+* **Location:** [`spread_analyzer/`](spread_analyzer/README.md)
+* **Purpose:** High-precision spread analytics and cross-broker execution benchmarking engine. Aggregates tick-by-tick bid/ask spreads into 1-minute timeframes across any lookback window, normalizes friction across Forex, Metals, Indices, and Crypto using **Spread in Basis Points (bps)** and **Spread / Daily Volatility (%)**, and benchmarks competing brokers using an Olympic Grand Prix points system with interactive Alpine.js dashboards.
+* **Key Features:**
+  - **Dual Core Engines**: Single-broker comprehensive multi-symbol profiler (`spread_analyzer.main`) and cross-broker competitive benchmarker (`spread_analyzer.compare`).
+  - **Multi-Tier Symbol Aliasing**: Maps broker-specific tickers into canonical instruments using a 4-tier resolution pipeline with custom mappings.
+  - **Capital Drag & Volatility Normalization**: Evaluates execution directly on pure `Spread (bps)` and `Spread / Vol (%)` across differing asset classes.
+  - **Grand Prix Winner Scoring & Winner Delta**: Allocates points (10, 6, 4, 2, 1) across all finishes and displays `Delta vs #1` (`🏆 Best (+X.XX lead)` for winner, `-X.XX bps` drag for runners-up).
+  - **Decoupled Alpine.js Dashboards**: Lightweight, standalone HTML dashboards powered by Alpine.js and external JSON data (`index.html`, `report_data.json`).
+* **Quick Run:**
+  ```powershell
+  # Single broker spread analysis:
+  uv run python -m spread_analyzer.main --symbols "EURUSD,GBPUSD,XAUUSD,BTCUSD" --days 14
+
+  # Cross-broker comparison across all saved runs:
+  uv run python -m spread_analyzer.compare
+  ```
+
+---
+
 ## 📓 Jupyter Notebooks
 
 ### Market Microstructure & Spreads
 
 | Notebook | Description | Key Focus |
 |---|---|---|
-| [`1min_spread_chart.ipynb`](file:///d:/projects/metatrader5/1min_spread_chart.ipynb) | **1-Minute Resolution Spread Analysis & Bar Chart** | Computes 1-minute average bid-ask spreads over a strict 1-day boundary (00:00:00–23:59:59) with adaptive unit scaling (`pips`, `cents`, `points`) and collision-free legend formatting. |
-| [`session_liquidity_volatility_heatmap.ipynb`](file:///d:/projects/metatrader5/session_liquidity_volatility_heatmap.ipynb) | **24-Hour Cumulative Session Liquidity & Volatility Heatmap** | Aggregates 24-hour profiles over Day/Week/Month periods for spreads, volatility, and execution efficiency across global sessions (Asian, London, NY, Rollover) with robust outlier saturation. |
+| [`1min_spread_chart.ipynb`](1min_spread_chart.ipynb) | **1-Minute Resolution Spread Analysis & Bar Chart** | Computes 1-minute average bid-ask spreads over a strict 1-day boundary (00:00:00–23:59:59) with adaptive unit scaling (`pips`, `cents`, `points`) and collision-free legend formatting. |
+| [`session_liquidity_volatility_heatmap.ipynb`](session_liquidity_volatility_heatmap.ipynb) | **24-Hour Cumulative Session Liquidity & Volatility Heatmap** | Aggregates 24-hour profiles over Day/Week/Month periods for spreads, volatility, and execution efficiency across global sessions (Asian, London, NY, Rollover) with robust outlier saturation. |
 
 ---
 
@@ -231,9 +252,9 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 
 | Notebook | Description | Key Focus |
 |---|---|---|
-| [`candlestick_chart_interactive.ipynb`](file:///d:/projects/metatrader5/candlestick_chart_interactive.ipynb) | **Second-Based Candlestick Chart (Plotly)** | Resamples raw MT5 tick data into sub-minute/second-based OHLC candlesticks (`1s`, `5s`, `10s`) with synchronized tick volume histograms and range sliders. |
-| [`tick_chart_interactive.ipynb`](file:///d:/projects/metatrader5/tick_chart_interactive.ipynb) | **Interactive Tick Price & Spread Dashboard** | Full-day interactive Plotly chart showing synchronized Bid/Ask step lines, real-time spread subplots, rich tooltips, and zoom/pan controls. |
-| [`historical_view.ipynb`](file:///d:/projects/metatrader5/historical_view.ipynb) | **Multi-Timeframe Historical Candlestick Explorer** | Fetches historical price action from 2–5 years ago across H1 (macro 3-day context), M5 (intraday), and M1 (microstructure) timeframes. |
+| [`candlestick_chart_interactive.ipynb`](candlestick_chart_interactive.ipynb) | **Second-Based Candlestick Chart (Plotly)** | Resamples raw MT5 tick data into sub-minute/second-based OHLC candlesticks (`1s`, `5s`, `10s`) with synchronized tick volume histograms and range sliders. |
+| [`tick_chart_interactive.ipynb`](tick_chart_interactive.ipynb) | **Interactive Tick Price & Spread Dashboard** | Full-day interactive Plotly chart showing synchronized Bid/Ask step lines, real-time spread subplots, rich tooltips, and zoom/pan controls. |
+| [`historical_view.ipynb`](historical_view.ipynb) | **Multi-Timeframe Historical Candlestick Explorer** | Fetches historical price action from 2–5 years ago across H1 (macro 3-day context), M5 (intraday), and M1 (microstructure) timeframes. |
 
 ---
 
@@ -241,8 +262,8 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 
 | Notebook | Description | Key Focus |
 |---|---|---|
-| [`cross_asset_correlation_cointegration_screener.ipynb`](file:///d:/projects/metatrader5/cross_asset_correlation_cointegration_screener.ipynb) | **Cross-Asset Correlation & Cointegration Divergence Screener** | Quantitative pairs trading and statistical arbitrage engine using Engle-Granger two-step regression, Augmented Dickey-Fuller (ADF) stationarity tests, half-life of mean reversion, and rolling Z-score spread divergence signals. |
-| [`tpo_profile_interactive.ipynb`](file:///d:/projects/metatrader5/tpo_profile_interactive.ipynb) | **TPO (Time Price Opportunity) Market Profile** | Calculates TPO price distribution, Point of Control (POC), and Value Area High/Low (VAH/VAL ~70% volume range) alongside interactive Plotly price action charts. |
+| [`cross_asset_correlation_cointegration_screener.ipynb`](cross_asset_correlation_cointegration_screener.ipynb) | **Cross-Asset Correlation & Cointegration Divergence Screener** | Quantitative pairs trading and statistical arbitrage engine using Engle-Granger two-step regression, Augmented Dickey-Fuller (ADF) stationarity tests, half-life of mean reversion, and rolling Z-score spread divergence signals. |
+| [`tpo_profile_interactive.ipynb`](tpo_profile_interactive.ipynb) | **TPO (Time Price Opportunity) Market Profile** | Calculates TPO price distribution, Point of Control (POC), and Value Area High/Low (VAH/VAL ~70% volume range) alongside interactive Plotly price action charts. |
 
 ---
 
@@ -251,7 +272,7 @@ pip install metatrader5 fastapi uvicorn websockets pandas numpy matplotlib plotl
 Run the full pytest test suite across all modules:
 
 ```powershell
-# Run all tests (68+ test cases)
+# Run all tests (86+ test cases)
 uv run pytest -v
 
 # Run module-specific tests
@@ -262,6 +283,7 @@ uv run pytest trading_range_analyzer/test_trading_range.py -v
 uv run pytest best_working_hours_analyzer/test_analyzer.py -v
 uv run pytest feed_quality_analyzer/test_feed_quality_analyzer.py -v
 uv run pytest history_viewer/test_history_viewer.py -v
+uv run pytest spread_analyzer/test_spread_analyzer.py spread_analyzer/test_comparator.py -v
 ```
 
 ---
@@ -324,6 +346,33 @@ metatrader5/
 ├── history_viewer/                          # Multi-timeframe history & tick replay viewer
 │   ├── history_viewer.py                    # CLI runner, MT5 data fetcher & 3x3 Plotly visualizer
 │   ├── test_history_viewer.py               # Unit tests
+│   └── README.md                            # Module documentation
+│
+├── regime_exit_recommender/                 # Empirical day regime & exit strategy calibration
+│   ├── analyzer.py                          # 4-regime taxonomy classifier & quantiles
+│   ├── main.py                              # Multi-symbol portfolio batch runner & CLI
+│   ├── visualizer.py                        # Interactive 3-pane Lightweight Charts viewer
+│   ├── test_recommender.py                  # Unit tests
+│   └── README.md                            # Module documentation
+│
+├── macro_regime_analyzer/                   # Multi-day continuous macro regime analyzer
+│   ├── analyzer.py                          # KER, ROR, REI & swing pivot market taxonomy
+│   ├── main.py                              # CLI entrypoint & macro scanner
+│   ├── visualizer.py                        # Continuous regime timeline visualizer
+│   └── README.md                            # Module documentation
+│
+├── spread_analyzer/                         # Multi-asset spread analyzer & cross-broker comparator
+│   ├── main.py                              # Single-broker analyzer CLI & pipeline
+│   ├── compare.py                           # Multi-broker comparator CLI & runner
+│   ├── comparator.py                        # Grand Prix scoring & cross-broker aggregation
+│   ├── visualizer.py                        # Single-broker interactive report generator
+│   ├── fetcher.py                           # MT5 tick fetcher & 1-minute spread resampler
+│   ├── symbol_mappings.json                 # Multi-tier cross-broker alias mappings
+│   ├── templates/                           # Decoupled Alpine.js HTML report templates
+│   │   ├── spread_report.html               # Single-broker dashboard template
+│   │   └── broker_comparison.html           # Cross-broker comparison template
+│   ├── test_spread_analyzer.py              # Unit tests for spread analytics
+│   ├── test_comparator.py                   # Unit tests for cross-broker comparator
 │   └── README.md                            # Module documentation
 │
 ├── 1min_spread_chart.ipynb                  # 1-minute spread analysis with collision-free legends
