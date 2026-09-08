@@ -1,8 +1,8 @@
 """Interactive Plotly visualization and HTML report generator.
 
-Builds 1-minute spread area charts (min=green, avg=orange, max=red)
-and compiles a unified dark-themed HTML dashboard with symbol switching
-and comprehensive comparative tables.
+Builds discrete 1-minute spread visualizations (Floating Range Bars and Step Corridor)
+with synchronized Tick Activity subplots and compiles a unified dark-themed HTML dashboard
+with symbol switching, view toggling, and comprehensive comparative tables.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -19,95 +20,35 @@ from plotly.subplots import make_subplots
 from spread_analyzer.analyzer import SymbolSpreadMetrics
 
 
-def build_symbol_area_figure(
-    df_m1: pd.DataFrame,
+def _apply_common_figure_layout(
+    fig: go.Figure,
     metrics: SymbolSpreadMetrics,
+    chart_type_name: str,
 ) -> go.Figure:
-    """
-    Constructs a Plotly area figure with three layered traces:
-    - Max Spread (Red, at the back)
-    - Avg Spread (Orange, in the middle)
-    - Min Spread (Green, in the front)
-    """
-    fig = go.Figure()
-    times = df_m1.index
+    """Applies unified dark theme styling, dual subplot axis config, rangebreaks, and selectors."""
     unit = metrics.unit
-
-    # 1. Max Spread (Red, background layer)
-    fig.add_trace(
-        go.Scatter(
-            x=times,
-            y=df_m1["max"],
-            mode="lines",
-            name=f"Max Spread ({unit})",
-            line=dict(color="#EF4444", width=1.5),
-            fill="tozeroy",
-            fillcolor="rgba(239, 68, 68, 0.20)",
-            customdata=df_m1["count"],
-            hovertemplate=(
-                "<b>%{x|%Y-%m-%d %H:%M} UTC</b><br>"
-                + f"Max: <b>%{{y:.2f}} {unit}</b><br>"
-                + "Ticks: %{customdata:,}<extra></extra>"
-            ),
-        )
-    )
-
-    # 2. Avg Spread (Orange, middle layer)
-    fig.add_trace(
-        go.Scatter(
-            x=times,
-            y=df_m1["avg"],
-            mode="lines",
-            name=f"Avg Spread ({unit})",
-            line=dict(color="#F97316", width=2.0),
-            fill="tozeroy",
-            fillcolor="rgba(249, 115, 22, 0.35)",
-            customdata=df_m1["count"],
-            hovertemplate=(
-                "<b>%{x|%Y-%m-%d %H:%M} UTC</b><br>"
-                + f"Avg: <b>%{{y:.2f}} {unit}</b><br>"
-                + "Ticks: %{customdata:,}<extra></extra>"
-            ),
-        )
-    )
-
-    # 3. Min Spread (Green, front layer)
-    fig.add_trace(
-        go.Scatter(
-            x=times,
-            y=df_m1["min"],
-            mode="lines",
-            name=f"Min Spread ({unit})",
-            line=dict(color="#22C55E", width=1.5),
-            fill="tozeroy",
-            fillcolor="rgba(34, 197, 94, 0.45)",
-            customdata=df_m1["count"],
-            hovertemplate=(
-                "<b>%{x|%Y-%m-%d %H:%M} UTC</b><br>"
-                + f"Min: <b>%{{y:.2f}} {unit}</b><br>"
-                + "Ticks: %{customdata:,}<extra></extra>"
-            ),
-        )
-    )
+    is_24_7 = getattr(metrics, "is_24_7", False)
+    rangebreaks = [dict(bounds=["sat", "mon"])] if not is_24_7 else None
 
     fig.update_layout(
         title=dict(
-            text=f"<b>{metrics.symbol}</b> — 1-Minute Spread Dynamic ({unit})",
+            text=f"<b>{metrics.symbol}</b> — 1-Minute {chart_type_name} ({unit})",
             font=dict(size=18, color="#F3F4F6"),
             x=0.01,
-            y=0.96,
+            y=0.97,
         ),
         paper_bgcolor="#111827",
         plot_bgcolor="#1F2937",
         font=dict(family="Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif", color="#9CA3AF"),
-        margin=dict(l=60, r=30, t=60, b=50),
+        margin=dict(l=60, r=30, t=65, b=45),
+        hovermode="x",
         legend=dict(
             orientation="h",
             yanchor="bottom",
             y=1.02,
             xanchor="right",
             x=1.0,
-            bgcolor="rgba(17, 24, 39, 0.8)",
+            bgcolor="rgba(17, 24, 39, 0.85)",
             bordercolor="rgba(255, 255, 255, 0.1)",
             borderwidth=1,
             font=dict(size=12, color="#E5E7EB"),
@@ -119,7 +60,17 @@ def build_symbol_area_figure(
             linecolor="#4B5563",
             zeroline=False,
             rangeslider=dict(visible=False),
-            rangebreaks=[dict(bounds=["sat", "mon"])] if not getattr(metrics, "is_24_7", False) else None,
+            rangeselector=dict(
+                buttons=[
+                    dict(count=1, label="1D", step="day", stepmode="backward"),
+                    dict(count=3, label="3D", step="day", stepmode="backward"),
+                    dict(count=7, label="1W", step="day", stepmode="backward"),
+                    dict(step="all", label="All"),
+                ],
+                bgcolor="#1F2937",
+                activecolor="#374151",
+                font=dict(color="#E5E7EB", size=11),
+            ),
         ),
         yaxis=dict(
             title=f"Spread ({unit})",
@@ -129,10 +80,197 @@ def build_symbol_area_figure(
             linecolor="#4B5563",
             zeroline=False,
         ),
-        hovermode="x unified",
+        xaxis2=dict(
+            gridcolor="#374151",
+            gridwidth=0.5,
+            showline=True,
+            linecolor="#4B5563",
+            zeroline=False,
+            rangeslider=dict(visible=True, thickness=0.06, bgcolor="#111827"),
+        ),
+        yaxis2=dict(
+            title="Ticks/min",
+            gridcolor="#374151",
+            gridwidth=0.5,
+            showline=True,
+            linecolor="#4B5563",
+            zeroline=False,
+        ),
     )
 
+    if rangebreaks:
+        fig.update_xaxes(rangebreaks=rangebreaks)
+
     return fig
+
+
+def build_symbol_range_bars_figure(
+    df_m1: pd.DataFrame,
+    metrics: SymbolSpreadMetrics,
+) -> go.Figure:
+    """
+    Constructs a 2-panel Plotly figure:
+    - Upper panel: Floating range bars (min to max spread) with overlaid Average spread line.
+    - Lower panel: Tick activity volume bar chart.
+    """
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.04,
+        row_heights=[0.77, 0.23],
+    )
+    times = df_m1.index
+    unit = metrics.unit
+    customdata = np.stack((df_m1["min"], df_m1["avg"], df_m1["max"], df_m1["count"]), axis=-1)
+
+    # 1. Floating Range Bar (Min to Max) - Vivid Sky / Cyan pillars
+    fig.add_trace(
+        go.Bar(
+            x=times,
+            base=df_m1["min"],
+            y=df_m1["max"] - df_m1["min"],
+            name=f"Spread Range ({unit})",
+            marker=dict(
+                color="rgba(14, 165, 233, 0.65)",
+                line=dict(color="#38BDF8", width=1.0),
+            ),
+            customdata=customdata,
+            hovertemplate=(
+                "<b>%{x|%Y-%m-%d %H:%M} UTC</b><br>"
+                + f"Max: <b>%{{customdata[2]:.2f}} {unit}</b><br>"
+                + f"Avg: <b>%{{customdata[1]:.2f}} {unit}</b><br>"
+                + f"Min: <b>%{{customdata[0]:.2f}} {unit}</b><br>"
+                + "Ticks: %{customdata[3]:,}<extra></extra>"
+            ),
+        ),
+        row=1,
+        col=1,
+    )
+
+    # 2. Avg Spread Overlay Line (crisp clean line, avoiding zoom-out marker clutter)
+    fig.add_trace(
+        go.Scatter(
+            x=times,
+            y=df_m1["avg"],
+            mode="lines",
+            line=dict(color="#F59E0B", width=1.5),
+            name=f"Avg Spread ({unit})",
+            hoverinfo="skip",
+        ),
+        row=1,
+        col=1,
+    )
+
+    # 3. Tick Activity Subplot
+    fig.add_trace(
+        go.Bar(
+            x=times,
+            y=df_m1["count"],
+            name="Tick Count",
+            marker=dict(color="#6366F1", opacity=0.85),
+            hovertemplate=(
+                "<b>%{x|%Y-%m-%d %H:%M} UTC</b><br>"
+                + "Ticks: <b>%{y:,}</b><extra></extra>"
+            ),
+        ),
+        row=2,
+        col=1,
+    )
+
+    return _apply_common_figure_layout(fig, metrics, "Range Bars & Tick Volume")
+
+
+def build_symbol_step_corridor_figure(
+    df_m1: pd.DataFrame,
+    metrics: SymbolSpreadMetrics,
+) -> go.Figure:
+    """
+    Constructs a 2-panel Plotly figure:
+    - Upper panel: Min-Max Step Corridor (emerald ribbon bounded between min & max, step line shape)
+      with central Average spread step line.
+    - Lower panel: Tick activity volume bar chart.
+    """
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.04,
+        row_heights=[0.77, 0.23],
+    )
+    times = df_m1.index
+    unit = metrics.unit
+    customdata = np.stack((df_m1["min"], df_m1["avg"], df_m1["max"], df_m1["count"]), axis=-1)
+
+    # 1. Min Spread boundary (step line, lower boundary of ribbon - Emerald Green)
+    fig.add_trace(
+        go.Scatter(
+            x=times,
+            y=df_m1["min"],
+            mode="lines",
+            line=dict(color="rgba(16, 185, 129, 0.75)", width=1.2, shape="hv"),
+            name=f"Min Spread ({unit})",
+            showlegend=False,
+            hoverinfo="skip",
+        ),
+        row=1,
+        col=1,
+    )
+
+    # 2. Max Spread boundary + Harmonizing Rose-Red Corridor Fill
+    fig.add_trace(
+        go.Scatter(
+            x=times,
+            y=df_m1["max"],
+            mode="lines",
+            line=dict(color="rgba(244, 63, 94, 0.85)", width=1.2, shape="hv"),
+            fill="tonexty",
+            fillcolor="rgba(244, 63, 94, 0.14)",
+            name=f"Min-Max Corridor ({unit})",
+            customdata=customdata,
+            hovertemplate=(
+                "<b>%{x|%Y-%m-%d %H:%M} UTC</b><br>"
+                + f"Max: <b>%{{customdata[2]:.2f}} {unit}</b><br>"
+                + f"Avg: <b>%{{customdata[1]:.2f}} {unit}</b><br>"
+                + f"Min: <b>%{{customdata[0]:.2f}} {unit}</b><br>"
+                + "Ticks: %{customdata[3]:,}<extra></extra>"
+            ),
+        ),
+        row=1,
+        col=1,
+    )
+
+    # 3. Avg Spread central step line
+    fig.add_trace(
+        go.Scatter(
+            x=times,
+            y=df_m1["avg"],
+            mode="lines",
+            line=dict(color="#F97316", width=2.0, shape="hv"),
+            name=f"Avg Spread ({unit})",
+            hoverinfo="skip",
+        ),
+        row=1,
+        col=1,
+    )
+
+    # 4. Tick Activity Subplot
+    fig.add_trace(
+        go.Bar(
+            x=times,
+            y=df_m1["count"],
+            name="Tick Count",
+            marker=dict(color="#6366F1", opacity=0.85),
+            hovertemplate=(
+                "<b>%{x|%Y-%m-%d %H:%M} UTC</b><br>"
+                + "Ticks: <b>%{y:,}</b><extra></extra>"
+            ),
+        ),
+        row=2,
+        col=1,
+    )
+
+    return _apply_common_figure_layout(fig, metrics, "Step Corridor & Tick Volume")
 
 
 def generate_html_report(
@@ -147,18 +285,21 @@ def generate_html_report(
     Generates a unified, responsive HTML report containing:
     - Multi-symbol comparative summary table
     - Dropdown/tab symbol switcher
-    - Interactive 1-minute spread area charts
+    - Interactive 1-minute spread charts (Floating Range Bars and Step Corridor)
+    - Synchronized Tick Activity subplot
     - Summary stat badge cards
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     metrics_list = [m for _, m in symbols_data.values()]
 
-    # Pre-render individual symbol figures to JSON spec
+    # Pre-render individual symbol figures to JSON spec for both modes
     chart_specs = {}
     for sym, (df_m1, m) in symbols_data.items():
-        fig = build_symbol_area_figure(df_m1, m)
-        chart_specs[sym] = json.loads(fig.to_json())
+        chart_specs[sym] = {
+            "range_bars": json.loads(build_symbol_range_bars_figure(df_m1, m).to_json()),
+            "step_corridor": json.loads(build_symbol_step_corridor_figure(df_m1, m).to_json()),
+        }
 
     # Build Table Rows
     table_rows_html = []
@@ -259,7 +400,7 @@ def generate_html_report(
                     <h1 class="text-2xl md:text-3xl font-bold tracking-tight text-white">MetaTrader 5 Spread Analyzer</h1>
                     <span class="px-2.5 py-0.5 rounded text-xs font-semibold bg-blue-900/60 text-blue-400 border border-blue-700/50">2-Week Tick Analysis</span>
                 </div>
-                <p class="text-sm text-gray-400 mt-1">High-frequency 1-minute spread dynamics (Min: Green, Avg: Orange, Max: Red)</p>
+                <p class="text-sm text-gray-400 mt-1">High-frequency 1-minute spread dynamics (Floating Range Bars & Step Corridor with Tick Activity)</p>
             </div>
             <div class="flex items-center gap-4 text-xs font-mono bg-gray-900/80 px-4 py-2.5 rounded-lg border border-gray-800">
                 <div>
@@ -284,7 +425,7 @@ def generate_html_report(
             <div class="p-5 border-b border-gray-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <div>
                     <h2 class="text-lg font-semibold text-white">Comprehensive Symbol Summary</h2>
-                    <p class="text-xs text-gray-400">Click any column header to sort • Click any row to view its 1-minute area chart</p>
+                    <p class="text-xs text-gray-400">Click any column header to sort • Click any row to view its 1-minute spread chart</p>
                 </div>
                 <div class="text-xs text-gray-400">
                     <span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500 mr-1"></span>Min
@@ -317,23 +458,38 @@ def generate_html_report(
             </div>
         </div>
 
-        <!-- Chart Section with Symbol Selector -->
+        <!-- Chart Section with Symbol Selector & View Mode Switcher -->
         <div class="bg-gray-900/60 rounded-xl border border-gray-800 p-5 shadow-xl space-y-4">
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h2 class="text-lg font-semibold text-white">1-Minute Resampled Area Chart</h2>
-                    <p class="text-xs text-gray-400">Overlapping translucent layers: Green (Min), Orange (Avg), Red (Max)</p>
+                    <div class="flex items-center gap-3">
+                        <h2 class="text-lg font-semibold text-white">1-Minute Spread Dynamics</h2>
+                        <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-blue-950/80 text-blue-400 border border-blue-800/60">Dual Subplot (Spread + Ticks)</span>
+                    </div>
+                    <p id="chartModeDescription" class="text-xs text-gray-400 mt-0.5">Discrete 1-minute Min-Max floating bars with Average spread overlay and Tick Activity volume</p>
                 </div>
-                <div class="flex items-center gap-3">
-                    <label for="symbolSelect" class="text-xs font-semibold text-gray-400">SELECT SYMBOL:</label>
-                    <select id="symbolSelect" onchange="selectSymbol(this.value)" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-1.5 focus:ring-blue-500 focus:border-blue-500 font-semibold">
-                        {"".join([f'<option value="{s}">{s}</option>' for s in sorted(symbols_data.keys())])}
-                    </select>
+                <div class="flex flex-wrap items-center gap-4">
+                    <!-- View Mode Toggle -->
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-semibold text-gray-400">VIEW:</span>
+                        <div class="inline-flex rounded-lg p-1 bg-gray-950/80 border border-gray-800 text-xs">
+                            <button id="viewBtnRangeBars" onclick="setViewMode('range_bars')" class="px-3 py-1.5 rounded-md transition text-white bg-sky-600 shadow font-medium text-xs">Range Bars</button>
+                            <button id="viewBtnStepCorridor" onclick="setViewMode('step_corridor')" class="px-3 py-1.5 rounded-md transition text-gray-400 hover:text-white font-medium text-xs">Step Corridor</button>
+                        </div>
+                    </div>
+
+                    <!-- Symbol Selector -->
+                    <div class="flex items-center gap-2">
+                        <label for="symbolSelect" class="text-xs font-semibold text-gray-400">SYMBOL:</label>
+                        <select id="symbolSelect" onchange="selectSymbol(this.value)" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg px-3 py-1.5 focus:ring-blue-500 focus:border-blue-500 font-semibold">
+                            {"".join([f'<option value="{s}">{s}</option>' for s in sorted(symbols_data.keys())])}
+                        </select>
+                    </div>
                 </div>
             </div>
 
             <!-- Plotly Chart Container -->
-            <div id="chartContainer" class="w-full h-[520px] rounded-lg overflow-hidden border border-gray-800 bg-[#1F2937]"></div>
+            <div id="chartContainer" class="w-full h-[560px] rounded-lg overflow-hidden border border-gray-800 bg-[#1F2937]"></div>
         </div>
 
         <!-- Footer -->
@@ -345,11 +501,15 @@ def generate_html_report(
     <script>
         const chartSpecs = {chart_specs_json};
         let currentSymbol = '{first_symbol}';
+        let currentViewMode = 'range_bars';
         let currentSortCol = null;
         let currentSortAsc = true;
 
-        function renderChart(symbol) {{
-            const spec = chartSpecs[symbol];
+        function renderChart(symbol, viewMode) {{
+            const symSpecs = chartSpecs[symbol];
+            if (!symSpecs) return;
+            const mode = viewMode || currentViewMode;
+            const spec = symSpecs[mode];
             if (!spec) return;
             Plotly.react('chartContainer', spec.data, spec.layout, {{
                 responsive: true,
@@ -358,11 +518,29 @@ def generate_html_report(
             }});
         }}
 
+        function setViewMode(mode) {{
+            currentViewMode = mode;
+            const btnBars = document.getElementById('viewBtnRangeBars');
+            const btnCorridor = document.getElementById('viewBtnStepCorridor');
+            const descEl = document.getElementById('chartModeDescription');
+
+            if (mode === 'range_bars') {{
+                if (btnBars) btnBars.className = "px-3 py-1.5 rounded-md transition text-white bg-sky-600 shadow font-medium text-xs";
+                if (btnCorridor) btnCorridor.className = "px-3 py-1.5 rounded-md transition text-gray-400 hover:text-white font-medium text-xs";
+                if (descEl) descEl.textContent = "Cyan 1-minute Min-Max floating bars with Average spread line overlay and Tick Activity volume";
+            }} else {{
+                if (btnCorridor) btnCorridor.className = "px-3 py-1.5 rounded-md transition text-white bg-emerald-600 shadow font-medium text-xs";
+                if (btnBars) btnBars.className = "px-3 py-1.5 rounded-md transition text-gray-400 hover:text-white font-medium text-xs";
+                if (descEl) descEl.textContent = "1-minute Min-Max step corridor (Emerald Min to Rose-Red Max) with Average spread step line and Tick Activity volume";
+            }}
+            renderChart(currentSymbol, currentViewMode);
+        }}
+
         function selectSymbol(symbol) {{
             currentSymbol = symbol;
             const selectEl = document.getElementById('symbolSelect');
             if (selectEl) selectEl.value = symbol;
-            renderChart(symbol);
+            renderChart(symbol, currentViewMode);
         }}
 
         function sortTable(colIdx) {{

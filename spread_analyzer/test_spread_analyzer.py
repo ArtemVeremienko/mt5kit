@@ -13,7 +13,8 @@ from spread_analyzer.analyzer import (
     SymbolSpreadMetrics,
 )
 from spread_analyzer.visualizer import (
-    build_symbol_area_figure,
+    build_symbol_range_bars_figure,
+    build_symbol_step_corridor_figure,
     generate_html_report,
 )
 from spread_analyzer.main import export_csv, resolve_date_range, parse_datetime_str
@@ -147,13 +148,21 @@ def test_visualizer_and_report_generation(tmp_path: Path):
         unit_type="standard",
     )
 
-    # Test build_symbol_area_figure
-    fig = build_symbol_area_figure(df_m1, metrics)
-    assert len(fig.data) == 3
-    # Verify trace order & colors: Max (Red), Avg (Orange), Min (Green)
-    assert "Max" in fig.data[0].name and fig.data[0].line.color == "#EF4444"
-    assert "Avg" in fig.data[1].name and fig.data[1].line.color == "#F97316"
-    assert "Min" in fig.data[2].name and fig.data[2].line.color == "#22C55E"
+    # Test build_symbol_range_bars_figure (Floating Range Bars + Tick Subplot)
+    fig_bars = build_symbol_range_bars_figure(df_m1, metrics)
+    assert len(fig_bars.data) == 3
+    assert fig_bars.data[0].type == "bar" and "Range" in fig_bars.data[0].name
+    assert fig_bars.data[1].type == "scatter" and "Avg" in fig_bars.data[1].name
+    assert fig_bars.data[1].mode == "lines"
+    assert fig_bars.data[2].type == "bar" and "Tick" in fig_bars.data[2].name
+
+    # Test build_symbol_step_corridor_figure (Step Corridor + Tick Subplot)
+    fig_corridor = build_symbol_step_corridor_figure(df_m1, metrics)
+    assert len(fig_corridor.data) == 4
+    assert fig_corridor.data[0].line.shape == "hv"
+    assert fig_corridor.data[1].line.shape == "hv" and fig_corridor.data[1].fill == "tonexty"
+    assert fig_corridor.data[2].line.shape == "hv" and "Avg" in fig_corridor.data[2].name
+    assert fig_corridor.data[3].type == "bar" and "Tick" in fig_corridor.data[3].name
 
     # Test HTML report generation
     html_file = tmp_path / "report.html"
@@ -168,6 +177,10 @@ def test_visualizer_and_report_generation(tmp_path: Path):
     assert "EURUSD" in content
     assert "TestBroker_12345" in content
     assert "Comprehensive Symbol Summary" in content
+    assert "viewBtnRangeBars" in content
+    assert "viewBtnStepCorridor" in content
+    assert "range_bars" in content
+    assert "step_corridor" in content
 
     # Test CSV export
     csv_file = tmp_path / "summary.csv"
@@ -237,8 +250,8 @@ def test_weekend_tick_filtering_and_chart_rangebreaks():
     assert m_std.total_ticks == 10  # 5 fri + 5 mon (sat filtered out)
     assert pytest.approx(m_std.max_spread, rel=1e-3) == 2.0  # 0.00020 / 0.0001 = 2.0 pips (not the 9.9 sat spike)
 
-    # Area figure has rangebreaks
-    fig_std = build_symbol_area_figure(df_std, m_std)
+    # Range bars figure has rangebreaks
+    fig_std = build_symbol_range_bars_figure(df_std, m_std)
     assert fig_std.layout.xaxis.rangebreaks is not None
     assert list(fig_std.layout.xaxis.rangebreaks[0].bounds) == ["sat", "mon"]
 
@@ -252,8 +265,8 @@ def test_weekend_tick_filtering_and_chart_rangebreaks():
         is_24_7=True,
     )
     assert m_crypto.total_ticks == 15  # All 15 ticks kept
-    fig_crypto = build_symbol_area_figure(df_crypto, m_crypto)
-    assert not fig_crypto.layout.xaxis.rangebreaks
+    fig_crypto = build_symbol_range_bars_figure(df_crypto, m_crypto)
+    assert not getattr(fig_crypto.layout.xaxis, "rangebreaks", None)
 
 
 def test_metric_mode_median_vs_mean():
