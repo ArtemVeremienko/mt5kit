@@ -258,6 +258,9 @@ def test_weekend_tick_filtering_and_chart_rangebreaks():
     )
     assert m_std.total_ticks == 10  # 5 fri + 5 mon (sat filtered out)
     assert pytest.approx(m_std.max_spread, rel=1e-3) == 2.0  # 0.00020 / 0.0001 = 2.0 pips (not the 9.9 sat spike)
+    # Crucial quant check: max_quote_gap_sec must NOT be ~48 hours (~170,000s) from the weekend break!
+    # Intraday tick interval is 1s, so max quote gap should be <= 60s
+    assert m_std.max_quote_gap_sec < 60.0
 
     # Range bars figure has rangebreaks
     fig_std = build_symbol_range_bars_figure(df_std, m_std)
@@ -278,33 +281,100 @@ def test_weekend_tick_filtering_and_chart_rangebreaks():
     assert not getattr(fig_crypto.layout.xaxis, "rangebreaks", None)
 
 
-def test_metric_mode_median_vs_mean():
+def test_spread_bps_locked_to_median():
     base_ms = 1700000000000
     # 9 normal ticks with spread 0.00010, 1 spike tick with spread 0.00100 (10x spike)
     spreads = np.array([0.00010] * 9 + [0.00100])
     ticks = make_mock_ticks(base_ms, 10, spreads, interval_ms=1000)
 
-    # 1. Median mode (optimal for intraday trading, immune to spike)
-    _, m_med = process_ticks_and_resample(
+    # spread_bps uses clean median baseline, immune to spike
+    _, m = process_ticks_and_resample(
         ticks=ticks,
         symbol="EURUSD",
         point=0.00001,
         digits=5,
-        metric_mode="median",
     )
-    assert m_med.metric_basis == "median"
+    assert m.metric_basis == "median"
+    # Median spread bps is strictly equal to baseline (0.00010 / 1.1000 * 10000)
+    assert pytest.approx(m.spread_bps, rel=1e-2) == (0.00010 / 1.1000) * 10000.0
+    # TWAS captures the spike exposure
+    assert m.time_weighted_bps > m.spread_bps
 
-    # 2. Mean mode (includes spike)
-    _, m_mean = process_ticks_and_resample(
+
+def test_quote_quality_and_widening_frequency():
+    # Wednesday 14:00 UTC (Core session)
+    base_dt = datetime(2026, 8, 26, 14, 0, tzinfo=timezone.utc)
+    base_ms = int(base_dt.timestamp() * 1000)
+
+    # 80 normal ticks (0.00010 = 1.0 pip)
+    # 20 widened ticks (0.00025 = 2.5 pips, which is > 2.0x median)
+    spreads = np.array([0.00010] * 80 + [0.00025] * 20)
+    ticks = make_mock_ticks(base_ms, 100, spreads, interval_ms=1000)
+
+    _, m = process_ticks_and_resample(
         ticks=ticks,
         symbol="EURUSD",
         point=0.00001,
         digits=5,
-        metric_mode="mean",
+        unit_type="standard",
     )
-    assert m_mean.metric_basis == "mean"
 
-    # Median spread bps is strictly lower than mean spread bps due to the spike
-    assert m_med.spread_bps < m_mean.spread_bps
-    assert pytest.approx(m_med.spread_bps, rel=1e-2) == (0.00010 / 1.1000) * 10000.0
-    assert pytest.approx(m_mean.spread_bps, rel=1e-2) == (0.00019 / 1.1000) * 10000.0
+    # Median is 1.0 pip
+    assert pytest.approx(m.median_spread, rel=1e-3) == 1.0
+    # Widening tick percentages: 20 ticks out of 100 = 20.0%
+    assert pytest.approx(m.widening_pct_15x_tick, rel=1e-2) == 20.0
+    assert pytest.approx(m.widening_pct_20x_tick, rel=1e-2) == 20.0
+    assert pytest.approx(m.widening_pct_15x_time, rel=1e-2) == 20.0
+
+    # Stability ratio P95 / Median: P95 is 2.5, Median is 1.0 -> 2.5x
+    assert pytest.approx(m.stability_ratio, rel=1e-2) == 2.5
+    assert pytest.approx(m.core_median_spread, rel=1e-3) == 1.0
+    assert m.core_spread_bps > 0.0
+
+
+def test_time_weighted_vs_tick_weighted_spread():
+    # Demonstrate quote stuffing resilience
+    # Scenario:
+    # 90 rapid ticks in 1 second with 0.1 pip spread (10 ms interval each)
+    # 10 slow ticks lasting 9 seconds with 1.0 pip spread (900 ms interval each)
+    base_dt = datetime(2026, 8, 26, 10, 0, tzinfo=timezone.utc)
+    base_ms = int(base_dt.timestamp() * 1000)
+
+    fast_times = base_ms + np.arange(90) * 10
+    slow_times = base_ms + 900 + np.arange(10) * 900
+    times = np.concatenate([fast_times, slow_times])
+
+    spreads = np.concatenate([np.array([0.00001] * 90), np.array([0.00010] * 10)])
+
+    dtype = np.dtype([
+        ("time", "<i8"),
+        ("bid", "<f8"),
+        ("ask", "<f8"),
+        ("last", "<f8"),
+        ("volume", "<u8"),
+        ("time_msc", "<i8"),
+        ("flags", "<u4"),
+        ("volume_real", "<f8"),
+    ])
+    ticks = np.zeros(100, dtype=dtype)
+    ticks["time_msc"] = times
+    ticks["time"] = times // 1000
+    ticks["bid"] = 1.1000
+    ticks["ask"] = 1.1000 + spreads
+    ticks["volume"] = 1
+
+    _, m = process_ticks_and_resample(
+        ticks=ticks,
+        symbol="EURUSD",
+        point=0.00001,
+        digits=5,
+        unit_type="standard",
+    )
+
+    # Tick average heavily favors the 90 fast ticks: (90*0.1 + 10*1.0)/100 = 0.19 pips
+    assert pytest.approx(m.avg_spread, rel=1e-2) == 0.19
+
+    # Time-weighted average accurately reflects the ~9 seconds of 1.0 pip:
+    # Time-weighted should be significantly higher than tick-weighted average
+    assert m.time_weighted_spread > m.avg_spread
+    assert m.time_weighted_spread > 0.7

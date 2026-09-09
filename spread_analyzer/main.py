@@ -97,24 +97,22 @@ def print_terminal_table(
     end_dt: datetime,
     days: int,
     unit_type: str,
-    metric_mode: str = "median",
 ) -> None:
     """Renders an aligned, color-coded terminal summary table with execution friction metrics."""
     print(f"\n{BOLD}{CYAN}=== METATRADER 5 SPREAD ANALYSIS SUMMARY ==={RESET}")
     print(f"{GRAY}Broker / Account : {BOLD}{account_tag}{RESET}")
     print(f"{GRAY}Date Range (UTC) : {BOLD}{start_dt.strftime('%Y-%m-%d %H:%M')} to {end_dt.strftime('%Y-%m-%d %H:%M')} UTC{RESET} ({days} days lookback)")
     print(f"{GRAY}Spread Unit Mode : {BOLD}{unit_type}{RESET}")
-    metric_desc = "optimal for intraday trading 8-22:00 (outlier-free)" if metric_mode == "median" else "all-hours expected cost (includes rollover spikes)"
-    print(f"{GRAY}Execution Metric : {BOLD}{metric_mode.upper()}{RESET} ({metric_desc})\n")
+    print(f"{GRAY}Base Spread Drag : {BOLD}MEDIAN (BPS){RESET} (Intraday baseline, unpolluted by rollover spikes)\n")
 
-    bps_header = f"Spread(bps)[{metric_mode[:3]}]"
-    vol_header = f"Spread/Vol[{metric_mode[:3]}]"
+    bps_header = "Spread(bps)"
+    vol_header = "Spread/Vol"
 
     headers = [
         "Symbol", "Unit", "Min", "Median", "Avg", "P95", "Max",
-        bps_header, vol_header, "DailyVol(%)", "Ticks", "M1 Bars"
+        bps_header, vol_header, "Stab(P95/Med)", "Widen(>1.5x)%", "Core(bps)", "RollMult", "Ticks", "M1 Bars"
     ]
-    col_widths = [10, 7, 8, 8, 8, 8, 9, 16, 16, 12, 12, 9]
+    col_widths = [10, 7, 8, 8, 8, 8, 9, 16, 16, 14, 14, 11, 10, 12, 9]
 
     header_line = "  ".join(f"{h:<{w}}" for h, w in zip(headers, col_widths))
     sep_line = "  ".join("-" * w for w in col_widths)
@@ -130,6 +128,21 @@ def print_terminal_table(
         # Spread/Vol (%): < 2.0% green, 2.0%-5.0% orange, > 5.0% red
         vol_color = GREEN if m.spread_to_vol_pct < 2.0 else (ORANGE if m.spread_to_vol_pct <= 5.0 else RED)
 
+        # Stability Ratio: < 1.3 green, 1.3-2.0 orange, > 2.0 red
+        stab = getattr(m, "stability_ratio", 1.0)
+        stab_color = GREEN if stab < 1.3 else (ORANGE if stab <= 2.0 else RED)
+
+        # Widening (% time > 1.5x): < 2% green, 2-10% orange, > 10% red
+        widen_time = getattr(m, "widening_pct_15x_time", 0.0)
+        widen_color = GREEN if widen_time < 2.0 else (ORANGE if widen_time <= 10.0 else RED)
+
+        # Core spread (bps)
+        core_bps = getattr(m, "core_spread_bps", 0.0)
+
+        # Rollover multiplier
+        roll_mult = getattr(m, "rollover_multiplier", 1.0)
+        roll_color = GREEN if roll_mult < 2.0 else (ORANGE if roll_mult <= 5.0 else RED)
+
         row_str = (
             f"{BOLD}{m.symbol:<10}{RESET}  "
             f"{m.unit:<7}  "
@@ -140,7 +153,10 @@ def print_terminal_table(
             f"{RED}{m.max_spread:<9.2f}{RESET}  "
             f"{bps_color}{m.spread_bps:<16.2f}{RESET}  "
             f"{vol_color}{f'{m.spread_to_vol_pct:.2f}%':<16}  "
-            f"{f'{m.avg_daily_volatility_pct:.2f}%':<12}  "
+            f"{stab_color}{f'{stab:.2f}x':<14}{RESET}  "
+            f"{widen_color}{f'{widen_time:.2f}%':<14}{RESET}  "
+            f"{core_bps:<11.2f}  "
+            f"{roll_color}{f'{roll_mult:.2f}x':<10}{RESET}  "
             f"{m.total_ticks:<12,d}  "
             f"{m.sampled_minutes:<9,d}"
         )
@@ -162,7 +178,20 @@ def export_csv(metrics_list: List[SymbolSpreadMetrics], csv_path: Path) -> Path:
         "max_spread",
         "metric_basis",
         "spread_bps",
+        "time_weighted_spread",
+        "time_weighted_bps",
         "spread_to_vol_pct",
+        "stability_ratio",
+        "widening_pct_15x_tick",
+        "widening_pct_15x_time",
+        "widening_pct_20x_tick",
+        "widening_pct_20x_time",
+        "core_median_spread",
+        "core_spread_bps",
+        "rollover_avg_spread",
+        "rollover_max_spread",
+        "rollover_multiplier",
+        "max_quote_gap_sec",
         "avg_daily_volatility_pct",
         "avg_daily_volatility",
         "total_ticks",
@@ -183,7 +212,20 @@ def export_csv(metrics_list: List[SymbolSpreadMetrics], csv_path: Path) -> Path:
                 "max_spread": round(m.max_spread, 4),
                 "metric_basis": getattr(m, "metric_basis", "median"),
                 "spread_bps": round(m.spread_bps, 4),
+                "time_weighted_spread": round(getattr(m, "time_weighted_spread", m.avg_spread), 4),
+                "time_weighted_bps": round(getattr(m, "time_weighted_bps", m.spread_bps), 4),
                 "spread_to_vol_pct": round(m.spread_to_vol_pct, 4),
+                "stability_ratio": round(getattr(m, "stability_ratio", 1.0), 4),
+                "widening_pct_15x_tick": round(getattr(m, "widening_pct_15x_tick", 0.0), 4),
+                "widening_pct_15x_time": round(getattr(m, "widening_pct_15x_time", 0.0), 4),
+                "widening_pct_20x_tick": round(getattr(m, "widening_pct_20x_tick", 0.0), 4),
+                "widening_pct_20x_time": round(getattr(m, "widening_pct_20x_time", 0.0), 4),
+                "core_median_spread": round(getattr(m, "core_median_spread", m.median_spread), 4),
+                "core_spread_bps": round(getattr(m, "core_spread_bps", m.spread_bps), 4),
+                "rollover_avg_spread": round(getattr(m, "rollover_avg_spread", m.avg_spread), 4),
+                "rollover_max_spread": round(getattr(m, "rollover_max_spread", m.max_spread), 4),
+                "rollover_multiplier": round(getattr(m, "rollover_multiplier", 1.0), 4),
+                "max_quote_gap_sec": round(getattr(m, "max_quote_gap_sec", 0.0), 4),
                 "avg_daily_volatility_pct": round(m.avg_daily_volatility_pct, 4),
                 "avg_daily_volatility": round(m.avg_daily_volatility, 4),
                 "total_ticks": m.total_ticks,
@@ -224,14 +266,7 @@ def parse_arguments() -> argparse.Namespace:
         default=None,
         help="Custom end date/time (YYYY-MM-DD or 'YYYY-MM-DD HH:MM'). Defaults to current time.",
     )
-    parser.add_argument(
-        "--metric",
-        "-m",
-        type=str,
-        choices=["median", "mean"],
-        default="median",
-        help="Spread metric basis for bps and spread/vol calculations: 'median' (default, recommended for intraday trading 8-22:00) or 'mean' (all-hours expected cost).",
-    )
+
     parser.add_argument(
         "--unit",
         "-u",
@@ -270,7 +305,7 @@ def parse_arguments() -> argparse.Namespace:
 def main() -> int:
     args = parse_arguments()
     unit_type: SpreadUnitType = args.unit
-    metric_mode: SpreadMetricMode = args.metric
+    metric_mode: SpreadMetricMode = "median"
 
     session = MT5Session()
     try:
@@ -307,8 +342,7 @@ def main() -> int:
             f"Analysis window: {start_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC "
             f"-> {end_dt.strftime('%Y-%m-%d %H:%M:%S')} UTC"
         )
-        metric_tag = "intraday standard (outlier-free)" if metric_mode == "median" else "all-hours standard (includes rollover spikes)"
-        logger.info(f"Execution metric basis: {metric_mode.upper()} ({metric_tag})")
+        logger.info("Base Spread Drag: MEDIAN (BPS) (intraday baseline, unpolluted by rollover spikes)")
 
         symbols_data: Dict[str, Tuple[pd.DataFrame, SymbolSpreadMetrics]] = {}
 
@@ -343,7 +377,7 @@ def main() -> int:
 
         # 1. Print formatted terminal table
         print_terminal_table(
-            metrics_list, account_tag, start_dt, end_dt, args.days, unit_type, metric_mode=metric_mode
+            metrics_list, account_tag, start_dt, end_dt, args.days, unit_type
         )
 
         # 2. Export CSV

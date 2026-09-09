@@ -137,3 +137,63 @@ def test_cross_broker_comparison_and_scoring(tmp_path: Path):
     assert "report_data.js" in html_text
 
 
+def test_quality_score_ranking_vs_raw_bps(tmp_path: Path):
+    # Scenario highlighting user's exact problem:
+    # Broker A has slightly lower median spread (0.80 bps vs 0.90 bps)
+    # BUT Broker A widens 35% of the time and has stability ratio 3.5x (unstable/erratic)
+    # Broker B has 0.90 bps, widens only 0.5% of the time, stability ratio 1.1x (ultra clean/stable)
+    mappings = {"EURUSD": ["EURUSD"]}
+    map_file = tmp_path / "mappings.json"
+    map_file.write_text(json.dumps(mappings), encoding="utf-8")
+
+    output_dir = tmp_path / "output_quality"
+    broker_a = output_dir / "VolatileBroker"
+    broker_b = output_dir / "StableBroker"
+    broker_a.mkdir(parents=True)
+    broker_b.mkdir(parents=True)
+
+    header = (
+        "symbol,unit,min_spread,median_spread,avg_spread,p95_spread,max_spread,metric_basis,spread_bps,"
+        "stability_ratio,widening_pct_15x_time,widening_pct_20x_time,widening_pct_15x_tick,core_spread_bps,"
+        "rollover_multiplier,spread_to_vol_pct,avg_daily_volatility_pct,avg_daily_volatility,total_ticks,sampled_minutes\n"
+    )
+
+    # Broker A: Tight median (0.8 bps), but volatile (stability 3.5x, widen 35%)
+    (broker_a / "spread_summary.csv").write_text(
+        header + "EURUSD,pips,0.5,0.8,1.4,2.8,8.0,median,0.80,3.5,35.0,20.0,30.0,0.80,4.0,1.0,0.5,50.0,20000,1400\n",
+        encoding="utf-8",
+    )
+
+    # Broker B: Slightly higher median (0.9 bps), but rock-solid (stability 1.1x, widen 0.5%)
+    (broker_b / "spread_summary.csv").write_text(
+        header + "EURUSD,pips,0.8,0.9,0.92,1.0,2.0,median,0.90,1.1,0.5,0.1,0.5,0.90,1.2,1.1,0.5,50.0,20000,1400\n",
+        encoding="utf-8",
+    )
+
+    # 1. Rank by quality (default): StableBroker should win Rank #1 despite 0.10 higher median bps!
+    groups_q, lb_q = run_cross_broker_comparison(
+        output_dir=output_dir,
+        mappings_file=map_file,
+        rank_by="quality",
+    )
+    assert len(groups_q) == 1
+    winner_q = groups_q[0].winner
+    assert winner_q.broker_tag == "StableBroker"
+    assert winner_q.rank == 1
+    assert lb_q["StableBroker"].first_places == 1
+    assert lb_q["VolatileBroker"].second_places == 1
+
+    # 2. Rank by legacy bps: VolatileBroker wins purely on median bps
+    groups_bps, lb_bps = run_cross_broker_comparison(
+        output_dir=output_dir,
+        mappings_file=map_file,
+        rank_by="bps",
+    )
+    assert len(groups_bps) == 1
+    winner_bps = groups_bps[0].winner
+    assert winner_bps.broker_tag == "VolatileBroker"
+    assert winner_bps.rank == 1
+    assert lb_bps["VolatileBroker"].first_places == 1
+    assert lb_bps["StableBroker"].second_places == 1
+
+

@@ -64,12 +64,6 @@ python -m spread_analyzer.main --symbols "EURUSD,GBPUSD" --start "2026-08-01" --
 python -m spread_analyzer.main --symbols "EURUSD,GBPUSD" --start "2026-08-01 00:00" --end "2026-08-15 23:59"
 ```
 
-### Select Execution Friction Metric Basis (Median vs. Mean)
-By default, the analyzer uses **`median`**, which is optimal for intraday trading (8:00–22:00) because it reflects the typical baseline spread without contamination from midnight rollover spikes. Use `mean` if you want the all-hours expected cost:
-```bash
-python -m spread_analyzer.main --symbols "EURUSD,XAUUSD" --metric median  # Default (intraday trading standard)
-python -m spread_analyzer.main --symbols "EURUSD,XAUUSD" --metric mean    # Includes rollover & news spikes
-```
 
 ### Select Spread Measurement Unit
 Choose between `standard` (pips/cents/pts), `points` (broker ticks), or `price` (raw difference):
@@ -131,7 +125,6 @@ python -m spread_analyzer.compare --output-dir spread_analyzer/output --mappings
 | `--days` | `-d` | `14` | Lookback window in calendar days (14 = 2 weeks) |
 | `--start` | | Auto (`00:00:00 UTC`) | Custom start datetime (`YYYY-MM-DD` or `'YYYY-MM-DD HH:MM'`) |
 | `--end` | | Auto (`now UTC`) | Custom end datetime (`YYYY-MM-DD` or `'YYYY-MM-DD HH:MM'`) |
-| `--metric` | `-m` | `median` | Execution metric basis: `median` (intraday 8-22:00 standard) or `mean` |
 | `--unit` | `-u` | `standard` | Spread unit: `standard`, `points`, or `price` |
 | `--output-dir` | `-o` | `spread_analyzer/output` | Base output directory |
 | `--tag` | `-t` | Auto-detected | Custom folder/report partition tag |
@@ -154,6 +147,11 @@ The interactive HTML report and terminal summary table display a multi-asset com
 | **P95** | Float | The **95th percentile spread**. 95% of all ticks were executed at or below this spread, and only 5% were wider. Used in risk management to size worst-case slippage buffers for orders executed near market volatility or off-hours. |
 | **Max Spread** | Float | Widest spread recorded, typically occurring during market open/close, bank rollover, or high-impact macroeconomic announcements. |
 | **Spread (bps)** | Basis Points (`bps`) | **Spread Cost in Basis Points**: Normalized cross-asset execution drag calculated as `(Spread / Price) * 10,000`. Enables direct capital efficiency comparison between instruments with vastly different prices (e.g. EURUSD at 1.08 vs Gold at 2,600 vs Bitcoin at 60,000). |
+| **Stability Ratio** | Ratio (`x`) | **Spread Predictability / Cleanliness**: Calculated as `P95 / Median`. A ratio near `1.0 - 1.2x` indicates rock-solid, ultra-clean spread execution; `> 2.0x` indicates erratic spreads and high blowout risk. |
+| **Widen (>1.5x)%** | Percentage (`%`) | **Widening Frequency**: Percentage of active quote time (and tick count) where spread widened by more than $1.5\times$ baseline median. Directly shows how often the broker inflates spreads beyond normal conditions. |
+| **Time-Weighted (bps)** | Basis Points (`bps`) | **Duration-Weighted Transaction Drag**: Time-Weighted Average Spread (TWAS) in basis points. Eliminates quote-stuffing and quiet-period tick density bias. |
+| **Core Spread (bps)** | Basis Points (`bps`) | Spread in basis points strictly during core London/NY trading hours (07:00–20:00 UTC), unpolluted by rollover spikes. |
+| **Rollover Multiplier** | Ratio (`x`) | Ratio of average spread during bank rollover (21:45–22:30 UTC) vs core daytime median spread. Quantifies overnight swap and reset risk. |
 | **Spread / Vol** | Percentage (`%`) | **Spread-to-Daily-Volatility Ratio**: Measures what portion of the instrument's average daily movement is consumed by the broker's spread `(Spread / Average Daily Range) * 100%`. Reveals which symbols offer the best profit potential relative to entry friction. |
 | **Daily Vol (%)** | Percentage (`%`) | **Average Daily Range as % of Price**: Calculated as `(Average Daily Range / Average Price) * 100%`. Normalizes volatility across assets regardless of nominal price (e.g. 0.36% for EURUSD vs 2.37% for Gold). In the HTML table, hovering over the cell displays the raw range in pips/cents (e.g. `42.2 pips`). |
 | **Total Ticks** | Integer | Raw count of bid/ask tick updates ingested and processed from MT5 over the analysis window. |
@@ -276,21 +274,136 @@ Here is how each metric maps directly to specific trading styles, risk models, a
 ---
 
 
-- **Header-Click Sorting**: Click any column header (`Symbol`, `Avg Spread`, `P95`, `Spread (bps)`, etc.) to sort instantly. Repeated clicks toggle between Ascending (`▲`) and Descending (`▼`). Sorting operates on exact underlying numeric values (`data-val`) rather than display strings.
-- **Row-Click Inspection**: Clicking any symbol row in the summary table instantly updates the 1-minute area chart below to that symbol.
-- **Area Chart Layers**:
-  - **Red Area (Max)**: Outlines peak volatility and spread blowout bounds.
-  - **Orange Area (Avg)**: Shows time-weighted mean dynamics throughout sessions.
-  - **Green Area (Min)**: Shows base quoting floor during high liquidity windows.
+- **Header-Click Sorting**: Click any column header (`Symbol`, `Avg Spread`, `P95`, `Spread (bps)`, etc.) to sort instantly. Repeated clicks toggle between Ascending (`▲`) and Descending (`▼`). Sorting operates on exact underlying numeric values rather than display strings.
+- **Row-Click Inspection**: Clicking any symbol row or the `[📈 View]` button instantly shifts the 1-minute spread chart to that symbol without page reload.
+- **Dual Dynamic View Modes**:
+  - **Range Bars (`viewMode = 'range_bars'`)**: Renders floating cyan min-max bars centered along the average step line, synchronized with indigo tick volume bars.
+  - **Step Corridor (`viewMode = 'step_corridor'`)**: Renders an emerald lower boundary line and rose upper boundary with translucent fill and tick activity volume.
 - **Weekend Normalization**: Standard instruments (Forex, Metals, Indices) have weekend market closures cleanly collapsed via Plotly rangebreaks to eliminate artificial connection lines, while 24/7 crypto pairs preserve continuous tracking.
+
+---
+
+## The Adaptive Cockpit: How to Use the Updated Tables
+
+The Spread Analyzer dashboard eliminates "table fatigue" through **progressive disclosure**. Instead of forcing traders to scan 18+ raw numbers across diverse units (points, pips, cents, bps, percentages), the interface provides three purpose-built view presets and top-level synthesis cards.
+
+```
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│ TOP-LINE PORTFOLIO HEALTH CARDS (Instant Macro-Triage)                                  │
+│  [🟢 PRIME INTRADAY: 18 (75%)]  [🟡 DAY-ONLY: 4 (17%)]  [🔴 SKIP: 2 (8%)]  [📊 1.42 bps]│
+└────────────────────────────────────────────────────────────────────────────────────────┘
+  ▼ VIEW PRESET TABS:
+  ┌───────────────────────┬───────────────────────┬────────────────────────┐
+  │ ⚡ Tradeability (6 col)│ 🤖 EA Quality (7 col) │ 🔬 Full Quant (18 col) │
+  └───────────────────────┴───────────────────────┴────────────────────────┘
+```
+
+---
+
+### 1. View Presets: When to Check Each View
+
+#### ⚡ Preset 1: `[Tradeability & Decision]` (Default View)
+- **Target Audience**: Discretionary traders, day traders, and portfolio managers making fast go/no-go trading decisions.
+- **Curated Columns (Zero Horizontal Scroll)**:
+  `Symbol` │ `Tradeability Verdict` │ `Spread Corridor Bar` │ `Core Cost (bps)` │ `Rollover Multiplier` │ `Chart Action`
+- **When to Use**:
+  - Open this view first when screening a broker's symbol universe.
+  - Instantly identify which pairs have clean quotes for scalping vs. which pairs must never be held past the New York close.
+  - Visually inspect the mini **Spread Corridor Bar** (`Min ──[===|===]── P95 --- Max`) to see the spread's typical bounds without deciphering 5 separate numeric columns.
+
+#### 🤖 Preset 2: `[EA & Execution Quality]`
+- **Target Audience**: Algorithmic developers, automated trading systems (EAs), and quantitative portfolio runners.
+- **Curated Columns**:
+  `Symbol` │ `Verdict` │ `TWAS (bps)` │ `Core (bps)` │ `Stability (P95/Med)` │ `Widening (>1.5x)%` │ `Roll Mult` │ `Total Ticks`
+- **When to Use**:
+  - When configuring automated Expert Advisors (EAs) or sizing slippage thresholds in algorithmic code.
+  - When you need to know if a broker uses **quote stuffing** (elevating tick counts during calm periods while freezing quotes during news).
+  - When calibrating maximum spread filters (e.g. `MaxSpreadFilter = P95`).
+
+#### 🔬 Preset 3: `[Full Quant Audit]`
+- **Target Audience**: Institutional TCA (Transaction Cost Analysis) officers, compliance auditors, and broker relationship managers.
+- **Grouped 2-Tier Header Structure**:
+  - `[ IDENTIFICATION ]`: Symbol, Measurement Unit.
+  - `[ SPREAD DISTRIBUTION ]`: Min, Median, Avg, P95, Max.
+  - `[ EXECUTION & STABILITY ]`: Spread (bps), TWAS (bps), Stability Ratio, Widening (>1.5x)%.
+  - `[ TEMPORAL REGIMES ]`: Core (bps), Rollover Multiplier, Spread / Vol (%).
+  - `[ SAMPLE STATS ]`: Daily Vol (%), Total Ticks, M1 Sampled Bars.
+- **When to Use**:
+  - For deep forensics when investigating broker execution discrepancies, trade disputes, or comprehensive liquidity provider audits.
+
+---
+
+### 2. Tradeability Verdict Engine: The Synthesis Badges
+
+Every instrument receives an automated, rule-based verdict badge that translates complex statistics into actionable execution guidance:
+
+| Badge | Criteria / Thresholds | Meaning & Actionable Rule |
+|---|---|---|
+| 🟢 **`PRIME INTRADAY & EA`** | `Spread ≤ 2.5 bps`<br>`Stability ≤ 1.40x`<br>`Widening ≤ 3.0%`<br>`Spread/Vol ≤ 3.5%` | **Elite Execution Quality**. Tight spread, minimal tail risk, and low volatility drag. Optimal for scalpers, M1–M5 EAs, and high-turnover strategies. |
+| 🟡 **`DAY-ONLY (AVOID OVERNIGHT)`** | Clean core spread, but:<br>`Rollover Mult > 3.0x` or<br>`Widening > 4.0%` | **Severe Rollover / Night Blowout Risk**. Spreads expand dramatically during the 17:00 NY bank rollover. **Mandatory rule**: Close all intraday positions before 21:45 UTC; do not hold overnight. |
+| 🔵 **`SWING / VOL ONLY`** | Wider nominal spread (`> 3.5 bps`), but:<br>`Spread/Vol ≤ 4.5%` | **Range-Absorbed Spread**. The spread is nominally wide, but the instrument's daily price range (ATR) easily absorbs the cost. Viable for swing targets; avoid scalping. |
+| 🔴 **`HIGH FRICTION / SKIP`** | `Stability > 2.20x` or<br>`Widening > 12.0%` or<br>`Spread/Vol > 7.5%` | **Toxic Quote Feed / Excessive Drag**. Frequent artificial widening or erratic spikes. Skip this instrument or find an alternative broker. |
+
+---
+
+### 3. Understanding the Metrics: Spread (bps) vs. TWAS (bps)
+
+One of the most crucial distinctions in institutional Transaction Cost Analysis is the difference between **`Spread (bps)`** and **`TWAS (bps)`**:
+
+$$\text{Spread (bps)} = \left(\frac{\text{Median Spread}}{\text{Mid-Price}}\right) \times 10{,}000$$
+
+$$\text{TWAS (bps)} = \left(\frac{\sum_{i=1}^{N-1} \text{Spread}_i \times \Delta t_i}{\text{Mid-Price} \times \sum_{i=1}^{N-1} \Delta t_i}\right) \times 10{,}000$$
+
+#### What is the Difference?
+- **`Spread (bps)` (Tick-Weighted Median Basis)**:
+  - Measures the spread observed on a typical **tick event**.
+  - Reflects market conditions when activity is occurring.
+  - Immune to extreme outlier spikes (e.g. 50-pip spikes for 3 seconds don't shift the median).
+- **`TWAS (bps)` (Time-Weighted Average Spread)**:
+  - Measures the spread observed by an order arriving at a **random moment in continuous time**.
+  - Quotes are weighted strictly by how many milliseconds they remained active on the screen.
+  - Completely eliminates **quote stuffing** bias (where a broker streams 5,000 rapid ticks with tight spreads during a dead market, then quotes 2 wide ticks during news).
+
+#### Practical Decision Rule:
+| Scenario | What It Means | Action to Take |
+|---|---|---|
+| **$\text{TWAS} \approx \text{Spread (bps)}$** | Clean, homogeneous quote stream. Spreads are consistent regardless of tick speed. | Safe for all trading styles (discretionary and automated). |
+| **$\text{TWAS} \gg \text{Spread (bps)}$** | The broker holds spreads wide during quiet periods or freezes quotes on wide spreads, while only streaming tight quotes during brief bursts. | EAs running off-peak will suffer worse fills than backtests suggest. Apply tight spread filters. |
+| **$\text{TWAS} < \text{Spread (bps)}$** | The spread widened briefly during high-frequency tick bursts (e.g., news spikes), but was tighter for the vast majority of wall-clock time. | Favorable for patient limit orders; avoid market orders during fast tape. |
+
+---
+
+### 4. Cross-Broker Showdown Cards (`compare.py`)
+
+When running `python -m spread_analyzer.compare`, the dashboard presents **Canonical Showdown Cards** alongside the detailed grid:
+
+- **Relative Horizon Delta Bar**:
+  Visual progress bar showing how far competitors lag behind the `#1 Winner`:
+  - `#1 Best Broker`: Shows `BEST 0.0 bps` with a solid emerald marker.
+  - Competitors: Visual amber/rose bar displaying the exact additional transaction drag incurred (e.g. `+0.42 bps`).
+- **Scale-Invariant Execution Quality Score**:
+  $$\text{Quality Score (bps)} = \text{TWAS}_{\text{bps}} + 0.5 \cdot \text{TailRisk}_{\text{bps}} + 1.0 \cdot \text{WideningFriction}_{\text{bps}}$$
+  Where:
+  - $\text{TailRisk}_{\text{bps}} = \max(P_{95} - \text{Median}, 0)$ in basis points.
+  - $\text{WideningFriction}_{\text{bps}} = \text{TWAS} \cdot (\%_{\text{widening}} / 100)$.
+  This formula is mathematically scale-invariant and monotonic, fairly penalizing erratic tail risk and widening frequency without distorting across zero-spread instruments.
+- **Cherry-Picking Guard**:
+  To prevent brokers offering only 1 or 2 exotic symbols from claiming the `#1 Leader` trophy, brokers must contest at least $\min(3, \text{max contested})$ symbols to qualify for top leaderboard rank.
 
 ---
 
 ## Running the Unit Tests
 
-Execute the pytest suite:
+Execute the complete pytest suite across all analyzers:
 
 ```bash
-pytest spread_analyzer/test_spread_analyzer.py -v
+uv run pytest
 ```
+
+To run specifically the `spread_analyzer` unit tests:
+
+```bash
+uv run pytest spread_analyzer/test_spread_analyzer.py spread_analyzer/test_comparator.py -v
+```
+
 

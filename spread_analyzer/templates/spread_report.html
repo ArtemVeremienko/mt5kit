@@ -85,8 +85,8 @@
                         </div>
                         <div class="h-6 w-px bg-gray-800"></div>
                         <div>
-                            <span class="text-gray-500 block">EXECUTION METRIC</span>
-                            <span class="text-cyan-400 font-semibold uppercase" x-text="data.metric_basis || 'median'"></span>
+                            <span class="text-gray-500 block">BASE SPREAD</span>
+                            <span class="text-cyan-400 font-semibold" title="Baseline intraday spread drag unpolluted by rollover spikes">MEDIAN (BPS)</span>
                         </div>
                     </div>
                 </template>
@@ -119,72 +119,305 @@
         <template x-if="data">
             <div class="space-y-6">
 
-                <!-- Comprehensive Multi-Symbol Summary Table -->
+                <!-- Top-Line Portfolio Health Cards (Executive Macro-Triage) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Prime Intraday Card -->
+                    <div class="bg-gray-900/70 border border-emerald-500/30 rounded-xl p-4 flex items-center justify-between shadow-lg shadow-emerald-500/5">
+                        <div class="space-y-1">
+                            <span class="text-[11px] font-mono uppercase text-emerald-400 font-semibold tracking-wider block">🟢 Prime Intraday</span>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-2xl font-bold text-white" x-text="healthStats.primeCount"></span>
+                                <span class="text-xs text-gray-400 font-mono" x-text="'(' + healthStats.primePct + '%)'"></span>
+                            </div>
+                            <span class="text-[11px] text-gray-400 block">Optimal for scalping & EAs</span>
+                        </div>
+                        <div class="w-10 h-10 rounded-lg bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center text-xl">⚡</div>
+                    </div>
+
+                    <!-- Day-Only Card -->
+                    <div class="bg-gray-900/70 border border-amber-500/30 rounded-xl p-4 flex items-center justify-between shadow-lg shadow-amber-500/5">
+                        <div class="space-y-1">
+                            <span class="text-[11px] font-mono uppercase text-amber-400 font-semibold tracking-wider block">🟡 Day-Only</span>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-2xl font-bold text-white" x-text="healthStats.dayOnlyCount"></span>
+                                <span class="text-xs text-gray-400 font-mono" x-text="'(' + healthStats.dayOnlyPct + '%)'"></span>
+                            </div>
+                            <span class="text-[11px] text-gray-400 block">Close prior to NY rollover</span>
+                        </div>
+                        <div class="w-10 h-10 rounded-lg bg-amber-950/80 border border-amber-800/60 flex items-center justify-center text-xl">🌙</div>
+                    </div>
+
+                    <!-- Swing / High Friction Card -->
+                    <div class="bg-gray-900/70 border border-rose-500/30 rounded-xl p-4 flex items-center justify-between shadow-lg shadow-rose-500/5">
+                        <div class="space-y-1">
+                            <span class="text-[11px] font-mono uppercase text-rose-400 font-semibold tracking-wider block">🔴 Caution / Skip</span>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-2xl font-bold text-white" x-text="healthStats.skipCount"></span>
+                                <span class="text-xs text-gray-400 font-mono" x-text="'(' + healthStats.skipPct + '%)'"></span>
+                            </div>
+                            <span class="text-[11px] text-gray-400 block">Wide tail risk or widening</span>
+                        </div>
+                        <div class="w-10 h-10 rounded-lg bg-rose-950/80 border border-rose-800/60 flex items-center justify-center text-xl">⚠️</div>
+                    </div>
+
+                    <!-- Portfolio Spread Average Card -->
+                    <div class="bg-gray-900/70 border border-cyan-500/30 rounded-xl p-4 flex items-center justify-between shadow-lg shadow-cyan-500/5">
+                        <div class="space-y-1">
+                            <span class="text-[11px] font-mono uppercase text-cyan-400 font-semibold tracking-wider block">📊 Portfolio Mean Spread</span>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-2xl font-bold text-white font-mono" x-text="healthStats.avgSpreadBps + ' bps'"></span>
+                            </div>
+                            <span class="text-[11px] text-gray-400 font-mono block" x-text="'TWAS: ' + healthStats.avgTwasBps + ' bps'"></span>
+                        </div>
+                        <div class="w-10 h-10 rounded-lg bg-cyan-950/80 border border-cyan-800/60 flex items-center justify-center text-xl">📈</div>
+                    </div>
+                </div>
+
+                <!-- Comprehensive Multi-Symbol Summary Table with Preset Views -->
                 <div class="bg-gray-900/60 rounded-xl border border-gray-800 overflow-hidden shadow-xl">
-                    <div class="p-5 border-b border-gray-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="p-5 border-b border-gray-800 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                         <div>
                             <h2 class="text-lg font-semibold text-white">Comprehensive Symbol Summary</h2>
-                            <p class="text-xs text-gray-400">Click any column header to sort • Click any row to view its 1-minute spread chart</p>
+                            <p class="text-xs text-gray-400">Adaptive execution analytics • Click column headers to sort • Click any row or [📈 Chart] to isolate 1-minute dynamics</p>
                         </div>
-                        <div class="flex flex-wrap items-center gap-4">
-                            <!-- Search Box -->
-                            <div class="relative w-full sm:w-64">
-                                <input type="text" x-model="search" placeholder="Filter symbol (e.g. EURUSD)..." class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono">
+                        
+                        <div class="flex flex-wrap items-center gap-3">
+                            <!-- View Preset Switcher Tabs -->
+                            <div class="inline-flex rounded-lg p-1 bg-gray-950 border border-gray-800 text-xs font-medium">
+                                <button @click="activePreset = 'tradeability'" 
+                                        :class="activePreset === 'tradeability' ? 'bg-blue-600 text-white shadow' : 'text-gray-400 hover:text-white'" 
+                                        class="px-3 py-1.5 rounded-md transition flex items-center gap-1.5">
+                                    <span>⚡</span> Tradeability
+                                </button>
+                                <button @click="activePreset = 'ea_quality'" 
+                                        :class="activePreset === 'ea_quality' ? 'bg-emerald-600 text-white shadow' : 'text-gray-400 hover:text-white'" 
+                                        class="px-3 py-1.5 rounded-md transition flex items-center gap-1.5">
+                                    <span>🤖</span> EA Quality
+                                </button>
+                                <button @click="activePreset = 'quant_audit'" 
+                                        :class="activePreset === 'quant_audit' ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-white'" 
+                                        class="px-3 py-1.5 rounded-md transition flex items-center gap-1.5">
+                                    <span>🔬</span> Full Quant Audit
+                                </button>
                             </div>
-                            <div class="text-xs text-gray-400">
-                                <span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500 mr-1"></span>Min
-                                <span class="inline-block w-2.5 h-2.5 rounded-full bg-orange-500 ml-3 mr-1"></span>Avg
-                                <span class="inline-block w-2.5 h-2.5 rounded-full bg-red-500 ml-3 mr-1"></span>Max
+
+                            <!-- Search Filter -->
+                            <div class="relative w-full sm:w-56">
+                                <input type="text" x-model="search" placeholder="Filter symbol (e.g. EURUSD)..." class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono">
                             </div>
                         </div>
                     </div>
-                    <div class="overflow-x-auto custom-scrollbar">
+
+                    <!-- Preset 1: Tradeability & Decision (Default 6 columns, zero scroll fatigue) -->
+                    <div x-show="activePreset === 'tradeability'" class="overflow-x-auto custom-scrollbar">
                         <table class="w-full text-left text-sm border-collapse">
                             <thead class="bg-gray-950/80 text-xs uppercase text-gray-400 font-semibold border-b border-gray-800">
                                 <tr>
                                     <th @click="sortBy('symbol')" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">Symbol <span class="text-[10px]" :class="sortCol === 'symbol' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('symbol')"></span></span></th>
-                                    <th @click="sortBy('unit')" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">Unit <span class="text-[10px]" :class="sortCol === 'unit' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('unit')"></span></span></th>
-                                    <th @click="sortBy('min_spread')" class="sort-th px-4 py-3 text-green-400"><span class="flex items-center gap-1.5">Min Spread <span class="text-[10px]" :class="sortCol === 'min_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('min_spread')"></span></span></th>
-                                    <th @click="sortBy('median_spread')" class="sort-th px-4 py-3 text-gray-300"><span class="flex items-center gap-1.5">Median <span class="text-[10px]" :class="sortCol === 'median_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('median_spread')"></span></span></th>
-                                    <th @click="sortBy('avg_spread')" class="sort-th px-4 py-3 text-amber-400"><span class="flex items-center gap-1.5">Avg Spread <span class="text-[10px]" :class="sortCol === 'avg_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('avg_spread')"></span></span></th>
-                                    <th @click="sortBy('p95_spread')" class="sort-th px-4 py-3 text-gray-300"><span class="flex items-center gap-1.5">P95 <span class="text-[10px]" :class="sortCol === 'p95_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('p95_spread')"></span></span></th>
-                                    <th @click="sortBy('max_spread')" class="sort-th px-4 py-3 text-red-400"><span class="flex items-center gap-1.5">Max Spread <span class="text-[10px]" :class="sortCol === 'max_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('max_spread')"></span></span></th>
-                                    <th @click="sortBy('spread_bps')" class="sort-th px-4 py-3 text-cyan-400 whitespace-nowrap min-w-[115px]"><span class="flex items-center gap-1.5">Spread (bps) <span class="text-[10px]" :class="sortCol === 'spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('spread_bps')"></span></span></th>
-                                    <th @click="sortBy('spread_to_vol_pct')" class="sort-th px-4 py-3 text-cyan-400 whitespace-nowrap min-w-[110px]"><span class="flex items-center gap-1.5">Spread / Vol <span class="text-[10px]" :class="sortCol === 'spread_to_vol_pct' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('spread_to_vol_pct')"></span></span></th>
-                                    <th @click="sortBy('avg_daily_volatility_pct')" class="sort-th px-4 py-3 whitespace-nowrap min-w-[110px]"><span class="flex items-center gap-1.5">Daily Vol (%) <span class="text-[10px]" :class="sortCol === 'avg_daily_volatility_pct' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('avg_daily_volatility_pct')"></span></span></th>
-                                    <th @click="sortBy('total_ticks')" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">Total Ticks <span class="text-[10px]" :class="sortCol === 'total_ticks' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('total_ticks')"></span></span></th>
-                                    <th @click="sortBy('sampled_minutes')" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">M1 Bars <span class="text-[10px]" :class="sortCol === 'sampled_minutes' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('sampled_minutes')"></span></span></th>
+                                    <th class="px-4 py-3">Tradeability Verdict</th>
+                                    <th class="px-4 py-3 min-w-[200px]">Spread Corridor (Min · Med · P95 · Max)</th>
+                                    <th @click="sortBy('core_spread_bps')" class="sort-th px-4 py-3 text-cyan-400 whitespace-nowrap"><span class="flex items-center gap-1.5">Core Cost (bps) <span class="text-[10px]" :class="sortCol === 'core_spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('core_spread_bps')"></span></span></th>
+                                    <th @click="sortBy('rollover_multiplier')" class="sort-th px-4 py-3 text-purple-400 whitespace-nowrap"><span class="flex items-center gap-1.5">Rollover Multiplier <span class="text-[10px]" :class="sortCol === 'rollover_multiplier' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('rollover_multiplier')"></span></span></th>
+                                    <th class="px-4 py-3 text-center">Chart</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-800/60">
                                 <template x-for="m in sortedSymbols" :key="m.symbol">
-                                    <tr @click="selectSymbol(m.symbol)" :class="selectedSymbol === m.symbol ? 'bg-blue-950/40 border-l-2 border-blue-500' : 'hover:bg-gray-800'" class="cursor-pointer transition">
-                                        <td class="px-4 py-3 font-semibold text-blue-400" x-text="m.symbol"></td>
-                                        <td class="px-4 py-3 text-gray-400" x-text="m.unit"></td>
-                                        <td class="px-4 py-3 text-green-400 font-mono" x-text="formatNum(m.min_spread)"></td>
-                                        <td class="px-4 py-3 text-gray-300 font-mono" x-text="formatNum(m.median_spread)"></td>
-                                        <td class="px-4 py-3 text-amber-400 font-mono font-medium" x-text="formatNum(m.avg_spread)"></td>
-                                        <td class="px-4 py-3 text-gray-300 font-mono" x-text="formatNum(m.p95_spread)"></td>
-                                        <td class="px-4 py-3 text-red-400 font-mono" x-text="formatNum(m.max_spread)"></td>
+                                    <tr @click="selectSymbol(m.symbol)" :class="selectedSymbol === m.symbol ? 'bg-blue-950/40 border-l-2 border-blue-500' : 'hover:bg-gray-800/50'" class="cursor-pointer transition">
                                         <td class="px-4 py-3">
-                                            <span class="px-2 py-0.5 rounded text-xs font-mono font-medium whitespace-nowrap border"
-                                                  :class="m.spread_bps < 1 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : (m.spread_bps <= 5 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
-                                                  x-text="formatNum(m.spread_bps) + ' bps'"></span>
+                                            <div class="font-bold text-blue-400 font-mono text-sm" x-text="m.symbol"></div>
+                                            <div class="text-[11px] text-gray-500 font-mono" x-text="m.unit + ' · ' + formatInt(m.total_ticks) + ' ticks'"></div>
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            <template x-if="getVerdict(m).tier === 'prime'">
+                                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 shadow-sm" :title="getVerdict(m).reason">
+                                                    <span>🟢</span> PRIME INTRADAY
+                                                </span>
+                                            </template>
+                                            <template x-if="getVerdict(m).tier === 'day_only'">
+                                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-950/80 text-amber-400 border border-amber-800/60 shadow-sm" :title="getVerdict(m).reason">
+                                                    <span>🟡</span> DAY-ONLY
+                                                </span>
+                                            </template>
+                                            <template x-if="getVerdict(m).tier === 'swing'">
+                                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-sky-950/80 text-sky-400 border border-sky-800/60 shadow-sm" :title="getVerdict(m).reason">
+                                                    <span>🔵</span> SWING ONLY
+                                                </span>
+                                            </template>
+                                            <template x-if="getVerdict(m).tier === 'skip'">
+                                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-rose-950/80 text-rose-400 border border-rose-800/60 shadow-sm" :title="getVerdict(m).reason">
+                                                    <span>🔴</span> HIGH FRICTION / SKIP
+                                                </span>
+                                            </template>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <!-- Inline Visual Corridor Bar -->
+                                            <div class="w-full max-w-[240px] space-y-1">
+                                                <div class="flex justify-between text-[10px] font-mono text-gray-400">
+                                                    <span class="text-emerald-400" x-text="formatNum(m.min_spread)"></span>
+                                                    <span class="text-gray-300 font-bold" x-text="'med ' + formatNum(m.median_spread)"></span>
+                                                    <span class="text-amber-400" x-text="'p95 ' + formatNum(m.p95_spread)"></span>
+                                                    <span class="text-rose-400" x-text="formatNum(m.max_spread)"></span>
+                                                </div>
+                                                <div class="h-2 w-full bg-gray-950 rounded-full overflow-hidden relative border border-gray-800">
+                                                    <!-- Ribbon: Min to P95 -->
+                                                    <div class="absolute top-0 bottom-0 bg-blue-500/30 rounded-full"
+                                                         :style="'left: ' + getBarPercent(m.min_spread, m) + '%; width: ' + (getBarPercent(m.p95_spread, m) - getBarPercent(m.min_spread, m)) + '%;'"></div>
+                                                    <!-- Median Indicator Line -->
+                                                    <div class="absolute top-0 bottom-0 w-1 bg-cyan-400 z-10 shadow-sm shadow-cyan-400"
+                                                         :style="'left: ' + getBarPercent(m.median_spread, m) + '%;'"></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <div class="font-mono text-cyan-300 font-semibold" x-text="formatNum(m.core_spread_bps || m.spread_bps) + ' bps'"></div>
+                                            <div class="text-[11px] text-gray-500 font-mono" x-text="'TWAS: ' + formatNum(m.time_weighted_bps || m.spread_bps) + ' bps'"></div>
                                         </td>
                                         <td class="px-4 py-3">
                                             <span class="px-2 py-0.5 rounded text-xs font-mono font-medium border"
+                                                  :class="(m.rollover_multiplier || 1) < 2.0 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((m.rollover_multiplier || 1) <= 4.0 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
+                                                  x-text="formatNum(m.rollover_multiplier || 1) + 'x'"></span>
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            <button @click.stop="selectSymbol(m.symbol)" 
+                                                    class="px-2.5 py-1 rounded bg-gray-800 hover:bg-blue-600 text-gray-300 hover:text-white text-xs font-mono transition border border-gray-700">
+                                                📈 View
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Preset 2: EA Quality & Execution Stability (7 columns) -->
+                    <div x-show="activePreset === 'ea_quality'" class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-left text-sm border-collapse">
+                            <thead class="bg-gray-950/80 text-xs uppercase text-gray-400 font-semibold border-b border-gray-800">
+                                <tr>
+                                    <th @click="sortBy('symbol')" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">Symbol <span class="text-[10px]" :class="sortCol === 'symbol' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('symbol')"></span></span></th>
+                                    <th class="px-4 py-3">Verdict</th>
+                                    <th @click="sortBy('time_weighted_bps')" class="sort-th px-4 py-3 text-cyan-300 whitespace-nowrap" title="Time-Weighted Average Spread across continuous duration"><span class="flex items-center gap-1.5">TWAS (bps) <span class="text-[10px]" :class="sortCol === 'time_weighted_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('time_weighted_bps')"></span></span></th>
+                                    <th @click="sortBy('core_spread_bps')" class="sort-th px-4 py-3 text-cyan-400 whitespace-nowrap" title="Core Hours (07:00-20:00 UTC) Median Spread"><span class="flex items-center gap-1.5">Core (bps) <span class="text-[10px]" :class="sortCol === 'core_spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('core_spread_bps')"></span></span></th>
+                                    <th @click="sortBy('stability_ratio')" class="sort-th px-4 py-3 text-emerald-400 whitespace-nowrap" title="P95 Spread / Median Spread"><span class="flex items-center gap-1.5">Stability (P95/Med) <span class="text-[10px]" :class="sortCol === 'stability_ratio' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('stability_ratio')"></span></span></th>
+                                    <th @click="sortBy('widening_pct_15x_time')" class="sort-th px-4 py-3 text-amber-400 whitespace-nowrap" title="% of session time spread exceeded 1.5x median"><span class="flex items-center gap-1.5">Widening (>1.5x)% <span class="text-[10px]" :class="sortCol === 'widening_pct_15x_time' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('widening_pct_15x_time')"></span></span></th>
+                                    <th @click="sortBy('rollover_multiplier')" class="sort-th px-4 py-3 text-purple-400 whitespace-nowrap" title="Rollover / Core Multiplier"><span class="flex items-center gap-1.5">Roll Mult <span class="text-[10px]" :class="sortCol === 'rollover_multiplier' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('rollover_multiplier')"></span></span></th>
+                                    <th @click="sortBy('total_ticks')" class="sort-th px-4 py-3 text-gray-400"><span class="flex items-center gap-1.5">Total Ticks <span class="text-[10px]" :class="sortCol === 'total_ticks' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('total_ticks')"></span></span></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-800/60">
+                                <template x-for="m in sortedSymbols" :key="m.symbol">
+                                    <tr @click="selectSymbol(m.symbol)" :class="selectedSymbol === m.symbol ? 'bg-blue-950/40 border-l-2 border-blue-500' : 'hover:bg-gray-800/50'" class="cursor-pointer transition font-mono text-xs">
+                                        <td class="px-4 py-3 font-semibold text-blue-400 text-sm" x-text="m.symbol"></td>
+                                        <td class="px-4 py-3 whitespace-nowrap font-sans">
+                                            <span class="px-2 py-0.5 rounded text-[11px] font-semibold border"
+                                                  :class="getVerdictBadgeClass(getVerdict(m).tier)"
+                                                  x-text="getVerdict(m).label"></span>
+                                        </td>
+                                        <td class="px-4 py-3 text-cyan-300 font-bold" x-text="formatNum(m.time_weighted_bps || m.spread_bps) + ' bps'"></td>
+                                        <td class="px-4 py-3 text-cyan-400 font-bold" x-text="formatNum(m.core_spread_bps || m.spread_bps) + ' bps'"></td>
+                                        <td class="px-4 py-3">
+                                            <span class="px-2 py-0.5 rounded font-medium border"
+                                                  :class="(m.stability_ratio || 1) < 1.3 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((m.stability_ratio || 1) <= 2.0 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
+                                                  x-text="formatNum(m.stability_ratio || 1) + 'x'"></span>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <span class="px-2 py-0.5 rounded font-medium border"
+                                                  :class="(m.widening_pct_15x_time || 0) < 2 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((m.widening_pct_15x_time || 0) <= 10 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
+                                                  x-text="formatNum(m.widening_pct_15x_time || 0) + '%'"></span>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <span class="px-2 py-0.5 rounded font-medium border"
+                                                  :class="(m.rollover_multiplier || 1) < 2.0 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((m.rollover_multiplier || 1) <= 5.0 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
+                                                  x-text="formatNum(m.rollover_multiplier || 1) + 'x'"></span>
+                                        </td>
+                                        <td class="px-4 py-3 text-gray-400" x-text="formatInt(m.total_ticks)"></td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Preset 3: Full Quant Audit (Grouped Institutional Headers) -->
+                    <div x-show="activePreset === 'quant_audit'" class="overflow-x-auto custom-scrollbar">
+                        <table class="w-full text-left text-sm border-collapse">
+                            <thead>
+                                <!-- Top Grouping Header Tier -->
+                                <tr class="bg-gray-950 text-[11px] font-mono uppercase text-gray-400 border-b border-gray-800">
+                                    <th colspan="2" class="px-4 py-2 border-r border-gray-800/80 bg-gray-950/90 text-blue-400">IDENTIFICATION</th>
+                                    <th colspan="5" class="px-4 py-2 border-r border-gray-800/80 bg-gray-900/40 text-center text-emerald-400">SPREAD DISTRIBUTION (POINTS/PIPS)</th>
+                                    <th colspan="4" class="px-4 py-2 border-r border-gray-800/80 bg-gray-950/90 text-center text-cyan-400">EXECUTION & STABILITY (BPS)</th>
+                                    <th colspan="3" class="px-4 py-2 border-r border-gray-800/80 bg-gray-900/40 text-center text-purple-400">TEMPORAL REGIMES</th>
+                                    <th colspan="3" class="px-4 py-2 bg-gray-950/90 text-center text-gray-400">SAMPLE STATS</th>
+                                </tr>
+                                <!-- Column Headers Tier -->
+                                <tr class="bg-gray-950/80 text-xs uppercase text-gray-400 font-semibold border-b border-gray-800">
+                                    <th @click="sortBy('symbol')" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">Symbol <span class="text-[10px]" :class="sortCol === 'symbol' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('symbol')"></span></span></th>
+                                    <th @click="sortBy('unit')" class="sort-th px-4 py-3 border-r border-gray-800/80"><span class="flex items-center gap-1.5">Unit <span class="text-[10px]" :class="sortCol === 'unit' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('unit')"></span></span></th>
+                                    <th @click="sortBy('min_spread')" class="sort-th px-4 py-3 text-green-400"><span class="flex items-center gap-1.5">Min <span class="text-[10px]" :class="sortCol === 'min_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('min_spread')"></span></span></th>
+                                    <th @click="sortBy('median_spread')" class="sort-th px-4 py-3 text-gray-300"><span class="flex items-center gap-1.5">Median <span class="text-[10px]" :class="sortCol === 'median_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('median_spread')"></span></span></th>
+                                    <th @click="sortBy('avg_spread')" class="sort-th px-4 py-3 text-amber-400"><span class="flex items-center gap-1.5">Avg <span class="text-[10px]" :class="sortCol === 'avg_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('avg_spread')"></span></span></th>
+                                    <th @click="sortBy('p95_spread')" class="sort-th px-4 py-3 text-gray-300"><span class="flex items-center gap-1.5">P95 <span class="text-[10px]" :class="sortCol === 'p95_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('p95_spread')"></span></span></th>
+                                    <th @click="sortBy('max_spread')" class="sort-th px-4 py-3 text-red-400 border-r border-gray-800/80"><span class="flex items-center gap-1.5">Max <span class="text-[10px]" :class="sortCol === 'max_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('max_spread')"></span></span></th>
+                                    <th @click="sortBy('spread_bps')" class="sort-th px-4 py-3 text-cyan-400 whitespace-nowrap min-w-[105px]"><span class="flex items-center gap-1.5">Spread (bps) <span class="text-[10px]" :class="sortCol === 'spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('spread_bps')"></span></span></th>
+                                    <th @click="sortBy('time_weighted_bps')" class="sort-th px-4 py-3 text-cyan-300 whitespace-nowrap min-w-[110px]" title="Time-Weighted Average Spread (TWAS)"><span class="flex items-center gap-1.5">TWAS (bps) <span class="text-[10px]" :class="sortCol === 'time_weighted_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('time_weighted_bps')"></span></span></th>
+                                    <th @click="sortBy('stability_ratio')" class="sort-th px-4 py-3 text-emerald-400 whitespace-nowrap min-w-[100px]"><span class="flex items-center gap-1.5">Stability <span class="text-[10px]" :class="sortCol === 'stability_ratio' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('stability_ratio')"></span></span></th>
+                                    <th @click="sortBy('widening_pct_15x_time')" class="sort-th px-4 py-3 text-amber-400 whitespace-nowrap min-w-[115px] border-r border-gray-800/80"><span class="flex items-center gap-1.5">Widen (>1.5x)% <span class="text-[10px]" :class="sortCol === 'widening_pct_15x_time' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('widening_pct_15x_time')"></span></span></th>
+                                    <th @click="sortBy('core_spread_bps')" class="sort-th px-4 py-3 text-gray-300 whitespace-nowrap min-w-[100px]" title="Core Hours (07:00-20:00 UTC) spread"><span class="flex items-center gap-1.5">Core (bps) <span class="text-[10px]" :class="sortCol === 'core_spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('core_spread_bps')"></span></span></th>
+                                    <th @click="sortBy('rollover_multiplier')" class="sort-th px-4 py-3 text-purple-400 whitespace-nowrap min-w-[100px]" title="Rollover Window / Core Spread Multiplier"><span class="flex items-center gap-1.5">Roll Mult <span class="text-[10px]" :class="sortCol === 'rollover_multiplier' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('rollover_multiplier')"></span></span></th>
+                                    <th @click="sortBy('spread_to_vol_pct')" class="sort-th px-4 py-3 text-cyan-400 whitespace-nowrap min-w-[105px] border-r border-gray-800/80"><span class="flex items-center gap-1.5">Spread / Vol <span class="text-[10px]" :class="sortCol === 'spread_to_vol_pct' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('spread_to_vol_pct')"></span></span></th>
+                                    <th @click="sortBy('avg_daily_volatility_pct')" class="sort-th px-4 py-3 whitespace-nowrap min-w-[100px]"><span class="flex items-center gap-1.5">Daily Vol (%) <span class="text-[10px]" :class="sortCol === 'avg_daily_volatility_pct' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('avg_daily_volatility_pct')"></span></span></th>
+                                    <th @click="sortBy('total_ticks')" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">Ticks <span class="text-[10px]" :class="sortCol === 'total_ticks' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('total_ticks')"></span></span></th>
+                                    <th @click="sortBy('sampled_minutes')" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">M1 Bars <span class="text-[10px]" :class="sortCol === 'sampled_minutes' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('sampled_minutes')"></span></span></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-800/60 font-mono text-xs">
+                                <template x-for="m in sortedSymbols" :key="m.symbol">
+                                    <tr @click="selectSymbol(m.symbol)" :class="selectedSymbol === m.symbol ? 'bg-blue-950/40 border-l-2 border-blue-500' : 'hover:bg-gray-800/50'" class="cursor-pointer transition">
+                                        <td class="px-4 py-3 font-semibold text-blue-400 font-sans text-sm" x-text="m.symbol"></td>
+                                        <td class="px-4 py-3 text-gray-400 border-r border-gray-800/80 font-sans" x-text="m.unit"></td>
+                                        <td class="px-4 py-3 text-green-400" x-text="formatNum(m.min_spread)"></td>
+                                        <td class="px-4 py-3 text-gray-300" x-text="formatNum(m.median_spread)"></td>
+                                        <td class="px-4 py-3 text-amber-400 font-medium" x-text="formatNum(m.avg_spread)"></td>
+                                        <td class="px-4 py-3 text-gray-300" x-text="formatNum(m.p95_spread)"></td>
+                                        <td class="px-4 py-3 text-red-400 border-r border-gray-800/80" x-text="formatNum(m.max_spread)"></td>
+                                        <td class="px-4 py-3">
+                                            <span class="px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap border"
+                                                  :class="m.spread_bps < 1 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : (m.spread_bps <= 5 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
+                                                  x-text="formatNum(m.spread_bps) + ' bps'"></span>
+                                        </td>
+                                        <td class="px-4 py-3 text-cyan-300 whitespace-nowrap" x-text="formatNum(m.time_weighted_bps || m.spread_bps) + ' bps'"></td>
+                                        <td class="px-4 py-3">
+                                            <span class="px-2 py-0.5 rounded text-xs font-medium border"
+                                                  :class="(m.stability_ratio || 1) < 1.3 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((m.stability_ratio || 1) <= 2.0 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
+                                                  x-text="formatNum(m.stability_ratio || 1) + 'x'"></span>
+                                        </td>
+                                        <td class="px-4 py-3 border-r border-gray-800/80">
+                                            <span class="px-2 py-0.5 rounded text-xs font-medium border"
+                                                  :class="(m.widening_pct_15x_time || 0) < 2 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((m.widening_pct_15x_time || 0) <= 10 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
+                                                  x-text="formatNum(m.widening_pct_15x_time || 0) + '%'"></span>
+                                        </td>
+                                        <td class="px-4 py-3 text-gray-300" x-text="formatNum(m.core_spread_bps || m.spread_bps) + ' bps'"></td>
+                                        <td class="px-4 py-3">
+                                            <span class="px-2 py-0.5 rounded text-xs font-medium border"
+                                                  :class="(m.rollover_multiplier || 1) < 2.0 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((m.rollover_multiplier || 1) <= 5.0 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
+                                                  x-text="formatNum(m.rollover_multiplier || 1) + 'x'"></span>
+                                        </td>
+                                        <td class="px-4 py-3 border-r border-gray-800/80">
+                                            <span class="px-2 py-0.5 rounded text-xs font-medium border"
                                                   :class="m.spread_to_vol_pct < 2 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : (m.spread_to_vol_pct <= 5 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
                                                   x-text="formatNum(m.spread_to_vol_pct) + '%'"></span>
                                         </td>
-                                        <td class="px-4 py-3 text-gray-300 font-mono cursor-help" :title="formatNum(m.avg_daily_volatility, 1) + ' ' + m.unit" x-text="formatNum(m.avg_daily_volatility_pct) + '%'"></td>
-                                        <td class="px-4 py-3 text-gray-400 font-mono" x-text="formatInt(m.total_ticks)"></td>
-                                        <td class="px-4 py-3 text-gray-400 font-mono" x-text="formatInt(m.sampled_minutes)"></td>
+                                        <td class="px-4 py-3 text-gray-300 cursor-help" :title="formatNum(m.avg_daily_volatility, 1) + ' ' + m.unit" x-text="formatNum(m.avg_daily_volatility_pct) + '%'"></td>
+                                        <td class="px-4 py-3 text-gray-400" x-text="formatInt(m.total_ticks)"></td>
+                                        <td class="px-4 py-3 text-gray-400" x-text="formatInt(m.sampled_minutes)"></td>
                                     </tr>
                                 </template>
                             </tbody>
                         </table>
                     </div>
                 </div>
+
 
                 <!-- Chart Section with Symbol Selector & View Mode Switcher -->
                 <div class="bg-gray-900/60 rounded-xl border border-gray-800 p-5 shadow-xl space-y-4">
@@ -237,11 +470,116 @@
                 data: null,
                 selectedSymbol: '',
                 viewMode: 'range_bars',
+                activePreset: 'tradeability',
                 search: '',
                 sortCol: 'symbol',
                 sortAsc: true,
                 dragOver: false,
                 loading: false,
+
+                getVerdict(m) {
+                    if (!m) return { tier: 'skip', label: '🔴 HIGH FRICTION / SKIP', reason: 'No data' };
+                    const bps = m.spread_bps || 0;
+                    const stab = m.stability_ratio || 1.0;
+                    const widen = m.widening_pct_15x_time || 0;
+                    const roll = m.rollover_multiplier || 1.0;
+                    const spVol = m.spread_to_vol_pct || 0;
+
+                    // Hard Stop Criteria: Toxic feed or severe widening
+                    if (stab > 2.2 || widen > 12.0 || spVol > 7.5) {
+                        return { 
+                            tier: 'skip', 
+                            label: '🔴 HIGH FRICTION / SKIP', 
+                            reason: `High risk: Stability ${stab.toFixed(2)}x, Widening ${widen.toFixed(1)}%, Spread/Vol ${spVol.toFixed(1)}%` 
+                        };
+                    }
+
+                    // Day-Only Criteria: Clean during the day, but dangerous overnight / rollover widening
+                    if (roll > 3.0 || widen > 4.0) {
+                        return { 
+                            tier: 'day_only', 
+                            label: '🟡 DAY-ONLY (AVOID OVERNIGHT)', 
+                            reason: `Rollover multiplier ${roll.toFixed(1)}x or widening ${widen.toFixed(1)}%. Close before 21:45 UTC.` 
+                        };
+                    }
+
+                    // Prime Intraday Criteria: Tight, highly stable, minimal widening
+                    if (bps <= 2.5 && stab <= 1.4 && widen <= 3.0 && spVol <= 3.5) {
+                        return { 
+                            tier: 'prime', 
+                            label: '🟢 PRIME INTRADAY & EA', 
+                            reason: 'Tight spread, minimal tail widening, and low spread-to-volatility friction.' 
+                        };
+                    }
+
+                    // Swing / Daily Volatility absorption
+                    if (spVol <= 4.5) {
+                        return { 
+                            tier: 'swing', 
+                            label: '🔵 SWING / VOL ONLY', 
+                            reason: `Spread is ${bps.toFixed(1)} bps but absorbed by daily volatility (${spVol.toFixed(1)}% of ATR).` 
+                        };
+                    }
+
+                    return { 
+                        tier: 'day_only', 
+                        label: '🟡 DAY-ONLY', 
+                        reason: 'Standard intraday conditions with moderate rollover or widening risk.' 
+                    };
+                },
+
+                getVerdictBadgeClass(tier) {
+                    if (tier === 'prime') return 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60';
+                    if (tier === 'day_only') return 'bg-amber-950/80 text-amber-400 border-amber-800/60';
+                    if (tier === 'swing') return 'bg-sky-950/80 text-sky-400 border-sky-800/60';
+                    return 'bg-rose-950/80 text-rose-400 border-rose-800/60';
+                },
+
+                getBarPercent(val, m) {
+                    const min = m.min_spread || 0;
+                    const max = m.max_spread || min || 1;
+                    const range = Math.max(max - min, 0.0001);
+                    const clamped = Math.max(min, Math.min(val || min, max));
+                    return Math.round(((clamped - min) / range) * 100);
+                },
+
+                get healthStats() {
+                    if (!this.data || !this.data.symbols || this.data.symbols.length === 0) {
+                        return {
+                            primeCount: 0, primePct: 0,
+                            dayOnlyCount: 0, dayOnlyPct: 0,
+                            skipCount: 0, skipPct: 0,
+                            avgSpreadBps: '0.00', avgTwasBps: '0.00'
+                        };
+                    }
+                    const total = this.data.symbols.length;
+                    let prime = 0;
+                    let dayOnly = 0;
+                    let skip = 0;
+                    let sumBps = 0;
+                    let sumTwas = 0;
+
+                    this.data.symbols.forEach(s => {
+                        const v = this.getVerdict(s);
+                        if (v.tier === 'prime') prime++;
+                        else if (v.tier === 'day_only') dayOnly++;
+                        else skip++;
+
+                        sumBps += (s.spread_bps || 0);
+                        sumTwas += (s.time_weighted_bps || s.spread_bps || 0);
+                    });
+
+                    return {
+                        primeCount: prime,
+                        primePct: Math.round((prime / total) * 100),
+                        dayOnlyCount: dayOnly,
+                        dayOnlyPct: Math.round((dayOnly / total) * 100),
+                        skipCount: skip,
+                        skipPct: Math.round((skip / total) * 100),
+                        avgSpreadBps: (sumBps / total).toFixed(2),
+                        avgTwasBps: (sumTwas / total).toFixed(2)
+                    };
+                },
 
                 init() {
                     if (window.__REPORT_DATA__) {

@@ -50,6 +50,16 @@ class BrokerSymbolRecord:
     avg_daily_volatility: float = 0.0
     total_ticks: int = 0
     sampled_minutes: int = 0
+    # Advanced Quote Quality & Widening Metrics
+    stability_ratio: float = 1.0
+    widening_pct_15x_time: float = 0.0
+    widening_pct_20x_time: float = 0.0
+    widening_pct_15x_tick: float = 0.0
+    time_weighted_bps: float = 0.0
+    core_spread_bps: float = 0.0
+    rollover_multiplier: float = 1.0
+    # Scoring & Ranking
+    quality_score: float = 0.0
     composite_score: float = 0.0
     rank: int = 0
     savings_vs_worst_bps: float = 0.0
@@ -196,6 +206,15 @@ def parse_summary_csv(
 
             canonical = normalize_symbol(sym, reverse_map)
 
+            # Advanced Quote Quality & Widening Metrics
+            stab = float(row.get("stability_ratio", 1.0))
+            widen_15_time = float(row.get("widening_pct_15x_time", 0.0))
+            widen_20_time = float(row.get("widening_pct_20x_time", 0.0))
+            widen_15_tick = float(row.get("widening_pct_15x_tick", 0.0))
+            tw_bps = float(row.get("time_weighted_bps", spread_bps))
+            core_bps = float(row.get("core_spread_bps", spread_bps))
+            roll_mult = float(row.get("rollover_multiplier", 1.0))
+
             record = BrokerSymbolRecord(
                 broker_tag=broker_tag,
                 symbol=sym,
@@ -213,6 +232,13 @@ def parse_summary_csv(
                 avg_daily_volatility=daily_vol,
                 total_ticks=ticks,
                 sampled_minutes=m1_bars,
+                stability_ratio=stab,
+                widening_pct_15x_time=widen_15_time,
+                widening_pct_20x_time=widen_20_time,
+                widening_pct_15x_tick=widen_15_tick,
+                time_weighted_bps=tw_bps,
+                core_spread_bps=core_bps,
+                rollover_multiplier=roll_mult,
                 composite_score=spread_bps,
             )
             records.append(record)
@@ -223,6 +249,7 @@ def parse_summary_csv(
 def run_cross_broker_comparison(
     output_dir: Path,
     mappings_file: Path,
+    rank_by: str = "quality",
 ) -> Tuple[List[CanonicalComparisonGroup], Dict[str, BrokerLeaderboardStats]]:
     reverse_map = load_symbol_mappings(mappings_file)
     files = discover_summary_files(output_dir)
@@ -254,8 +281,29 @@ def run_cross_broker_comparison(
     }
 
     for canonical, recs in sorted(grouped.items()):
-        # Sort purely by Spread in Basis Points (bps), then median spread as tie-breaker
-        recs_sorted = sorted(recs, key=lambda x: (x.spread_bps, x.median_spread))
+        # Institutional Additive Execution Quality Score (Friction in basis points):
+        # Quality Score = TWAS (bps) + 0.5 * TailRisk (bps) + 1.0 * WideningFriction (bps)
+        # Where:
+        # - TWAS (bps): Base time-weighted execution friction (fallback to spread_bps if 0)
+        # - TailRisk (bps): Non-negative right-tail spread risk (P95 - Median in bps)
+        # - WideningFriction (bps): TWAS * (widening_pct_15x_time / 100.0)
+        # Properties: Scale-invariant, monotonic, immune to zero-spread collapse.
+        for r in recs:
+            base_bps = r.time_weighted_bps if r.time_weighted_bps > 0.0 else r.spread_bps
+            # Tail risk in bps: difference between P95 and Median
+            tail_scaled = max(r.p95_spread - r.median_spread, 0.0)
+            tail_bps = (tail_scaled / r.median_spread * base_bps) if r.median_spread > 0.0 else (r.stability_ratio - 1.0) * base_bps
+            tail_bps = max(tail_bps, 0.0)
+
+            widen_friction = base_bps * (r.widening_pct_15x_time / 100.0)
+            r.quality_score = round(base_bps + 0.5 * tail_bps + 1.0 * widen_friction, 4)
+
+        if rank_by == "quality":
+            # Rank by composite quality score, tie-break with spread_bps then median_spread
+            recs_sorted = sorted(recs, key=lambda x: (x.quality_score, x.spread_bps, x.median_spread))
+        else:
+            # Legacy: Sort purely by Spread in Basis Points (bps), then median spread as tie-breaker
+            recs_sorted = sorted(recs, key=lambda x: (x.spread_bps, x.median_spread))
 
         is_contested = (len(recs_sorted) > 1)
         winner = recs_sorted[0] if recs_sorted else None
@@ -264,7 +312,7 @@ def run_cross_broker_comparison(
 
         for rank_idx, r in enumerate(recs_sorted, start=1):
             r.rank = rank_idx
-            r.composite_score = r.spread_bps
+            r.composite_score = r.quality_score if rank_by == "quality" else r.spread_bps
             r.winner_lead_bps = winner_lead
 
             if rank_idx == 1:
@@ -315,16 +363,29 @@ def run_cross_broker_comparison(
 def print_comparison_terminal(
     groups: List[CanonicalComparisonGroup],
     leaderboard: Dict[str, BrokerLeaderboardStats],
+    rank_by: str = "quality",
 ) -> None:
-    print(f"\n{BOLD}{CYAN}=== CROSS-BROKER SPREAD COMPARISON SUMMARY ==={RESET}")
-    print(f"{GRAY}Execution Metric: {BOLD}Spread (bps){RESET} (Lower = Better Execution; Lowest Wins Rank #1 🏆)")
+    print(f"\n{BOLD}{CYAN}=== CROSS-BROKER SPREAD & EXECUTION QUALITY COMPARISON ==={RESET}")
+    metric_desc = "Institutional Execution Quality Score [TWAS + 0.5*Tail + Widen] (bps)" if rank_by == "quality" else "Spread (bps)"
+    print(f"{GRAY}Execution Metric: {BOLD}{metric_desc}{RESET} (Lower = Better Execution; Lowest Wins Rank #1 [BEST])")
     print(f"{GRAY}Points Formula  : {BOLD}1st: 10 pts, 2nd: 6 pts, 3rd: 4 pts, 4th: 2 pts, 5th: 1 pt{RESET} (Ranked by Avg Points/Symbol)")
 
     # Win & Points Leaderboard
+    # To prevent cherry-picking where 1 symbol wins #1 over 50 symbols,
+    # Leaderboard ranks by (avg_points, total_points, first_places)
     print(f"\n{BOLD}=== BROKER PERFORMANCE LEADERBOARD ==={RESET}")
+    max_contested = max((s.contested_symbols for s in leaderboard.values()), default=0)
+    # Require at least min(3, max_contested) contested symbols to qualify for the #1 Leader title
+    min_required_for_leader = min(3, max_contested) if max_contested > 0 else 1
+
     sorted_leaderboard = sorted(
         leaderboard.values(),
-        key=lambda x: (x.avg_points, x.total_points, x.first_places),
+        key=lambda x: (
+            1 if x.contested_symbols >= min_required_for_leader else 0,
+            x.avg_points,
+            x.total_points,
+            x.first_places,
+        ),
         reverse=True
     )
     for idx, s in enumerate(sorted_leaderboard, start=1):
@@ -336,9 +397,10 @@ def print_comparison_terminal(
         )
 
     h_sym, h_rnk, h_brk, h_unt = "CANONICAL", "RANK", "BROKER ACCOUNT", "UNIT"
-    h_med, h_avg, h_p95, h_bps, h_dlt = "MEDIAN", "AVG", "P95", "SPREAD(BPS)", "DELTA VS #1"
-    print(f"\n{BOLD}{h_sym:<10}  {h_rnk:<5}  {h_brk:<35}  {h_unt:<6}  {h_med:<8}  {h_avg:<8}  {h_p95:<8}  {h_bps:<12}  {h_dlt:<22}{RESET}")
-    print(f"{GRAY}{'-'*115}{RESET}")
+    h_med, h_p95, h_bps = "MEDIAN", "P95", "SPREAD(BPS)"
+    h_stab, h_wid, h_qlt, h_dlt = "STABILITY", "WIDEN(>1.5x)%", "QUALITY", "DELTA VS #1"
+    print(f"\n{BOLD}{h_sym:<10}  {h_rnk:<5}  {h_brk:<35}  {h_unt:<6}  {h_med:<8}  {h_p95:<8}  {h_bps:<12}  {h_stab:<10}  {h_wid:<14}  {h_qlt:<8}  {h_dlt:<22}{RESET}")
+    print(f"{GRAY}{'-'*145}{RESET}")
 
     for g in groups:
         is_contested = len(g.records) > 1
@@ -346,7 +408,7 @@ def print_comparison_terminal(
             if r.rank == 1:
                 rank_str = f"{GREEN}{BOLD}#1 [BEST]{RESET}"
                 broker_str = f"{GREEN}{BOLD}{r.broker_tag:<35}{RESET}"
-                delta_str = f"{GREEN}+ {r.winner_lead_bps:.2f} bps lead{RESET}" if is_contested else f"{GREEN}🏆 Best{RESET}"
+                delta_str = f"{GREEN}+ {r.winner_lead_bps:.2f} bps lead{RESET}" if is_contested else f"{GREEN}[Best]{RESET}"
             elif r.rank == 2:
                 rank_str = f"{ORANGE}#2{RESET}"
                 broker_str = f"{r.broker_tag:<35}"
@@ -356,18 +418,23 @@ def print_comparison_terminal(
                 broker_str = f"{GRAY}{r.broker_tag:<35}{RESET}"
                 delta_str = f"{RED}{r.delta_vs_winner_bps:.2f} bps{RESET}"
 
+            stab_color = GREEN if r.stability_ratio < 1.3 else (ORANGE if r.stability_ratio <= 2.0 else RED)
+            wid_color = GREEN if r.widening_pct_15x_time < 2.0 else (ORANGE if r.widening_pct_15x_time <= 10.0 else RED)
+
             print(
                 f"{BOLD}{g.canonical_symbol:<10}{RESET}  "
                 f"{rank_str:<5}  "
                 f"{broker_str}  "
                 f"{r.unit:<6}  "
                 f"{r.median_spread:<8.2f}  "
-                f"{r.avg_spread:<8.2f}  "
                 f"{r.p95_spread:<8.2f}  "
                 f"{BOLD}{r.spread_bps:<12.2f}{RESET}  "
+                f"{stab_color}{f'{r.stability_ratio:.2f}x':<10}{RESET}  "
+                f"{wid_color}{f'{r.widening_pct_15x_time:.2f}%':<14}{RESET}  "
+                f"{r.quality_score:<8.3f}  "
                 f"{delta_str:<22}"
             )
-        print(f"{GRAY}{'.' * 115}{RESET}")
+        print(f"{GRAY}{'.' * 145}{RESET}")
     print()
 
 
@@ -386,6 +453,13 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
         "p95_spread",
         "max_spread",
         "spread_bps",
+        "stability_ratio",
+        "widening_pct_15x_time",
+        "widening_pct_20x_time",
+        "widening_pct_15x_tick",
+        "core_spread_bps",
+        "rollover_multiplier",
+        "quality_score",
         "delta_vs_winner_bps",
         "winner_lead_bps",
         "total_ticks",
@@ -410,6 +484,13 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
                     "p95_spread": r.p95_spread,
                     "max_spread": r.max_spread,
                     "spread_bps": round(r.spread_bps, 4),
+                    "stability_ratio": round(r.stability_ratio, 4),
+                    "widening_pct_15x_time": round(r.widening_pct_15x_time, 4),
+                    "widening_pct_20x_time": round(r.widening_pct_20x_time, 4),
+                    "widening_pct_15x_tick": round(r.widening_pct_15x_tick, 4),
+                    "core_spread_bps": round(r.core_spread_bps, 4),
+                    "rollover_multiplier": round(r.rollover_multiplier, 4),
+                    "quality_score": round(r.quality_score, 4),
                     "delta_vs_winner_bps": round(r.delta_vs_winner_bps, 4),
                     "winner_lead_bps": round(r.winner_lead_bps, 4),
                     "total_ticks": r.total_ticks,
@@ -422,6 +503,7 @@ def generate_comparison_html(
     groups: List[CanonicalComparisonGroup],
     leaderboard: Dict[str, BrokerLeaderboardStats],
     output_path: Path,
+    rank_by: str = "quality",
 ) -> Path:
     """
     Generates a decoupled cross-broker comparison package:
@@ -473,6 +555,13 @@ def generate_comparison_html(
                 "max_spread": round(float(r.max_spread), 4),
                 "metric_basis": r.metric_basis,
                 "spread_bps": round(float(r.spread_bps), 4),
+                "stability_ratio": round(float(r.stability_ratio), 4),
+                "widening_pct_15x_time": round(float(r.widening_pct_15x_time), 4),
+                "widening_pct_20x_time": round(float(r.widening_pct_20x_time), 4),
+                "widening_pct_15x_tick": round(float(r.widening_pct_15x_tick), 4),
+                "core_spread_bps": round(float(r.core_spread_bps), 4),
+                "rollover_multiplier": round(float(r.rollover_multiplier), 4),
+                "quality_score": round(float(r.quality_score), 4),
                 "rank": int(r.rank),
                 "delta_vs_winner_bps": round(float(r.delta_vs_winner_bps), 4),
                 "winner_lead_bps": round(float(r.winner_lead_bps), 4),
@@ -485,8 +574,10 @@ def generate_comparison_html(
             "winner_lead_bps": round(float(g.winner_lead_bps), 4),
         })
 
+    metric_title = "Execution Quality Score (bps: TWAS + 0.5·Tail + 1.0·Widening)" if rank_by == "quality" else "Spread (bps)"
     report_data = {
-        "metric": "Spread (bps)",
+        "metric": metric_title,
+        "rank_by": rank_by,
         "leaderboard": leaderboard_data,
         "groups": groups_data,
     }
