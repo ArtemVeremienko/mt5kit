@@ -93,10 +93,11 @@ def test_cross_broker_comparison_and_scoring(tmp_path: Path):
     assert g.runner_up.rank == 2
     assert pytest.approx(g.runner_up.spread_bps, rel=1e-3) == 0.30
 
-    # Verify winner lead (+0.20 bps) and runner-up deficit (-0.20 bps)
-    assert pytest.approx(g.winner.winner_lead_bps, rel=1e-3) == 0.20
+    # Verify winner lead and runner-up deficit aligned with Quality Score
+    expected_lead = round(g.runner_up.quality_score - g.winner.quality_score, 4)
+    assert pytest.approx(g.winner.winner_lead_bps, rel=1e-3) == expected_lead
     assert pytest.approx(g.winner.delta_vs_winner_bps, rel=1e-3) == 0.0
-    assert pytest.approx(g.runner_up.delta_vs_winner_bps, rel=1e-3) == -0.20
+    assert pytest.approx(g.runner_up.delta_vs_winner_bps, rel=1e-3) == -expected_lead
 
     # Verify leaderboard points: Broker A = 10 pts (1st), Broker B = 6 pts (2nd)
     assert leaderboard["BrokerA_1001"].first_places == 1
@@ -170,30 +171,24 @@ def test_quality_score_ranking_vs_raw_bps(tmp_path: Path):
         encoding="utf-8",
     )
 
-    # 1. Rank by quality (default): StableBroker should win Rank #1 despite 0.10 higher median bps!
+    # Rank by quality: StableBroker wins Rank #1 despite 0.10 higher median bps!
     groups_q, lb_q = run_cross_broker_comparison(
         output_dir=output_dir,
         mappings_file=map_file,
-        rank_by="quality",
     )
     assert len(groups_q) == 1
     winner_q = groups_q[0].winner
+    runner_up_q = groups_q[0].runner_up
     assert winner_q.broker_tag == "StableBroker"
     assert winner_q.rank == 1
+    assert runner_up_q.broker_tag == "VolatileBroker"
+    assert runner_up_q.rank == 2
     assert lb_q["StableBroker"].first_places == 1
     assert lb_q["VolatileBroker"].second_places == 1
 
-    # 2. Rank by legacy bps: VolatileBroker wins purely on median bps
-    groups_bps, lb_bps = run_cross_broker_comparison(
-        output_dir=output_dir,
-        mappings_file=map_file,
-        rank_by="bps",
-    )
-    assert len(groups_bps) == 1
-    winner_bps = groups_bps[0].winner
-    assert winner_bps.broker_tag == "VolatileBroker"
-    assert winner_bps.rank == 1
-    assert lb_bps["VolatileBroker"].first_places == 1
-    assert lb_bps["StableBroker"].second_places == 1
+    # Verify Delta vs #1 is aligned with Quality Score
+    assert winner_q.winner_lead_bps > 0
+    assert runner_up_q.delta_vs_winner_bps < 0
+    assert pytest.approx(winner_q.winner_lead_bps, rel=1e-3) == abs(runner_up_q.delta_vs_winner_bps)
 
 

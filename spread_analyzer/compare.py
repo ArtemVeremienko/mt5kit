@@ -51,12 +51,6 @@ def parse_args() -> argparse.Namespace:
         help="Path to save comparison summary CSV (default: <output-dir>/broker_comparison.csv)",
     )
     parser.add_argument(
-        "--rank-by",
-        choices=["quality", "bps"],
-        default="quality",
-        help="Ranking methodology for contested symbols: 'quality' (Additive Quality Score: TWAS + 0.5*Tail + 1.0*Widening) or 'bps' (lowest spread bps)",
-    )
-    parser.add_argument(
         "--no-html",
         action="store_true",
         help="Skip generating HTML comparison report",
@@ -93,12 +87,11 @@ def main() -> None:
 
     logger.info(f"Scanning for broker runs in: {output_dir}")
     logger.info(f"Using symbol mappings: {mappings_file}")
-    logger.info(f"Ranking methodology: {args.rank_by.upper()}")
+    logger.info("Ranking methodology: QUALITY SCORE (TWAS + 0.5*Tail + 1.0*Widening)")
 
     groups, leaderboard = run_cross_broker_comparison(
         output_dir=output_dir,
         mappings_file=mappings_file,
-        rank_by=args.rank_by,
     )
 
     if not groups:
@@ -106,7 +99,7 @@ def main() -> None:
         sys.exit(1)
 
     # 1. Terminal Table Output
-    print_comparison_terminal(groups, leaderboard, rank_by=args.rank_by)
+    print_comparison_terminal(groups, leaderboard)
 
     # 2. CSV Export
     if not args.no_csv:
@@ -117,7 +110,7 @@ def main() -> None:
     # 3. HTML Dashboard Generation
     if not args.no_html:
         html_path = args.save_html or (output_dir / "index.html")
-        generate_comparison_html(groups, leaderboard, html_path, rank_by=args.rank_by)
+        generate_comparison_html(groups, leaderboard, html_path)
         logger.info(f"Exported comparison dashboard: {html_path} (with report_data.json & report_data.js)")
 
 

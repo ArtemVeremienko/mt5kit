@@ -249,7 +249,6 @@ def parse_summary_csv(
 def run_cross_broker_comparison(
     output_dir: Path,
     mappings_file: Path,
-    rank_by: str = "quality",
 ) -> Tuple[List[CanonicalComparisonGroup], Dict[str, BrokerLeaderboardStats]]:
     reverse_map = load_symbol_mappings(mappings_file)
     files = discover_summary_files(output_dir)
@@ -298,29 +297,25 @@ def run_cross_broker_comparison(
             widen_friction = base_bps * (r.widening_pct_15x_time / 100.0)
             r.quality_score = round(base_bps + 0.5 * tail_bps + 1.0 * widen_friction, 4)
 
-        if rank_by == "quality":
-            # Rank by composite quality score, tie-break with spread_bps then median_spread
-            recs_sorted = sorted(recs, key=lambda x: (x.quality_score, x.spread_bps, x.median_spread))
-        else:
-            # Legacy: Sort purely by Spread in Basis Points (bps), then median spread as tie-breaker
-            recs_sorted = sorted(recs, key=lambda x: (x.spread_bps, x.median_spread))
+        # Rank by composite quality score, tie-break with spread_bps then median_spread
+        recs_sorted = sorted(recs, key=lambda x: (x.quality_score, x.spread_bps, x.median_spread))
 
         is_contested = (len(recs_sorted) > 1)
         winner = recs_sorted[0] if recs_sorted else None
         runner_up = recs_sorted[1] if len(recs_sorted) > 1 else None
-        winner_lead = (runner_up.spread_bps - winner.spread_bps) if (winner and runner_up) else 0.0
+        winner_lead = round(runner_up.quality_score - winner.quality_score, 4) if (winner and runner_up) else 0.0
 
         for rank_idx, r in enumerate(recs_sorted, start=1):
             r.rank = rank_idx
-            r.composite_score = r.quality_score if rank_by == "quality" else r.spread_bps
+            r.composite_score = r.quality_score
             r.winner_lead_bps = winner_lead
 
             if rank_idx == 1:
                 r.delta_vs_winner_bps = 0.0
                 r.savings_vs_worst_bps = winner_lead  # preserve for backwards compatibility
             else:
-                # Negative delta representing deficit vs winner
-                r.delta_vs_winner_bps = winner.spread_bps - r.spread_bps
+                # Negative delta representing deficit vs winner in execution quality score
+                r.delta_vs_winner_bps = round(winner.quality_score - r.quality_score, 4)
                 r.savings_vs_worst_bps = 0.0
 
             stats = leaderboard[r.broker_tag]
@@ -363,10 +358,9 @@ def run_cross_broker_comparison(
 def print_comparison_terminal(
     groups: List[CanonicalComparisonGroup],
     leaderboard: Dict[str, BrokerLeaderboardStats],
-    rank_by: str = "quality",
 ) -> None:
     print(f"\n{BOLD}{CYAN}=== CROSS-BROKER SPREAD & EXECUTION QUALITY COMPARISON ==={RESET}")
-    metric_desc = "Institutional Execution Quality Score [TWAS + 0.5*Tail + Widen] (bps)" if rank_by == "quality" else "Spread (bps)"
+    metric_desc = "Institutional Execution Quality Score [TWAS + 0.5*Tail + Widen] (bps)"
     print(f"{GRAY}Execution Metric: {BOLD}{metric_desc}{RESET} (Lower = Better Execution; Lowest Wins Rank #1 [BEST])")
     print(f"{GRAY}Points Formula  : {BOLD}1st: 10 pts, 2nd: 6 pts, 3rd: 4 pts, 4th: 2 pts, 5th: 1 pt{RESET} (Ranked by Avg Points/Symbol)")
 
@@ -503,7 +497,6 @@ def generate_comparison_html(
     groups: List[CanonicalComparisonGroup],
     leaderboard: Dict[str, BrokerLeaderboardStats],
     output_path: Path,
-    rank_by: str = "quality",
 ) -> Path:
     """
     Generates a decoupled cross-broker comparison package:
@@ -574,10 +567,10 @@ def generate_comparison_html(
             "winner_lead_bps": round(float(g.winner_lead_bps), 4),
         })
 
-    metric_title = "Execution Quality Score (bps: TWAS + 0.5·Tail + 1.0·Widening)" if rank_by == "quality" else "Spread (bps)"
+    metric_title = "Execution Quality Score (bps: TWAS + 0.5·Tail + 1.0·Widening)"
     report_data = {
         "metric": metric_title,
-        "rank_by": rank_by,
+        "rank_by": "quality",
         "leaderboard": leaderboard_data,
         "groups": groups_data,
     }

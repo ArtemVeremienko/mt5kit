@@ -73,11 +73,11 @@
                     <div class="text-xs font-mono bg-gray-900/80 px-4 py-2.5 rounded-lg border border-gray-800 space-y-1">
                         <div>
                             <span class="text-gray-500">EXECUTION METRIC:</span>
-                            <span class="text-cyan-400 font-bold">Spread (bps)</span>
+                            <span class="text-purple-400 font-bold">Quality Score (bps)</span>
                         </div>
                         <div>
                             <span class="text-gray-500">CRITERION:</span>
-                            <span class="text-gray-300">Lowest Spread (bps) Wins (Rank #1 🏆)</span>
+                            <span class="text-gray-300">Lowest Quality Score Wins (Rank #1 🏆)</span>
                         </div>
                     </div>
                 </template>
@@ -293,9 +293,9 @@
                                     <th @click="sortBy('p95_spread')" class="sort-th px-3 py-2.5 text-gray-300 whitespace-nowrap"><span class="flex items-center gap-1">P95 <span class="text-[10px]" :class="sortCol === 'p95_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('p95_spread')"></span></span></th>
                                     <th @click="sortBy('max_spread')" class="sort-th px-3 py-2.5 text-red-400 whitespace-nowrap"><span class="flex items-center gap-1">Max <span class="text-[10px]" :class="sortCol === 'max_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('max_spread')"></span></span></th>
                                     <th @click="sortBy('spread_bps')" class="sort-th px-3 py-2.5 text-cyan-400 whitespace-nowrap font-bold"><span class="flex items-center gap-1">Spread (bps) <span class="text-[10px]" :class="sortCol === 'spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('spread_bps')"></span></span></th>
+                                    <th @click="sortBy('core_spread_bps')" class="sort-th px-3 py-2.5 text-cyan-300 whitespace-nowrap font-bold" title="Core trading hours (07:00-20:00 UTC) spread"><span class="flex items-center gap-1">Core (bps) <span class="text-[10px]" :class="sortCol === 'core_spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('core_spread_bps')"></span></span></th>
                                     <th @click="sortBy('stability_ratio')" class="sort-th px-3 py-2.5 text-emerald-400 whitespace-nowrap"><span class="flex items-center gap-1">Stability <span class="text-[10px]" :class="sortCol === 'stability_ratio' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('stability_ratio')"></span></span></th>
                                     <th @click="sortBy('widening_pct_15x_time')" class="sort-th px-3 py-2.5 text-amber-400 whitespace-nowrap"><span class="flex items-center gap-1">Widen (>1.5x)% <span class="text-[10px]" :class="sortCol === 'widening_pct_15x_time' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('widening_pct_15x_time')"></span></span></th>
-                                    <th @click="sortBy('core_spread_bps')" class="sort-th px-3 py-2.5 text-gray-300 whitespace-nowrap" title="Core trading hours (07:00-20:00 UTC) spread"><span class="flex items-center gap-1">Core (bps) <span class="text-[10px]" :class="sortCol === 'core_spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('core_spread_bps')"></span></span></th>
                                     <th @click="sortBy('rollover_multiplier')" class="sort-th px-3 py-2.5 text-purple-400 whitespace-nowrap" title="Rollover window (21:45-22:30 UTC) avg / Core median"><span class="flex items-center gap-1">Roll Mult <span class="text-[10px]" :class="sortCol === 'rollover_multiplier' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('rollover_multiplier')"></span></span></th>
                                     <th @click="sortBy('quality_score')" class="sort-th px-3 py-2.5 text-purple-400 whitespace-nowrap font-bold"><span class="flex items-center gap-1">Quality Score <span class="text-[10px]" :class="sortCol === 'quality_score' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('quality_score')"></span></span></th>
                                     <th @click="sortBy('delta_vs_winner_bps')" class="sort-th px-3 py-2.5 text-emerald-400 whitespace-nowrap min-w-[140px]"><span class="flex items-center gap-1">Delta vs #1 <span class="text-[10px]" :class="sortCol === 'delta_vs_winner_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('delta_vs_winner_bps')"></span></span></th>
@@ -329,6 +329,7 @@
                                         <td class="px-3 py-2.5 text-gray-300" x-text="formatNum(r.p95_spread)"></td>
                                         <td class="px-3 py-2.5 text-red-400" x-text="formatNum(r.max_spread)"></td>
                                         <td class="px-3 py-2.5 text-cyan-400 font-bold whitespace-nowrap" x-text="formatNum(r.spread_bps) + ' bps'"></td>
+                                        <td class="px-3 py-2.5 text-cyan-300 font-semibold whitespace-nowrap" x-text="formatNum(r.core_spread_bps || r.spread_bps) + ' bps'"></td>
                                         <td class="px-3 py-2.5">
                                             <span class="px-2 py-0.5 rounded text-xs font-medium border"
                                                   :class="(r.stability_ratio || 1) < 1.3 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((r.stability_ratio || 1) <= 2.0 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
@@ -339,7 +340,6 @@
                                                   :class="(r.widening_pct_15x_time || 0) < 2 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((r.widening_pct_15x_time || 0) <= 10 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
                                                   x-text="formatNum(r.widening_pct_15x_time || 0) + '%'"></span>
                                         </td>
-                                        <td class="px-3 py-2.5 text-gray-300 text-xs" x-text="formatNum(r.core_spread_bps || r.spread_bps) + ' bps'"></td>
                                         <td class="px-3 py-2.5">
                                             <span class="px-2 py-0.5 rounded text-xs font-medium border"
                                                   :class="(r.rollover_multiplier || 1) < 2.0 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((r.rollover_multiplier || 1) <= 5.0 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
