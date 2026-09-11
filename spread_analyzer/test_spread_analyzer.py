@@ -186,6 +186,8 @@ def test_visualizer_and_report_generation(tmp_path: Path):
     assert len(json_data["charts"]["EURUSD"]["times"]) > 0
 
     content = html_file.read_text(encoding="utf-8")
+    assert "<title>TestBroker_12345 - MetaTrader 5 Spread Analyzer</title>" in content
+    assert ">TestBroker_12345</h1>" in content
     assert "Comprehensive Symbol Summary" in content
     assert "range_bars" in content
     assert "step_corridor" in content

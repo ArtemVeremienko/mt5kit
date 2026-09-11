@@ -9,7 +9,7 @@
   },
   "brokers": {
     "RoboForex": {
-      "forex": 5.0,
+      "forex": 3.0,
       "metals": 8.0
     },
     "Fusion_Markets": {

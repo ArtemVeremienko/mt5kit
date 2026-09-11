@@ -46,6 +46,11 @@
     </style>
     <!-- Direct data shim for double-click offline viewing (file://) -->
     <script src="report_data.js"></script>
+    <script>
+        if (window.__REPORT_DATA__ && window.__REPORT_DATA__.account_tag) {
+            document.title = window.__REPORT_DATA__.account_tag + ' - MetaTrader 5 Spread Analyzer';
+        }
+    </script>
 </head>
 <body class="text-gray-200 min-h-screen p-4 md:p-8" x-data="spreadViewer()" x-init="init()" @dragover.prevent="dragOver = true" @dragleave.prevent="dragOver = false" @drop.prevent="handleDrop($event)">
 
@@ -64,7 +69,7 @@
         <div class="flex flex-col md:flex-row md:items-center justify-between border-b border-gray-800 pb-5 gap-4">
             <div>
                 <div class="flex items-center gap-3">
-                    <h1 class="text-2xl md:text-3xl font-bold tracking-tight text-white">MetaTrader 5 Spread Analyzer</h1>
+                    <h1 class="text-2xl md:text-3xl font-bold tracking-tight text-white" x-text="data?.account_tag || 'MetaTrader 5 Spread Analyzer'">MetaTrader 5 Spread Analyzer</h1>
                     <span class="px-2.5 py-0.5 rounded text-xs font-semibold bg-blue-900/60 text-blue-400 border border-blue-700/50">1-Minute Dynamics</span>
                 </div>
                 <p class="text-sm text-gray-400 mt-1">High-frequency spread dynamics (Floating Range Bars & Step Corridor with Tick Activity)</p>
@@ -74,11 +79,6 @@
                 <!-- Metadata Badges -->
                 <template x-if="data">
                     <div class="flex items-center gap-4 text-xs font-mono bg-gray-900/80 px-4 py-2.5 rounded-lg border border-gray-800">
-                        <div>
-                            <span class="text-gray-500 block">ACCOUNT / BROKER</span>
-                            <span class="text-gray-200 font-semibold" x-text="data.account_tag || 'Unknown'"></span>
-                        </div>
-                        <div class="h-6 w-px bg-gray-800"></div>
                         <div>
                             <span class="text-gray-500 block">DATE RANGE (UTC)</span>
                             <span class="text-gray-200 font-semibold" x-text="data.date_range || 'N/A'"></span>
@@ -733,6 +733,9 @@
 
                 loadData(json) {
                     this.data = json;
+                    if (json.account_tag) {
+                        document.title = json.account_tag + ' - MetaTrader 5 Spread Analyzer';
+                    }
                     if (json.symbols && json.symbols.length > 0) {
                         this.selectedSymbol = json.symbols[0].symbol;
                         this.$nextTick(() => {

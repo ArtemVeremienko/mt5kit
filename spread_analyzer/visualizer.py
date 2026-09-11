@@ -376,7 +376,17 @@ def generate_html_report(
     # 3. Copy static Alpine.js template
     template_path = Path(__file__).parent / "templates" / "spread_report.html"
     if template_path.exists():
-        shutil.copy2(template_path, html_file)
+        content = template_path.read_text(encoding="utf-8")
+        if account_tag:
+            content = content.replace(
+                "<title>MetaTrader 5 Spread Analyzer</title>",
+                f"<title>{account_tag} - MetaTrader 5 Spread Analyzer</title>",
+            )
+            content = content.replace(
+                ">MetaTrader 5 Spread Analyzer</h1>",
+                f">{account_tag}</h1>",
+            )
+        html_file.write_text(content, encoding="utf-8")
     else:
         raise FileNotFoundError(f"Template not found at: {template_path}")
 
