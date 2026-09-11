@@ -84,3 +84,24 @@ Trading costs vary dramatically across market regimes:
 | **Core Session Spread** | `core_spread_bps` | Spread (bps) during 07:00–20:00 UTC | True friction for intraday/scalping strategies. |
 | **Rollover Spread Multiplier**| `rollover_multiplier`| $\frac{\text{Rollover Avg Spread (21:45-22:30)}}{\text{Core Median Spread}}$ | Risk factor for overnight holding and swing trading. |
 | **Execution Quality Score** | `quality_score` | Multi-factor weighted score (Spread bps + Stability + Widening Frequency) | Comprehensive ranking in comparator instead of raw median bps alone. |
+
+---
+
+## 5. Tradeability Verdict Hierarchy & Classification Engine
+
+To provide instantaneous decision-making without requiring discretionary traders or EA operators to manually audit dozens of raw metrics, the dashboard implements a deterministic, rule-based classification hierarchy.
+
+### Classification Priority & Evaluation Order
+1. 🔴 **High Friction / Skip**: Toxic feeds, predatory spikes, or severe tail risk (`stability > 2.2x` OR `widening > 12.0%` OR `spread_to_vol > 7.5%` OR `tail_blowout_ratio > 4.0x` OR `max_to_median > 8.0x`). Evaluated first; if triggered, the symbol is disqualified immediately regardless of daytime tightness.
+2. 🟢 **Prime Intraday**: Ultra-tight and ultra-stable feeds with clean tails (`bps <= 2.5` AND `stability <= 1.4x` AND `widening <= 3.0%` AND `spread_to_vol <= 3.5%` AND `tail_blowout_ratio <= 2.5x`). Optimal for M1–M5 scalping and high-frequency EAs.
+3. 🟡 **Day-Only (Close prior to NY rollover)**: Standard liquid intraday instruments with tight daytime spreads (`bps <= 2.5`), but non-negligible off-hours/rollover widening (`widening > 3.0%`, `rollover_multiplier > 2.5x`, or `tail_blowout_ratio > 2.5x`). Mandatory rule: Close prior to 21:45 UTC rollover.
+4. 🟠 **Caution / Swing**: Instruments with wider spreads in basis points (`bps > 2.5`), but where daily volatility absorbs execution friction (`spread_to_vol <= 5.0%`), making them viable for swing holding rather than tight intraday scalping.
+
+### 6. Institutional Microstructure: Stop-Loss Asymmetry & Extreme Tail Percentiles
+- **The Stop-Loss Execution Trap**: Passive limit orders benefit from continuous-time TWAS, but resting stop-losses, trailing stops, and margin stop-outs execute at the **worst instantaneous tick peak**. A 20-millisecond widening to 40 pips has near-zero impact on TWAS, yet triggers catastrophic slippage and account blowouts.
+- **The Bad Print Problem & Extreme Robust Quantiles**: Raw sample maximum (`np.max()`) is brittle to 1-tick bridge glitches. Institutional TCA relies on **$P_{99}$** (worst 1%) and **$P_{99.9}$** (worst 0.1% / ~100 ticks per day). Prolonged liquidity vacuums and synthetic markups heavily shift $P_{99.9}$, whereas single-tick bad prints are filtered.
+- **Tail Blowout Ratio**:
+  $$\text{Tail Blowout Ratio} = \frac{P_{99.9}}{P_{95}}$$
+  Measures right-tail convexity beyond the normal 95% boundary. Ratios $> 2.5\text{x}$ flag rollover danger, and $> 4.0\text{x}$ flag toxic venues.
+
+

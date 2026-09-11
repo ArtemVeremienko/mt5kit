@@ -121,55 +121,160 @@
 
                 <!-- Top-Line Portfolio Health Cards (Executive Macro-Triage) -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <!-- Prime Intraday Card -->
-                    <div class="bg-gray-900/70 border border-emerald-500/30 rounded-xl p-4 flex items-center justify-between shadow-lg shadow-emerald-500/5">
-                        <div class="space-y-1">
-                            <span class="text-[11px] font-mono uppercase text-emerald-400 font-semibold tracking-wider block">🟢 Prime Intraday</span>
-                            <div class="flex items-baseline gap-2">
+                    <!-- 1. Prime Intraday Card -->
+                    <div @click="toggleVerdictFilter('prime')"
+                         class="cursor-pointer bg-gray-900/70 border rounded-xl p-4 flex flex-col justify-between shadow-lg transition"
+                         :class="verdictFilter === 'prime' ? 'ring-2 ring-emerald-400 border-emerald-400 bg-gray-900 shadow-emerald-500/20' : 'border-emerald-500/30 hover:border-emerald-500/60 shadow-emerald-500/5'">
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-mono uppercase text-emerald-400 font-semibold tracking-wider block">🟢 Prime Intraday</span>
+                                <div class="w-8 h-8 rounded-lg bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center text-base">⚡</div>
+                            </div>
+                            <div class="flex items-baseline gap-2 mt-1">
                                 <span class="text-2xl font-bold text-white" x-text="healthStats.primeCount"></span>
                                 <span class="text-xs text-gray-400 font-mono" x-text="'(' + healthStats.primePct + '%)'"></span>
                             </div>
-                            <span class="text-[11px] text-gray-400 block">Optimal for scalping & EAs</span>
+                            <span class="text-[11px] text-gray-400 block mt-0.5">Optimal for scalping & EAs</span>
                         </div>
-                        <div class="w-10 h-10 rounded-lg bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center text-xl">⚡</div>
+
+                        <!-- Matched Symbol Pills -->
+                        <div class="mt-3 pt-2.5 border-t border-gray-800/80">
+                            <div class="text-[10px] text-gray-500 uppercase font-mono mb-1.5 flex justify-between">
+                                <span>Matched Symbols</span>
+                                <template x-if="verdictFilter === 'prime'">
+                                    <span class="text-emerald-400 font-bold">Filter Active ✕</span>
+                                </template>
+                            </div>
+                            <div class="flex flex-wrap gap-1 max-h-20 overflow-y-auto custom-scrollbar pr-0.5">
+                                <template x-for="sym in healthStats.primeSymbols" :key="sym">
+                                    <button @click.stop="selectSymbol(sym)"
+                                            class="px-2 py-0.5 rounded text-[10px] font-mono transition border"
+                                            :class="selectedSymbol === sym ? 'bg-emerald-500 text-gray-950 font-bold border-emerald-400 shadow-sm' : 'bg-gray-800/80 hover:bg-emerald-900/60 text-emerald-300 border-gray-700/80 hover:border-emerald-700/60'"
+                                            :title="'Inspect ' + sym"
+                                            x-text="sym"></button>
+                                </template>
+                                <template x-if="healthStats.primeSymbols.length === 0">
+                                    <span class="text-[11px] text-gray-500 italic">None</span>
+                                </template>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Day-Only Card -->
-                    <div class="bg-gray-900/70 border border-amber-500/30 rounded-xl p-4 flex items-center justify-between shadow-lg shadow-amber-500/5">
-                        <div class="space-y-1">
-                            <span class="text-[11px] font-mono uppercase text-amber-400 font-semibold tracking-wider block">🟡 Day-Only</span>
-                            <div class="flex items-baseline gap-2">
+                    <!-- 2. Day-Only Card -->
+                    <div @click="toggleVerdictFilter('day_only')"
+                         class="cursor-pointer bg-gray-900/70 border rounded-xl p-4 flex flex-col justify-between shadow-lg transition"
+                         :class="verdictFilter === 'day_only' ? 'ring-2 ring-amber-400 border-amber-400 bg-gray-900 shadow-amber-500/20' : 'border-amber-500/30 hover:border-amber-500/60 shadow-amber-500/5'">
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-mono uppercase text-amber-400 font-semibold tracking-wider block">🟡 Day-Only</span>
+                                <div class="w-8 h-8 rounded-lg bg-amber-950/80 border border-amber-800/60 flex items-center justify-center text-base">🌙</div>
+                            </div>
+                            <div class="flex items-baseline gap-2 mt-1">
                                 <span class="text-2xl font-bold text-white" x-text="healthStats.dayOnlyCount"></span>
                                 <span class="text-xs text-gray-400 font-mono" x-text="'(' + healthStats.dayOnlyPct + '%)'"></span>
                             </div>
-                            <span class="text-[11px] text-gray-400 block">Close prior to NY rollover</span>
+                            <span class="text-[11px] text-gray-400 block mt-0.5">Close prior to NY rollover</span>
                         </div>
-                        <div class="w-10 h-10 rounded-lg bg-amber-950/80 border border-amber-800/60 flex items-center justify-center text-xl">🌙</div>
+
+                        <!-- Matched Symbol Pills -->
+                        <div class="mt-3 pt-2.5 border-t border-gray-800/80">
+                            <div class="text-[10px] text-gray-500 uppercase font-mono mb-1.5 flex justify-between">
+                                <span>Matched Symbols</span>
+                                <template x-if="verdictFilter === 'day_only'">
+                                    <span class="text-amber-400 font-bold">Filter Active ✕</span>
+                                </template>
+                            </div>
+                            <div class="flex flex-wrap gap-1 max-h-20 overflow-y-auto custom-scrollbar pr-0.5">
+                                <template x-for="sym in healthStats.dayOnlySymbols" :key="sym">
+                                    <button @click.stop="selectSymbol(sym)"
+                                            class="px-2 py-0.5 rounded text-[10px] font-mono transition border"
+                                            :class="selectedSymbol === sym ? 'bg-amber-500 text-gray-950 font-bold border-amber-400 shadow-sm' : 'bg-gray-800/80 hover:bg-amber-900/60 text-amber-300 border-gray-700/80 hover:border-amber-700/60'"
+                                            :title="'Inspect ' + sym"
+                                            x-text="sym"></button>
+                                </template>
+                                <template x-if="healthStats.dayOnlySymbols.length === 0">
+                                    <span class="text-[11px] text-gray-500 italic">None</span>
+                                </template>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Swing / High Friction Card -->
-                    <div class="bg-gray-900/70 border border-rose-500/30 rounded-xl p-4 flex items-center justify-between shadow-lg shadow-rose-500/5">
-                        <div class="space-y-1">
-                            <span class="text-[11px] font-mono uppercase text-rose-400 font-semibold tracking-wider block">🔴 Caution / Skip</span>
-                            <div class="flex items-baseline gap-2">
+                    <!-- 3. Caution / Swing Card -->
+                    <div @click="toggleVerdictFilter('caution')"
+                         class="cursor-pointer bg-gray-900/70 border rounded-xl p-4 flex flex-col justify-between shadow-lg transition"
+                         :class="verdictFilter === 'caution' ? 'ring-2 ring-orange-400 border-orange-400 bg-gray-900 shadow-orange-500/20' : 'border-orange-500/30 hover:border-orange-500/60 shadow-orange-500/5'">
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-mono uppercase text-orange-400 font-semibold tracking-wider block">🟠 Caution / Swing</span>
+                                <div class="w-8 h-8 rounded-lg bg-orange-950/80 border border-orange-800/60 flex items-center justify-center text-base">⚠️</div>
+                            </div>
+                            <div class="flex items-baseline gap-2 mt-1">
+                                <span class="text-2xl font-bold text-white" x-text="healthStats.cautionCount"></span>
+                                <span class="text-xs text-gray-400 font-mono" x-text="'(' + healthStats.cautionPct + '%)'"></span>
+                            </div>
+                            <span class="text-[11px] text-gray-400 block mt-0.5">Moderate spread, swing or day caution</span>
+                        </div>
+
+                        <!-- Matched Symbol Pills -->
+                        <div class="mt-3 pt-2.5 border-t border-gray-800/80">
+                            <div class="text-[10px] text-gray-500 uppercase font-mono mb-1.5 flex justify-between">
+                                <span>Matched Symbols</span>
+                                <template x-if="verdictFilter === 'caution'">
+                                    <span class="text-orange-400 font-bold">Filter Active ✕</span>
+                                </template>
+                            </div>
+                            <div class="flex flex-wrap gap-1 max-h-20 overflow-y-auto custom-scrollbar pr-0.5">
+                                <template x-for="sym in healthStats.cautionSymbols" :key="sym">
+                                    <button @click.stop="selectSymbol(sym)"
+                                            class="px-2 py-0.5 rounded text-[10px] font-mono transition border"
+                                            :class="selectedSymbol === sym ? 'bg-orange-500 text-gray-950 font-bold border-orange-400 shadow-sm' : 'bg-gray-800/80 hover:bg-orange-900/60 text-orange-300 border-gray-700/80 hover:border-orange-700/60'"
+                                            :title="'Inspect ' + sym"
+                                            x-text="sym"></button>
+                                </template>
+                                <template x-if="healthStats.cautionSymbols.length === 0">
+                                    <span class="text-[11px] text-gray-500 italic">None</span>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. High Friction / Skip Card -->
+                    <div @click="toggleVerdictFilter('skip')"
+                         class="cursor-pointer bg-gray-900/70 border rounded-xl p-4 flex flex-col justify-between shadow-lg transition"
+                         :class="verdictFilter === 'skip' ? 'ring-2 ring-rose-400 border-rose-400 bg-gray-900 shadow-rose-500/20' : 'border-rose-500/30 hover:border-rose-500/60 shadow-rose-500/5'">
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[11px] font-mono uppercase text-rose-400 font-semibold tracking-wider block">🔴 High Friction / Skip</span>
+                                <div class="w-8 h-8 rounded-lg bg-rose-950/80 border border-rose-800/60 flex items-center justify-center text-base">🛑</div>
+                            </div>
+                            <div class="flex items-baseline gap-2 mt-1">
                                 <span class="text-2xl font-bold text-white" x-text="healthStats.skipCount"></span>
                                 <span class="text-xs text-gray-400 font-mono" x-text="'(' + healthStats.skipPct + '%)'"></span>
                             </div>
-                            <span class="text-[11px] text-gray-400 block">Wide tail risk or widening</span>
+                            <span class="text-[11px] text-gray-400 block mt-0.5">Toxic feed, widening > 12%</span>
                         </div>
-                        <div class="w-10 h-10 rounded-lg bg-rose-950/80 border border-rose-800/60 flex items-center justify-center text-xl">⚠️</div>
-                    </div>
 
-                    <!-- Portfolio Spread Average Card -->
-                    <div class="bg-gray-900/70 border border-cyan-500/30 rounded-xl p-4 flex items-center justify-between shadow-lg shadow-cyan-500/5">
-                        <div class="space-y-1">
-                            <span class="text-[11px] font-mono uppercase text-cyan-400 font-semibold tracking-wider block">📊 Portfolio Mean Spread</span>
-                            <div class="flex items-baseline gap-2">
-                                <span class="text-2xl font-bold text-white font-mono" x-text="healthStats.avgSpreadBps + ' bps'"></span>
+                        <!-- Matched Symbol Pills -->
+                        <div class="mt-3 pt-2.5 border-t border-gray-800/80">
+                            <div class="text-[10px] text-gray-500 uppercase font-mono mb-1.5 flex justify-between">
+                                <span>Matched Symbols</span>
+                                <template x-if="verdictFilter === 'skip'">
+                                    <span class="text-rose-400 font-bold">Filter Active ✕</span>
+                                </template>
                             </div>
-                            <span class="text-[11px] text-gray-400 font-mono block" x-text="'TWAS: ' + healthStats.avgTwasBps + ' bps'"></span>
+                            <div class="flex flex-wrap gap-1 max-h-20 overflow-y-auto custom-scrollbar pr-0.5">
+                                <template x-for="sym in healthStats.skipSymbols" :key="sym">
+                                    <button @click.stop="selectSymbol(sym)"
+                                            class="px-2 py-0.5 rounded text-[10px] font-mono transition border"
+                                            :class="selectedSymbol === sym ? 'bg-rose-500 text-gray-950 font-bold border-rose-400 shadow-sm' : 'bg-gray-800/80 hover:bg-rose-900/60 text-rose-300 border-gray-700/80 hover:border-rose-700/60'"
+                                            :title="'Inspect ' + sym"
+                                            x-text="sym"></button>
+                                </template>
+                                <template x-if="healthStats.skipSymbols.length === 0">
+                                    <span class="text-[11px] text-gray-500 italic">None</span>
+                                </template>
+                            </div>
                         </div>
-                        <div class="w-10 h-10 rounded-lg bg-cyan-950/80 border border-cyan-800/60 flex items-center justify-center text-xl">📈</div>
                     </div>
                 </div>
 
@@ -201,6 +306,16 @@
                                 </button>
                             </div>
 
+                            <!-- Active Verdict Filter Chip -->
+                            <template x-if="verdictFilter">
+                                <button @click="verdictFilter = null" 
+                                        class="px-2.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs font-mono border border-gray-700 text-gray-200 transition flex items-center gap-1.5 shadow-sm">
+                                    <span class="text-gray-400">Filter:</span>
+                                    <span class="font-bold text-white uppercase" x-text="verdictFilter.replace('_', ' ')"></span>
+                                    <span class="text-rose-400 font-bold ml-0.5">✕</span>
+                                </button>
+                            </template>
+
                             <!-- Search Filter -->
                             <div class="relative w-full sm:w-56">
                                 <input type="text" x-model="search" placeholder="Filter symbol (e.g. EURUSD)..." class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono">
@@ -215,7 +330,7 @@
                                 <tr>
                                     <th @click="sortBy('symbol')" class="sort-th px-4 py-3"><span class="flex items-center gap-1.5">Symbol <span class="text-[10px]" :class="sortCol === 'symbol' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('symbol')"></span></span></th>
                                     <th class="px-4 py-3">Tradeability Verdict</th>
-                                    <th class="px-4 py-3 min-w-[200px]">Spread Corridor (Min · Med · P95 · Max)</th>
+                                    <th class="px-4 py-3 min-w-[320px]">Spread Corridor (Min · Med · P95 · Max)</th>
                                     <th @click="sortBy('core_spread_bps')" class="sort-th px-4 py-3 text-cyan-400 whitespace-nowrap"><span class="flex items-center gap-1.5">Core Cost (bps) <span class="text-[10px]" :class="sortCol === 'core_spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('core_spread_bps')"></span></span></th>
                                     <th @click="sortBy('rollover_multiplier')" class="sort-th px-4 py-3 text-purple-400 whitespace-nowrap"><span class="flex items-center gap-1.5">Rollover Multiplier <span class="text-[10px]" :class="sortCol === 'rollover_multiplier' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('rollover_multiplier')"></span></span></th>
                                     <th class="px-4 py-3 text-center">Chart</th>
@@ -228,41 +343,32 @@
                                             <div class="font-bold text-blue-400 font-mono text-sm" x-text="m.symbol"></div>
                                             <div class="text-[11px] text-gray-500 font-mono" x-text="m.unit + ' · ' + formatInt(m.total_ticks) + ' ticks'"></div>
                                         </td>
-                                        <td class="px-4 py-3 whitespace-nowrap">
-                                            <template x-if="getVerdict(m).tier === 'prime'">
-                                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 shadow-sm" :title="getVerdict(m).reason">
-                                                    <span>🟢</span> PRIME INTRADAY
-                                                </span>
-                                            </template>
-                                            <template x-if="getVerdict(m).tier === 'day_only'">
-                                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-950/80 text-amber-400 border border-amber-800/60 shadow-sm" :title="getVerdict(m).reason">
-                                                    <span>🟡</span> DAY-ONLY
-                                                </span>
-                                            </template>
-                                            <template x-if="getVerdict(m).tier === 'swing'">
-                                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-sky-950/80 text-sky-400 border border-sky-800/60 shadow-sm" :title="getVerdict(m).reason">
-                                                    <span>🔵</span> SWING ONLY
-                                                </span>
-                                            </template>
-                                            <template x-if="getVerdict(m).tier === 'skip'">
-                                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-rose-950/80 text-rose-400 border border-rose-800/60 shadow-sm" :title="getVerdict(m).reason">
-                                                    <span>🔴</span> HIGH FRICTION / SKIP
-                                                </span>
-                                            </template>
+                                        <td class="px-4 py-3 whitespace-nowrap font-sans">
+                                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border shadow-sm"
+                                                  :class="getVerdictBadgeClass(getVerdict(m).tier)"
+                                                  :title="getVerdict(m).reason"
+                                                  x-text="getVerdict(m).label"></span>
                                         </td>
                                         <td class="px-4 py-3">
                                             <!-- Inline Visual Corridor Bar -->
-                                            <div class="w-full max-w-[240px] space-y-1">
-                                                <div class="flex justify-between text-[10px] font-mono text-gray-400">
-                                                    <span class="text-emerald-400" x-text="formatNum(m.min_spread)"></span>
-                                                    <span class="text-gray-300 font-bold" x-text="'med ' + formatNum(m.median_spread)"></span>
-                                                    <span class="text-amber-400" x-text="'p95 ' + formatNum(m.p95_spread)"></span>
-                                                    <span class="text-rose-400" x-text="formatNum(m.max_spread)"></span>
+                                            <div class="w-full min-w-[280px] max-w-[340px] space-y-1">
+                                                <div class="flex justify-between items-center text-[10px] font-mono text-gray-400 gap-1.5 whitespace-nowrap">
+                                                    <span class="text-emerald-400 whitespace-nowrap flex-shrink-0" x-text="formatSpreadVal(m.min_spread)"></span>
+                                                    <span class="text-gray-300 font-bold whitespace-nowrap flex-shrink-0" x-text="'med ' + formatSpreadVal(m.median_spread)"></span>
+                                                    <span class="text-amber-400 whitespace-nowrap flex-shrink-0" x-text="'p95 ' + formatSpreadVal(m.p95_spread)"></span>
+                                                    <div class="flex items-center gap-1 flex-shrink-0 whitespace-nowrap">
+                                                        <span class="text-rose-400 whitespace-nowrap" x-text="formatSpreadVal(m.max_spread)"></span>
+                                                        <span x-show="(m.max_spread / (m.p95_spread || 1)) >= 3.0" 
+                                                              class="whitespace-nowrap flex-shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-rose-950 text-rose-300 border border-rose-800 leading-none"
+                                                              :title="'Extreme tail blowout: ' + ((m.max_spread / (m.p95_spread || 1))).toFixed(1) + 'x P95'">
+                                                            <span>⚠️</span><span x-text="((m.max_spread / (m.p95_spread || 1))).toFixed(1) + 'x'"></span>
+                                                        </span>
+                                                    </div>
                                                 </div>
                                                 <div class="h-2 w-full bg-gray-950 rounded-full overflow-hidden relative border border-gray-800">
                                                     <!-- Ribbon: Min to P95 -->
                                                     <div class="absolute top-0 bottom-0 bg-blue-500/30 rounded-full"
-                                                         :style="'left: ' + getBarPercent(m.min_spread, m) + '%; width: ' + (getBarPercent(m.p95_spread, m) - getBarPercent(m.min_spread, m)) + '%;'"></div>
+                                                         :style="'left: ' + getBarPercent(m.min_spread, m) + '%; width: ' + Math.max(getBarPercent(m.p95_spread, m) - getBarPercent(m.min_spread, m), 4) + '%;'"></div>
                                                     <!-- Median Indicator Line -->
                                                     <div class="absolute top-0 bottom-0 w-1 bg-cyan-400 z-10 shadow-sm shadow-cyan-400"
                                                          :style="'left: ' + getBarPercent(m.median_spread, m) + '%;'"></div>
@@ -345,8 +451,8 @@
                                 <!-- Top Grouping Header Tier -->
                                 <tr class="bg-gray-950 text-[11px] font-mono uppercase text-gray-400 border-b border-gray-800">
                                     <th colspan="2" class="px-4 py-2 border-r border-gray-800/80 bg-gray-950/90 text-blue-400">IDENTIFICATION</th>
-                                    <th colspan="5" class="px-4 py-2 border-r border-gray-800/80 bg-gray-900/40 text-center text-emerald-400">SPREAD DISTRIBUTION (POINTS/PIPS)</th>
-                                    <th colspan="4" class="px-4 py-2 border-r border-gray-800/80 bg-gray-950/90 text-center text-cyan-400">EXECUTION & STABILITY (BPS)</th>
+                                    <th colspan="6" class="px-4 py-2 border-r border-gray-800/80 bg-gray-900/40 text-center text-emerald-400">SPREAD DISTRIBUTION (POINTS/PIPS)</th>
+                                    <th colspan="5" class="px-4 py-2 border-r border-gray-800/80 bg-gray-950/90 text-center text-cyan-400">EXECUTION & STABILITY (BPS)</th>
                                     <th colspan="3" class="px-4 py-2 border-r border-gray-800/80 bg-gray-900/40 text-center text-purple-400">TEMPORAL REGIMES</th>
                                     <th colspan="3" class="px-4 py-2 bg-gray-950/90 text-center text-gray-400">SAMPLE STATS</th>
                                 </tr>
@@ -358,10 +464,12 @@
                                     <th @click="sortBy('median_spread')" class="sort-th px-4 py-3 text-gray-300"><span class="flex items-center gap-1.5">Median <span class="text-[10px]" :class="sortCol === 'median_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('median_spread')"></span></span></th>
                                     <th @click="sortBy('avg_spread')" class="sort-th px-4 py-3 text-amber-400"><span class="flex items-center gap-1.5">Avg <span class="text-[10px]" :class="sortCol === 'avg_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('avg_spread')"></span></span></th>
                                     <th @click="sortBy('p95_spread')" class="sort-th px-4 py-3 text-gray-300"><span class="flex items-center gap-1.5">P95 <span class="text-[10px]" :class="sortCol === 'p95_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('p95_spread')"></span></span></th>
+                                    <th @click="sortBy('p99_spread')" class="sort-th px-4 py-3 text-amber-300" title="99th Percentile Spread (Worst 1% of quotes)"><span class="flex items-center gap-1.5">P99 <span class="text-[10px]" :class="sortCol === 'p99_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('p99_spread')"></span></span></th>
                                     <th @click="sortBy('max_spread')" class="sort-th px-4 py-3 text-red-400 border-r border-gray-800/80"><span class="flex items-center gap-1.5">Max <span class="text-[10px]" :class="sortCol === 'max_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('max_spread')"></span></span></th>
                                     <th @click="sortBy('spread_bps')" class="sort-th px-4 py-3 text-cyan-400 whitespace-nowrap min-w-[105px]"><span class="flex items-center gap-1.5">Spread (bps) <span class="text-[10px]" :class="sortCol === 'spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('spread_bps')"></span></span></th>
                                     <th @click="sortBy('time_weighted_bps')" class="sort-th px-4 py-3 text-cyan-300 whitespace-nowrap min-w-[110px]" title="Time-Weighted Average Spread (TWAS)"><span class="flex items-center gap-1.5">TWAS (bps) <span class="text-[10px]" :class="sortCol === 'time_weighted_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('time_weighted_bps')"></span></span></th>
                                     <th @click="sortBy('stability_ratio')" class="sort-th px-4 py-3 text-emerald-400 whitespace-nowrap min-w-[100px]"><span class="flex items-center gap-1.5">Stability <span class="text-[10px]" :class="sortCol === 'stability_ratio' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('stability_ratio')"></span></span></th>
+                                    <th @click="sortBy('tail_blowout_ratio')" class="sort-th px-4 py-3 text-rose-300 whitespace-nowrap min-w-[100px]" title="Tail Blowout Ratio (P99.9 / P95)"><span class="flex items-center gap-1.5">Blowout <span class="text-[10px]" :class="sortCol === 'tail_blowout_ratio' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('tail_blowout_ratio')"></span></span></th>
                                     <th @click="sortBy('widening_pct_15x_time')" class="sort-th px-4 py-3 text-amber-400 whitespace-nowrap min-w-[115px] border-r border-gray-800/80"><span class="flex items-center gap-1.5">Widen (>1.5x)% <span class="text-[10px]" :class="sortCol === 'widening_pct_15x_time' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('widening_pct_15x_time')"></span></span></th>
                                     <th @click="sortBy('core_spread_bps')" class="sort-th px-4 py-3 text-gray-300 whitespace-nowrap min-w-[100px]" title="Core Hours (07:00-20:00 UTC) spread"><span class="flex items-center gap-1.5">Core (bps) <span class="text-[10px]" :class="sortCol === 'core_spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('core_spread_bps')"></span></span></th>
                                     <th @click="sortBy('rollover_multiplier')" class="sort-th px-4 py-3 text-purple-400 whitespace-nowrap min-w-[100px]" title="Rollover Window / Core Spread Multiplier"><span class="flex items-center gap-1.5">Roll Mult <span class="text-[10px]" :class="sortCol === 'rollover_multiplier' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('rollover_multiplier')"></span></span></th>
@@ -380,6 +488,7 @@
                                         <td class="px-4 py-3 text-gray-300" x-text="formatNum(m.median_spread)"></td>
                                         <td class="px-4 py-3 text-amber-400 font-medium" x-text="formatNum(m.avg_spread)"></td>
                                         <td class="px-4 py-3 text-gray-300" x-text="formatNum(m.p95_spread)"></td>
+                                        <td class="px-4 py-3 text-amber-300" x-text="formatNum(m.p99_spread || m.p95_spread)"></td>
                                         <td class="px-4 py-3 text-red-400 border-r border-gray-800/80" x-text="formatNum(m.max_spread)"></td>
                                         <td class="px-4 py-3">
                                             <span class="px-2 py-0.5 rounded text-xs font-medium whitespace-nowrap border"
@@ -391,6 +500,11 @@
                                             <span class="px-2 py-0.5 rounded text-xs font-medium border"
                                                   :class="(m.stability_ratio || 1) < 1.3 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((m.stability_ratio || 1) <= 2.0 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
                                                   x-text="formatNum(m.stability_ratio || 1) + 'x'"></span>
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            <span class="px-2 py-0.5 rounded text-xs font-medium border"
+                                                  :class="(m.tail_blowout_ratio || (m.p95_spread ? m.max_spread/m.p95_spread : 1)) <= 2.0 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((m.tail_blowout_ratio || 1) <= 3.5 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
+                                                  x-text="formatNum(m.tail_blowout_ratio || (m.p95_spread ? m.max_spread/m.p95_spread : 1)) + 'x'"></span>
                                         </td>
                                         <td class="px-4 py-3 border-r border-gray-800/80">
                                             <span class="px-2 py-0.5 rounded text-xs font-medium border"
@@ -472,10 +586,15 @@
                 viewMode: 'range_bars',
                 activePreset: 'tradeability',
                 search: '',
+                verdictFilter: null,
                 sortCol: 'symbol',
                 sortAsc: true,
                 dragOver: false,
                 loading: false,
+
+                toggleVerdictFilter(tier) {
+                    this.verdictFilter = (this.verdictFilter === tier) ? null : tier;
+                },
 
                 getVerdict(m) {
                     if (!m) return { tier: 'skip', label: '🔴 HIGH FRICTION / SKIP', reason: 'No data' };
@@ -484,100 +603,114 @@
                     const widen = m.widening_pct_15x_time || 0;
                     const roll = m.rollover_multiplier || 1.0;
                     const spVol = m.spread_to_vol_pct || 0;
+                    
+                    // Tail Blowout Metrics (default 1.0)
+                    const blowout = m.tail_blowout_ratio || 1.0;
 
-                    // Hard Stop Criteria: Toxic feed or severe widening
-                    if (stab > 2.2 || widen > 12.0 || spVol > 7.5) {
+                    // 1. Hard Stop / Skip (Toxic execution, chronic instability, or severe friction)
+                    // Note: Blowout only forces Skip if the spread itself represents actual friction (bps > 2.5 or spVol > 5.0%)
+                    // On raw ECN feeds, tight daytime spreads that expand at rollover belong in Day-Only, not Skip!
+                    const isSevereFriction = stab > 2.2 || widen > 12.0 || spVol > 7.5;
+                    const isSevereBlowout = (blowout > 4.0 && (bps > 2.5 || spVol > 5.0));
+
+                    if (isSevereFriction || isSevereBlowout) {
                         return { 
                             tier: 'skip', 
                             label: '🔴 HIGH FRICTION / SKIP', 
-                            reason: `High risk: Stability ${stab.toFixed(2)}x, Widening ${widen.toFixed(1)}%, Spread/Vol ${spVol.toFixed(1)}%` 
+                            reason: `Severe risk: Stability ${stab.toFixed(2)}x, Widening ${widen.toFixed(1)}%, Spread/Vol ${spVol.toFixed(1)}%, or Tail Blowout ${blowout.toFixed(1)}x` 
                         };
                     }
 
-                    // Day-Only Criteria: Clean during the day, but dangerous overnight / rollover widening
-                    if (roll > 3.0 || widen > 4.0) {
-                        return { 
-                            tier: 'day_only', 
-                            label: '🟡 DAY-ONLY (AVOID OVERNIGHT)', 
-                            reason: `Rollover multiplier ${roll.toFixed(1)}x or widening ${widen.toFixed(1)}%. Close before 21:45 UTC.` 
-                        };
-                    }
-
-                    // Prime Intraday Criteria: Tight, highly stable, minimal widening
-                    if (bps <= 2.5 && stab <= 1.4 && widen <= 3.0 && spVol <= 3.5) {
+                    // 2. Prime Intraday (Ultra-tight spread, rock-solid stability, negligible widening, clean tail)
+                    if (bps <= 2.5 && stab <= 1.4 && widen <= 3.0 && spVol <= 3.5 && blowout <= 2.5) {
                         return { 
                             tier: 'prime', 
-                            label: '🟢 PRIME INTRADAY & EA', 
-                            reason: 'Tight spread, minimal tail widening, and low spread-to-volatility friction.' 
+                            label: '🟢 PRIME INTRADAY', 
+                            reason: 'Tight spread, minimal tail widening, clean tail (no blowout spikes), and low volatility drag.' 
                         };
                     }
 
-                    // Swing / Daily Volatility absorption
-                    if (spVol <= 4.5) {
+                    // 3. Day-Only (Tight intraday spreads with rollover or off-hours widening, close before NY rollover)
+                    if (bps <= 2.5 || roll > 2.5 || blowout > 2.5) {
                         return { 
-                            tier: 'swing', 
-                            label: '🔵 SWING / VOL ONLY', 
-                            reason: `Spread is ${bps.toFixed(1)} bps but absorbed by daily volatility (${spVol.toFixed(1)}% of ATR).` 
+                            tier: 'day_only', 
+                            label: '🟡 DAY-ONLY', 
+                            reason: `Intraday spread ${bps.toFixed(2)} bps. Widening ${widen.toFixed(1)}%, Rollover ${roll.toFixed(1)}x, or Tail Blowout ${blowout.toFixed(1)}x — close before NY rollover.` 
+                        };
+                    }
+
+                    // 4. Caution / Swing (Wider spread bps > 2.5 absorbed by daily volatility spVol <= 5.0%)
+                    if (spVol <= 5.0) {
+                        return { 
+                            tier: 'caution', 
+                            label: '🟠 CAUTION / SWING', 
+                            reason: `Spread is ${bps.toFixed(1)} bps (>2.5 bps) but absorbed by daily volatility (${spVol.toFixed(1)}% of ATR). Best for swing.` 
                         };
                     }
 
                     return { 
-                        tier: 'day_only', 
-                        label: '🟡 DAY-ONLY', 
-                        reason: 'Standard intraday conditions with moderate rollover or widening risk.' 
+                        tier: 'caution', 
+                        label: '🟠 CAUTION / SWING', 
+                        reason: `Moderate spread friction (${bps.toFixed(1)} bps, stability ${stab.toFixed(2)}x). Trade with caution.` 
                     };
                 },
 
                 getVerdictBadgeClass(tier) {
                     if (tier === 'prime') return 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60';
                     if (tier === 'day_only') return 'bg-amber-950/80 text-amber-400 border-amber-800/60';
-                    if (tier === 'swing') return 'bg-sky-950/80 text-sky-400 border-sky-800/60';
+                    if (tier === 'caution') return 'bg-orange-950/80 text-orange-400 border-orange-800/60';
                     return 'bg-rose-950/80 text-rose-400 border-rose-800/60';
                 },
 
                 getBarPercent(val, m) {
                     const min = m.min_spread || 0;
-                    const max = m.max_spread || min || 1;
-                    const range = Math.max(max - min, 0.0001);
-                    const clamped = Math.max(min, Math.min(val || min, max));
+                    // Anti-squash ceiling: robust ceiling scaled to max(P99, P95 * 1.25) so extreme spikes don't compress the active ribbon
+                    const robustMax = Math.max(m.p99_spread || m.p95_spread || 0, (m.p95_spread || 0) * 1.25);
+                    const ceil = robustMax > min ? robustMax : (m.max_spread || min || 1);
+                    const range = Math.max(ceil - min, 0.0001);
+                    const clamped = Math.max(min, Math.min(val || min, ceil));
                     return Math.round(((clamped - min) / range) * 100);
                 },
 
                 get healthStats() {
                     if (!this.data || !this.data.symbols || this.data.symbols.length === 0) {
                         return {
-                            primeCount: 0, primePct: 0,
-                            dayOnlyCount: 0, dayOnlyPct: 0,
-                            skipCount: 0, skipPct: 0,
-                            avgSpreadBps: '0.00', avgTwasBps: '0.00'
+                            primeCount: 0, primePct: 0, primeSymbols: [],
+                            dayOnlyCount: 0, dayOnlyPct: 0, dayOnlySymbols: [],
+                            cautionCount: 0, cautionPct: 0, cautionSymbols: [],
+                            skipCount: 0, skipPct: 0, skipSymbols: [],
                         };
                     }
                     const total = this.data.symbols.length;
-                    let prime = 0;
-                    let dayOnly = 0;
-                    let skip = 0;
-                    let sumBps = 0;
-                    let sumTwas = 0;
+                    const primeSyms = [];
+                    const dayOnlySyms = [];
+                    const cautionSyms = [];
+                    const skipSyms = [];
 
                     this.data.symbols.forEach(s => {
                         const v = this.getVerdict(s);
-                        if (v.tier === 'prime') prime++;
-                        else if (v.tier === 'day_only') dayOnly++;
-                        else skip++;
-
-                        sumBps += (s.spread_bps || 0);
-                        sumTwas += (s.time_weighted_bps || s.spread_bps || 0);
+                        if (v.tier === 'prime') primeSyms.push(s.symbol);
+                        else if (v.tier === 'day_only') dayOnlySyms.push(s.symbol);
+                        else if (v.tier === 'caution') cautionSyms.push(s.symbol);
+                        else skipSyms.push(s.symbol);
                     });
 
                     return {
-                        primeCount: prime,
-                        primePct: Math.round((prime / total) * 100),
-                        dayOnlyCount: dayOnly,
-                        dayOnlyPct: Math.round((dayOnly / total) * 100),
-                        skipCount: skip,
-                        skipPct: Math.round((skip / total) * 100),
-                        avgSpreadBps: (sumBps / total).toFixed(2),
-                        avgTwasBps: (sumTwas / total).toFixed(2)
+                        primeCount: primeSyms.length,
+                        primePct: Math.round((primeSyms.length / total) * 100),
+                        primeSymbols: primeSyms.sort(),
+
+                        dayOnlyCount: dayOnlySyms.length,
+                        dayOnlyPct: Math.round((dayOnlySyms.length / total) * 100),
+                        dayOnlySymbols: dayOnlySyms.sort(),
+
+                        cautionCount: cautionSyms.length,
+                        cautionPct: Math.round((cautionSyms.length / total) * 100),
+                        cautionSymbols: cautionSyms.sort(),
+
+                        skipCount: skipSyms.length,
+                        skipPct: Math.round((skipSyms.length / total) * 100),
+                        skipSymbols: skipSyms.sort(),
                     };
                 },
 
@@ -639,6 +772,9 @@
                 get sortedSymbols() {
                     if (!this.data || !this.data.symbols) return [];
                     let list = [...this.data.symbols];
+                    if (this.verdictFilter) {
+                        list = list.filter(item => this.getVerdict(item).tier === this.verdictFilter);
+                    }
                     if (this.search.trim()) {
                         const q = this.search.trim().toUpperCase();
                         list = list.filter(item => item.symbol.toUpperCase().includes(q));
@@ -673,6 +809,12 @@
                 selectSymbol(sym) {
                     this.selectedSymbol = sym;
                     this.renderChart();
+                    this.$nextTick(() => {
+                        const chartEl = document.getElementById('chartSection');
+                        if (chartEl) {
+                            chartEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    });
                 },
 
                 setViewMode(mode) {
@@ -683,6 +825,14 @@
                 formatNum(val, dec = 2) {
                     if (val === undefined || val === null || isNaN(val)) return '-';
                     return Number(val).toFixed(dec);
+                },
+
+                formatSpreadVal(val) {
+                    if (val === undefined || val === null || isNaN(val)) return '-';
+                    const num = Number(val);
+                    if (num >= 1000) return num.toFixed(0);
+                    if (num >= 100) return num.toFixed(1);
+                    return num.toFixed(2);
                 },
 
                 formatInt(val) {

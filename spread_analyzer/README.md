@@ -288,10 +288,11 @@ Here is how each metric maps directly to specific trading styles, risk models, a
 The Spread Analyzer dashboard eliminates "table fatigue" through **progressive disclosure**. Instead of forcing traders to scan 18+ raw numbers across diverse units (points, pips, cents, bps, percentages), the interface provides three purpose-built view presets and top-level synthesis cards.
 
 ```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ TOP-LINE PORTFOLIO HEALTH CARDS (Instant Macro-Triage)                                  │
-│  [🟢 PRIME INTRADAY: 18 (75%)]  [🟡 DAY-ONLY: 4 (17%)]  [🔴 SKIP: 2 (8%)]  [📊 1.42 bps]│
-└────────────────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ TOP-LINE PORTFOLIO HEALTH CARDS (Instant Macro-Triage & Symbol Watchlists)                             │
+│  [🟢 PRIME INTRADAY: 1 (7%)]  [🟡 DAY-ONLY: 7 (50%)]  [🟠 CAUTION / SWING: 2 (14%)]  [🔴 SKIP: 4 (29%)]│
+│  Interactive symbol pill tags under each card allow 1-click chart isolation and table filtering.       │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
   ▼ VIEW PRESET TABS:
   ┌───────────────────────┬───────────────────────┬────────────────────────┐
   │ ⚡ Tradeability (6 col)│ 🤖 EA Quality (7 col) │ 🔬 Full Quant (18 col) │
@@ -335,14 +336,20 @@ The Spread Analyzer dashboard eliminates "table fatigue" through **progressive d
 
 ### 2. Tradeability Verdict Engine: The Synthesis Badges
 
-Every instrument receives an automated, rule-based verdict badge that translates complex statistics into actionable execution guidance:
+Every instrument receives an automated, rule-based verdict badge that translates complex statistics into actionable execution guidance. The classification engine evaluates metrics in a strict priority order to prevent hazardous feeds from masquerading as tradable:
+
+#### Classification Evaluation Order & Hierarchy
+1. 🔴 **High Friction / Skip**: Toxic feeds, chronic instability, or severe tail risk (`stability > 2.2x` OR `widening > 12.0%` OR `spread_to_vol > 7.5%`, OR `tail_blowout_ratio > 4.0x` when combined with significant friction `bps > 2.5` or `spread_to_vol > 5.0%`).
+2. 🟢 **Prime Intraday**: Ultra-tight, highly stable feeds with clean tails (`bps <= 2.5` AND `stability <= 1.4x` AND `widening <= 3.0%` AND `spread_to_vol <= 3.5%` AND `tail_blowout_ratio <= 2.5x`).
+3. 🟡 **Day-Only (Close prior to NY rollover)**: Standard liquid intraday instruments with tight daytime spreads (`bps <= 2.5`), but non-negligible off-hours widening (`widening > 3.0%`, `rollover_multiplier > 2.5x`, or `tail_blowout_ratio > 2.5x`).
+4. 🟠 **Caution / Swing**: Instruments with wider spreads in basis points (`bps > 2.5`), but where daily volatility absorbs execution friction (`spread_to_vol <= 5.0%`), making them viable for swing holding rather than tight intraday scalping.
 
 | Badge | Criteria / Thresholds | Meaning & Actionable Rule |
 |---|---|---|
-| 🟢 **`PRIME INTRADAY & EA`** | `Spread ≤ 2.5 bps`<br>`Stability ≤ 1.40x`<br>`Widening ≤ 3.0%`<br>`Spread/Vol ≤ 3.5%` | **Elite Execution Quality**. Tight spread, minimal tail risk, and low volatility drag. Optimal for scalpers, M1–M5 EAs, and high-turnover strategies. |
-| 🟡 **`DAY-ONLY (AVOID OVERNIGHT)`** | Clean core spread, but:<br>`Rollover Mult > 3.0x` or<br>`Widening > 4.0%` | **Severe Rollover / Night Blowout Risk**. Spreads expand dramatically during the 17:00 NY bank rollover. **Mandatory rule**: Close all intraday positions before 21:45 UTC; do not hold overnight. |
-| 🔵 **`SWING / VOL ONLY`** | Wider nominal spread (`> 3.5 bps`), but:<br>`Spread/Vol ≤ 4.5%` | **Range-Absorbed Spread**. The spread is nominally wide, but the instrument's daily price range (ATR) easily absorbs the cost. Viable for swing targets; avoid scalping. |
-| 🔴 **`HIGH FRICTION / SKIP`** | `Stability > 2.20x` or<br>`Widening > 12.0%` or<br>`Spread/Vol > 7.5%` | **Toxic Quote Feed / Excessive Drag**. Frequent artificial widening or erratic spikes. Skip this instrument or find an alternative broker. |
+| 🟢 **`PRIME INTRADAY`** | `Spread ≤ 2.5 bps`<br>`Stability ≤ 1.40x`<br>`Widening ≤ 3.0%`<br>`Spread/Vol ≤ 3.5%`<br>`Blowout ≤ 2.5x` | **Elite Execution Quality**. Ultra-tight spread, rock-solid stability, negligible widening, clean tail (no blowout spikes), and low volatility drag. Optimal for scalpers, M1–M5 EAs, and high-turnover strategies. *(e.g. `US500`, `JPN225`, `NAS100`, `BTCUSD` on raw ECN)* |
+| 🟡 **`DAY-ONLY (AVOID OVERNIGHT)`** | Standard liquid intraday spreads (`Spread ≤ 2.5 bps`), but:<br>`Widening > 3.0%` or<br>`Rollover Mult > 2.5x` or<br>`Blowout > 2.5x` | **Day Trading Only / Avoid Overnight Holding**. Spreads are tight during normal market hours, but experience non-negligible widening during the 17:00 NY rollover or illiquid periods. **Mandatory rule**: Close intraday positions before 21:45 UTC; do not hold overnight. *(e.g. `EURUSD`, `GBPUSD`, `AUDUSD`, `NZDUSD`, `USDCAD`, `USDJPY`, `XAUUSD`)* |
+| 🟠 **`CAUTION / SWING`** | Nominally wider spread (`Spread > 2.5 bps`), but:<br>`Spread/Vol ≤ 5.0%` (or elevated stability) | **Volatility-Absorbed Spread / Swing Viable**. The spread is wider in basis points, but the instrument's daily price range (ATR) easily absorbs the cost. Viable for swing targets where profit targets are wide; avoid tight scalping. *(e.g. `BRENT`, `WTI`, `XBRUSD`, `XTIUSD`, `XAGUSD`, `XNGUSD`)* |
+| 🔴 **`HIGH FRICTION / SKIP`** | `Stability > 2.20x` or<br>`Widening > 12.0%` or<br>`Spread/Vol > 7.5%` or<br>(`Blowout > 4.0x` & `bps > 2.5`) | **Toxic Quote Feed / Severe Tail Blowouts**. Frequent artificial widening or erratic spikes exceeding baseline bounds. Disqualifies predatory feeds and stop-out traps. Skip this instrument or find an alternative broker. *(e.g. `DE40Cash`, `JP225Cash` on unstable feeds)* |
 
 ---
 
@@ -373,6 +380,31 @@ $$\text{TWAS (bps)} = \left(\frac{\sum_{i=1}^{N-1} \text{Spread}_i \times \Delta
 
 ---
 
+### 3.1 Extreme Tail Microstructure: P95 vs. P99 vs. Max Spread
+
+Standard retail analytics often assume that `TWAS` or `P95` spread sufficiently captures broker spread behavior. In institutional market microstructure, this is a dangerous misconception:
+
+#### The Stop-Loss & Stop-Out Execution Asymmetry
+- **Limit Orders** execute passively and benefit from low continuous TWAS.
+- **Stop-Loss Orders & Margin Liquidations** execute as aggressive market orders at the **instantaneous worst touch price (tick peak)**.
+- If a broker widens spreads from 1 pip to 40 pips for just **20 milliseconds** during rollover or illiquid periods, `TWAS` is barely moved (+0.00001 bps) and `widening_pct` increases by <0.01%. Yet **every resting stop-loss in that window is triggered and filled at the catastrophic price**.
+
+#### The Tail Blowout Ratio ($\frac{P_{99.9}}{P_{95}}$)
+To protect traders without succumbing to single-tick bad prints or bridge delivery glitches, the system computes:
+- **$P_{99}$ & $P_{99.9}$ Extreme Quantiles**: Robust right-tail quantiles representing the worst 1% and 0.1% of quotes ($\approx 100$ ticks/day). Prolonged synthetic markups or illiquid vacuums generate hundreds of ticks and heavily shift $P_{99.9}$, while isolated 1-tick glitches are safely filtered.
+- **Tail Blowout Ratio**:
+  $$\text{Tail Blowout Ratio} = \frac{P_{99.9}}{P_{95}}$$
+  - **$\le 2.0\text{x}$**: Well-behaved, liquid book.
+  - **$> 2.5\text{x}$**: Elevated rollover/off-hours blowout risk (classified as `Day-Only`).
+  - **$> 4.0\text{x}$**: Severe tail blowout / predatory stop-hunting (automatically disqualified to `Skip`).
+
+#### Anti-Squash Spread Corridor Bar
+When a broker experiences a 40x blowout spike, scaling the corridor bar to raw $Max$ compresses the entire active trading range ($Min \to P_{95}$) into an unreadable 2-pixel sliver. The interface solves this by:
+1. Scaling the active corridor bar from $Min$ to a robust ceiling: $\max(P_{99}, 1.25 \times P_{95})$.
+2. Appending an amber/red `⚠️ Blowout: X.Xx` warning pill whenever $\frac{Max}{P_{95}} \ge 3.0\text{x}$.
+
+---
+
 ### 4. Cross-Broker Showdown Cards (`compare.py`)
 
 When running `python -m spread_analyzer.compare`, the dashboard presents **Canonical Showdown Cards** alongside the detailed grid:
@@ -382,11 +414,12 @@ When running `python -m spread_analyzer.compare`, the dashboard presents **Canon
   - `#1 Best Broker`: Shows `BEST 0.0 bps` with a solid emerald marker.
   - Competitors: Visual amber/rose bar displaying the exact additional transaction drag incurred (e.g. `+0.42 bps`).
 - **Scale-Invariant Execution Quality Score**:
-  $$\text{Quality Score (bps)} = \text{TWAS}_{\text{bps}} + 0.5 \cdot \text{TailRisk}_{\text{bps}} + 1.0 \cdot \text{WideningFriction}_{\text{bps}}$$
+  $$\text{Quality Score (bps)} = \text{TWAS}_{\text{bps}} + 0.4 \cdot \text{TailRisk}_{\text{bps}} + 0.2 \cdot \text{BlowoutRisk}_{\text{bps}} + 1.0 \cdot \text{WideningFriction}_{\text{bps}}$$
   Where:
-  - $\text{TailRisk}_{\text{bps}} = \max(P_{95} - \text{Median}, 0)$ in basis points.
-  - $\text{WideningFriction}_{\text{bps}} = \text{TWAS} \cdot (\%_{\text{widening}} / 100)$.
-  This formula is mathematically scale-invariant and monotonic, fairly penalizing erratic tail risk and widening frequency without distorting across zero-spread instruments.
+  - $\text{TailRisk}_{\text{bps}} = \frac{\max(P_{95} - \text{Median}, 0)}{\text{Median}} \cdot \text{Base}_{\text{bps}}$ (Normal right-tail expansion).
+  - $\text{BlowoutRisk}_{\text{bps}} = \frac{\max(P_{99.9} - P_{95}, 0)}{\text{Median}} \cdot \text{Base}_{\text{bps}}$ (Extreme tail blowout penalty).
+  - $\text{WideningFriction}_{\text{bps}} = \text{Base}_{\text{bps}} \cdot (\%_{\text{widening}} / 100)$.
+  This formula is mathematically scale-invariant and monotonic, fairly penalizing erratic tail risk and predatory spikes without distorting across zero-spread instruments.
 - **Cherry-Picking Guard**:
   To prevent brokers offering only 1 or 2 exotic symbols from claiming the `#1 Leader` trophy, brokers must contest at least $\min(3, \text{max contested})$ symbols to qualify for top leaderboard rank.
 

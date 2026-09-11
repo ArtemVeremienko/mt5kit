@@ -378,3 +378,31 @@ def test_time_weighted_vs_tick_weighted_spread():
     # Time-weighted should be significantly higher than tick-weighted average
     assert m.time_weighted_spread > m.avg_spread
     assert m.time_weighted_spread > 0.7
+
+
+def test_extreme_tail_percentiles_and_blowout_ratio():
+    # 1000 ticks: 950 ticks at 1.0 pip (0.00010), 45 ticks at 2.0 pips (0.00020), 4 ticks at 5.0 pips, 1 tick spike at 30.0 pips
+    base_ms = 1700000000000
+    spreads = np.concatenate([
+        np.array([0.00010] * 950),
+        np.array([0.00020] * 45),
+        np.array([0.00050] * 4),
+        np.array([0.00300] * 1),
+    ])
+    ticks = make_mock_ticks(base_ms, 1000, spreads, interval_ms=500)
+
+    _, m = process_ticks_and_resample(
+        ticks=ticks,
+        symbol="EURUSD",
+        point=0.00001,
+        digits=5,
+        unit_type="standard",
+    )
+
+    assert pytest.approx(m.median_spread, rel=1e-3) == 1.0
+    assert pytest.approx(m.p95_spread, abs=0.1) == 1.05
+    assert pytest.approx(m.max_spread, rel=1e-3) == 30.0
+    assert pytest.approx(m.p99_spread, abs=0.05) == 2.0
+    assert m.p999_spread > m.p95_spread
+    assert m.tail_blowout_ratio > 1.0
+    assert pytest.approx(m.max_to_median_ratio, abs=0.1) == 30.0

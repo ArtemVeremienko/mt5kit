@@ -192,3 +192,45 @@ def test_quality_score_ranking_vs_raw_bps(tmp_path: Path):
     assert pytest.approx(winner_q.winner_lead_bps, rel=1e-3) == abs(runner_up_q.delta_vs_winner_bps)
 
 
+def test_quality_score_penalizes_extreme_blowout_tail(tmp_path: Path):
+    mappings = {"EURUSD": ["EURUSD"]}
+    map_file = tmp_path / "mappings.json"
+    map_file.write_text(json.dumps(mappings), encoding="utf-8")
+
+    output_dir = tmp_path / "output_blowout"
+    clean_broker = output_dir / "CleanBroker"
+    blowout_broker = output_dir / "BlowoutBroker"
+    clean_broker.mkdir(parents=True)
+    blowout_broker.mkdir(parents=True)
+
+    header = (
+        "symbol,unit,min_spread,median_spread,avg_spread,p95_spread,p99_spread,p999_spread,max_spread,metric_basis,spread_bps,"
+        "time_weighted_bps,stability_ratio,tail_blowout_ratio,max_to_median_ratio,widening_pct_15x_time,widening_pct_20x_time,"
+        "widening_pct_15x_tick,core_spread_bps,rollover_multiplier,spread_to_vol_pct,avg_daily_volatility_pct,avg_daily_volatility,total_ticks,sampled_minutes\n"
+    )
+
+    # Clean Broker: Median 1.0 bps, P95 1.2, P99.9 1.5, Max 2.0 (Tail blowout ratio 1.25x)
+    (clean_broker / "spread_summary.csv").write_text(
+        header + "EURUSD,pips,0.8,1.0,1.05,1.2,1.3,1.5,2.0,median,1.0,1.0,1.2,1.25,2.0,1.0,0.5,1.0,1.0,1.2,1.0,0.5,50.0,20000,1400\n",
+        encoding="utf-8",
+    )
+
+    # Blowout Broker: Slightly lower median (0.95 bps), P95 1.2, BUT P99.9 blows out to 15.0 pips (Max 30.0 pips)
+    (blowout_broker / "spread_summary.csv").write_text(
+        header + "EURUSD,pips,0.7,0.95,1.15,1.2,3.0,15.0,30.0,median,0.95,0.95,1.26,12.5,31.5,1.0,0.5,1.0,0.95,1.2,1.0,0.5,50.0,20000,1400\n",
+        encoding="utf-8",
+    )
+
+    groups, lb = run_cross_broker_comparison(output_dir=output_dir, mappings_file=map_file)
+    assert len(groups) == 1
+    winner = groups[0].winner
+    runner_up = groups[0].runner_up
+
+    # CleanBroker must win #1 because BlowoutBroker's extreme tail blowout penalty pushes its quality score much worse
+    assert winner.broker_tag == "CleanBroker"
+    assert runner_up.broker_tag == "BlowoutBroker"
+    assert winner.rank == 1
+    assert runner_up.rank == 2
+
+
+

@@ -53,6 +53,11 @@ class SymbolSpreadMetrics:
     rollover_max_spread: float = 0.0
     rollover_multiplier: float = 1.0
     max_quote_gap_sec: float = 0.0
+    # Extreme Tail Risk & Microstructure Blowout Metrics
+    p99_spread: float = 0.0
+    p999_spread: float = 0.0
+    tail_blowout_ratio: float = 1.0  # P99.9 / P95 (or Robust Max / P95)
+    max_to_median_ratio: float = 1.0  # Max / Median
 
 
 def is_24_7_symbol(symbol: str, path: str = "", description: str = "") -> bool:
@@ -177,11 +182,17 @@ def process_ticks_and_resample(
     max_spread = float(np.max(spreads_scaled))
     median_spread = float(np.median(spreads_scaled))
     p95_spread = float(np.percentile(spreads_scaled, 95.0))
+    p99_spread = float(np.percentile(spreads_scaled, 99.0))
+    p999_spread = float(np.percentile(spreads_scaled, 99.9))
     total_ticks = int(len(spreads_scaled))
 
-    # 1. Spread Stability Ratio (P95 / Median)
-    # Ratio near 1.0 - 1.2 indicates highly stable/clean spread; > 2.0 indicates volatile widening
+    # 1. Spread Stability & Extreme Tail Blowout Ratios
+    # Stability: P95 / Median (1.0 - 1.3 is clean; > 2.0 indicates frequent widening)
     stability_ratio = (p95_spread / median_spread) if median_spread > 0.0 else 1.0
+    # Tail Blowout Ratio: P99.9 / P95 (<= 2.0 is well-behaved; > 3.0 indicates severe tail blowouts / stop-out risks)
+    tail_blowout_ratio = (p999_spread / p95_spread) if p95_spread > 0.0 else 1.0
+    # Max to Median Ratio: Peak tick spike vs typical baseline
+    max_to_median_ratio = (max_spread / median_spread) if median_spread > 0.0 else 1.0
 
     # 2. Time-Weighted Average Spread (TWAS) and Max Quote Gap (Excluding Weekend / Session Breaks)
     # Compute quote duration delta_t.
@@ -344,6 +355,10 @@ def process_ticks_and_resample(
         rollover_max_spread=rollover_max_spread,
         rollover_multiplier=rollover_multiplier,
         max_quote_gap_sec=max_quote_gap_sec,
+        p99_spread=p99_spread,
+        p999_spread=p999_spread,
+        tail_blowout_ratio=tail_blowout_ratio,
+        max_to_median_ratio=max_to_median_ratio,
     )
 
     return resampled, metrics

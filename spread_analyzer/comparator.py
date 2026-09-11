@@ -58,6 +58,11 @@ class BrokerSymbolRecord:
     time_weighted_bps: float = 0.0
     core_spread_bps: float = 0.0
     rollover_multiplier: float = 1.0
+    # Extreme Tail Risk & Blowout Metrics
+    p99_spread: float = 0.0
+    p999_spread: float = 0.0
+    tail_blowout_ratio: float = 1.0
+    max_to_median_ratio: float = 1.0
     # Scoring & Ranking
     quality_score: float = 0.0
     composite_score: float = 0.0
@@ -214,6 +219,10 @@ def parse_summary_csv(
             tw_bps = float(row.get("time_weighted_bps", spread_bps))
             core_bps = float(row.get("core_spread_bps", spread_bps))
             roll_mult = float(row.get("rollover_multiplier", 1.0))
+            p99_s = float(row.get("p99_spread", p95_s))
+            p999_s = float(row.get("p999_spread", max_s))
+            blowout_r = float(row.get("tail_blowout_ratio", (p999_s / p95_s) if p95_s > 0.0 else 1.0))
+            max_med_r = float(row.get("max_to_median_ratio", (max_s / med_s) if med_s > 0.0 else 1.0))
 
             record = BrokerSymbolRecord(
                 broker_tag=broker_tag,
@@ -239,6 +248,10 @@ def parse_summary_csv(
                 time_weighted_bps=tw_bps,
                 core_spread_bps=core_bps,
                 rollover_multiplier=roll_mult,
+                p99_spread=p99_s,
+                p999_spread=p999_s,
+                tail_blowout_ratio=blowout_r,
+                max_to_median_ratio=max_med_r,
                 composite_score=spread_bps,
             )
             records.append(record)
@@ -281,21 +294,29 @@ def run_cross_broker_comparison(
 
     for canonical, recs in sorted(grouped.items()):
         # Institutional Additive Execution Quality Score (Friction in basis points):
-        # Quality Score = TWAS (bps) + 0.5 * TailRisk (bps) + 1.0 * WideningFriction (bps)
+        # Quality Score = TWAS (bps) + 0.4 * TailRisk (bps) + 0.2 * BlowoutRisk (bps) + 1.0 * WideningFriction (bps)
         # Where:
         # - TWAS (bps): Base time-weighted execution friction (fallback to spread_bps if 0)
-        # - TailRisk (bps): Non-negative right-tail spread risk (P95 - Median in bps)
+        # - TailRisk (bps): Non-negative normal right-tail spread risk (P95 - Median in bps)
+        # - BlowoutRisk (bps): Extreme tail expansion risk (P99.9 - P95 in bps)
         # - WideningFriction (bps): TWAS * (widening_pct_15x_time / 100.0)
         # Properties: Scale-invariant, monotonic, immune to zero-spread collapse.
         for r in recs:
             base_bps = r.time_weighted_bps if r.time_weighted_bps > 0.0 else r.spread_bps
-            # Tail risk in bps: difference between P95 and Median
+            # 1. Normal right-tail risk (P95 - Median)
             tail_scaled = max(r.p95_spread - r.median_spread, 0.0)
             tail_bps = (tail_scaled / r.median_spread * base_bps) if r.median_spread > 0.0 else (r.stability_ratio - 1.0) * base_bps
             tail_bps = max(tail_bps, 0.0)
 
+            # 2. Extreme tail blowout risk (P99.9 - P95)
+            p999_s = getattr(r, "p999_spread", r.max_spread)
+            blowout_scaled = max(p999_s - r.p95_spread, 0.0)
+            blowout_bps = (blowout_scaled / r.median_spread * base_bps) if r.median_spread > 0.0 else 0.0
+            blowout_bps = max(blowout_bps, 0.0)
+
+            # 3. Widening duration friction
             widen_friction = base_bps * (r.widening_pct_15x_time / 100.0)
-            r.quality_score = round(base_bps + 0.5 * tail_bps + 1.0 * widen_friction, 4)
+            r.quality_score = round(base_bps + 0.4 * tail_bps + 0.2 * blowout_bps + 1.0 * widen_friction, 4)
 
         # Rank by composite quality score, tie-break with spread_bps then median_spread
         recs_sorted = sorted(recs, key=lambda x: (x.quality_score, x.spread_bps, x.median_spread))
@@ -545,10 +566,14 @@ def generate_comparison_html(
                 "median_spread": round(float(r.median_spread), 4),
                 "avg_spread": round(float(r.avg_spread), 4),
                 "p95_spread": round(float(r.p95_spread), 4),
+                "p99_spread": round(float(getattr(r, "p99_spread", r.p95_spread)), 4),
+                "p999_spread": round(float(getattr(r, "p999_spread", r.max_spread)), 4),
                 "max_spread": round(float(r.max_spread), 4),
                 "metric_basis": r.metric_basis,
                 "spread_bps": round(float(r.spread_bps), 4),
                 "stability_ratio": round(float(r.stability_ratio), 4),
+                "tail_blowout_ratio": round(float(getattr(r, "tail_blowout_ratio", 1.0)), 4),
+                "max_to_median_ratio": round(float(getattr(r, "max_to_median_ratio", 1.0)), 4),
                 "widening_pct_15x_time": round(float(r.widening_pct_15x_time), 4),
                 "widening_pct_20x_time": round(float(r.widening_pct_20x_time), 4),
                 "widening_pct_15x_tick": round(float(r.widening_pct_15x_tick), 4),
@@ -567,7 +592,7 @@ def generate_comparison_html(
             "winner_lead_bps": round(float(g.winner_lead_bps), 4),
         })
 
-    metric_title = "Execution Quality Score (bps: TWAS + 0.5·Tail + 1.0·Widening)"
+    metric_title = "Execution Quality Score (bps: TWAS + 0.4·Tail + 0.2·Blowout + 1.0·Widening)"
     report_data = {
         "metric": metric_title,
         "rank_by": "quality",

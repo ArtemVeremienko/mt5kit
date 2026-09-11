@@ -398,25 +398,38 @@
                     const stab = m.stability_ratio || 1.0;
                     const widen = m.widening_pct_15x_time || 0;
                     const roll = m.rollover_multiplier || 1.0;
+                    const spVol = m.spread_to_vol_pct || 0;
 
-                    // Hard Stop Criteria
-                    if (stab > 2.2 || widen > 12.0) {
+                    // Tail Blowout Metrics (default 1.0)
+                    const blowout = m.tail_blowout_ratio || 1.0;
+
+                    // 1. Hard Stop / Skip (Toxic execution, chronic instability, or severe friction)
+                    // Note: Blowout only forces Skip if the spread itself represents actual friction (bps > 2.5 or spVol > 5.0%)
+                    const isSevereFriction = stab > 2.2 || widen > 12.0 || spVol > 7.5;
+                    const isSevereBlowout = (blowout > 4.0 && (bps > 2.5 || spVol > 5.0));
+
+                    if (isSevereFriction || isSevereBlowout) {
                         return { tier: 'skip', label: '🔴 HIGH FRICTION / SKIP' };
                     }
-                    // Day-Only Criteria
-                    if (roll > 3.0 || widen > 4.0) {
-                        return { tier: 'day_only', label: '🟡 DAY-ONLY' };
-                    }
-                    // Prime Intraday Criteria
-                    if (bps <= 2.5 && stab <= 1.4 && widen <= 3.0) {
+
+                    // 2. Prime Intraday
+                    if (bps <= 2.5 && stab <= 1.4 && widen <= 3.0 && spVol <= 3.5 && blowout <= 2.5) {
                         return { tier: 'prime', label: '🟢 PRIME' };
                     }
-                    return { tier: 'day_only', label: '🟡 DAY-ONLY' };
+
+                    // 3. Day-Only (Tight intraday spreads, close before rollover)
+                    if (bps <= 2.5 || roll > 2.5 || blowout > 2.5) {
+                        return { tier: 'day_only', label: '🟡 DAY-ONLY' };
+                    }
+
+                    // 4. Caution / Swing
+                    return { tier: 'caution', label: '🟠 CAUTION' };
                 },
 
                 getVerdictBadgeClass(tier) {
                     if (tier === 'prime') return 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60';
                     if (tier === 'day_only') return 'bg-amber-950/80 text-amber-400 border-amber-800/60';
+                    if (tier === 'caution') return 'bg-orange-950/80 text-orange-400 border-orange-800/60';
                     return 'bg-rose-950/80 text-rose-400 border-rose-800/60';
                 },
 
