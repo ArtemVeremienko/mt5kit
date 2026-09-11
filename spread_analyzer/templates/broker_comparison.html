@@ -440,26 +440,23 @@
 
                     // Tail Blowout Metrics (default 1.0)
                     const blowout = m.tail_blowout_ratio || 1.0;
-                    const coreGap = m.core_max_quote_gap_sec || 0;
-                    const freezeCnt = m.quote_freeze_count || 0;
 
                     // 1. Hard Stop / Skip (Toxic execution, chronic instability, or severe friction)
                     // Note: Blowout only forces Skip if the spread itself represents actual friction (bps > 2.5 or spVol > 5.0%)
                     const isSevereFriction = stab > 2.2 || widen > 12.0 || spVol > 7.5;
                     const isSevereBlowout = (blowout > 4.0 && (bps > 2.5 || spVol > 5.0));
-                    const isSevereFreeze = coreGap > 120.0 || freezeCnt > 50;
 
-                    if (isSevereFriction || isSevereBlowout || isSevereFreeze) {
+                    if (isSevereFriction || isSevereBlowout) {
                         return { tier: 'skip', label: '🔴 HIGH FRICTION / SKIP' };
                     }
 
                     // 2. Prime Intraday
-                    if (bps <= 2.5 && stab <= 1.4 && widen <= 3.0 && spVol <= 3.5 && blowout <= 2.5 && coreGap <= 15.0 && freezeCnt <= 5) {
+                    if (bps <= 2.5 && stab <= 1.4 && widen <= 3.0 && spVol <= 3.5 && blowout <= 2.5) {
                         return { tier: 'prime', label: '🟢 PRIME' };
                     }
 
-                    // 3. Day-Only (Tight intraday spreads, close before rollover, or moderate quote freeze)
-                    if (bps <= 2.5 || roll > 2.5 || blowout > 2.5 || coreGap > 15.0 || freezeCnt > 5) {
+                    // 3. Day-Only (Tight intraday spreads, close before rollover)
+                    if (bps <= 2.5 || roll > 2.5 || blowout > 2.5) {
                         return { tier: 'day_only', label: '🟡 DAY-ONLY' };
                     }
 

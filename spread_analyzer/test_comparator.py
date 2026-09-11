@@ -51,7 +51,7 @@ FULL_TEST_HEADER = (
     "symbol,unit,min_spread,median_spread,avg_spread,p95_spread,p99_spread,p999_spread,max_spread,metric_basis,"
     "spread_bps,time_weighted_bps,core_spread_bps,rollover_multiplier,stability_ratio,tail_blowout_ratio,"
     "max_to_median_ratio,widening_pct_15x_time,widening_pct_20x_time,widening_pct_15x_tick,max_quote_gap_sec,"
-    "core_max_quote_gap_sec,quote_freeze_count,spread_to_vol_pct,avg_daily_volatility_pct,avg_daily_volatility,"
+    "spread_to_vol_pct,avg_daily_volatility_pct,avg_daily_volatility,"
     "total_ticks,sampled_minutes,mean_price\n"
 )
 
@@ -71,7 +71,7 @@ def test_cross_broker_comparison_and_scoring(tmp_path: Path):
     csv_a = broker_a / "spread_summary.csv"
     csv_a.write_text(
         FULL_TEST_HEADER
-        + "XAUUSD,cents,5.0,8.0,10.0,15.0,18.0,22.0,50.0,median,0.10,0.10,0.10,1.2,1.5,1.4,5.0,1.0,0.5,1.0,2.0,1.5,0,0.10,2.0,1000.0,50000,1400,2500.0\n",
+        + "XAUUSD,cents,5.0,8.0,10.0,15.0,18.0,22.0,50.0,median,0.10,0.10,0.10,1.2,1.5,1.4,5.0,1.0,0.5,1.0,2.0,0.10,2.0,1000.0,50000,1400,2500.0\n",
         encoding="utf-8",
     )
 
@@ -79,7 +79,7 @@ def test_cross_broker_comparison_and_scoring(tmp_path: Path):
     csv_b = broker_b / "spread_summary.csv"
     csv_b.write_text(
         FULL_TEST_HEADER
-        + "GOLD,cents,15.0,20.0,22.0,30.0,35.0,40.0,80.0,median,0.30,0.30,0.30,1.5,1.5,1.3,4.0,2.0,1.0,2.0,3.0,2.0,0,0.30,2.0,1000.0,40000,1400,2500.0\n",
+        + "GOLD,cents,15.0,20.0,22.0,30.0,35.0,40.0,80.0,median,0.30,0.30,0.30,1.5,1.5,1.3,4.0,2.0,1.0,2.0,3.0,0.30,2.0,1000.0,40000,1400,2500.0\n",
         encoding="utf-8",
     )
 
@@ -165,14 +165,14 @@ def test_quality_score_ranking_vs_raw_bps(tmp_path: Path):
     # Broker A: Tight median (0.8 bps), but volatile (stability 3.5x, widen 35%)
     (broker_a / "spread_summary.csv").write_text(
         FULL_TEST_HEADER
-        + "EURUSD,pips,0.5,0.8,1.4,2.8,3.2,4.0,8.0,median,0.80,0.80,0.80,4.0,3.5,1.4,10.0,35.0,20.0,30.0,2.0,1.5,0,1.0,0.5,50.0,20000,1400,1.0850\n",
+        + "EURUSD,pips,0.5,0.8,1.4,2.8,3.2,4.0,8.0,median,0.80,0.80,0.80,4.0,3.5,1.4,10.0,35.0,20.0,30.0,2.0,1.0,0.5,50.0,20000,1400,1.0850\n",
         encoding="utf-8",
     )
 
     # Broker B: Slightly higher median (0.9 bps), but rock-solid (stability 1.1x, widen 0.5%)
     (broker_b / "spread_summary.csv").write_text(
         FULL_TEST_HEADER
-        + "EURUSD,pips,0.8,0.9,0.92,1.0,1.1,1.2,2.0,median,0.90,0.90,0.90,1.2,1.1,1.2,2.2,0.5,0.1,0.5,1.0,0.8,0,1.1,0.5,50.0,20000,1400,1.0850\n",
+        + "EURUSD,pips,0.8,0.9,0.92,1.0,1.1,1.2,2.0,median,0.90,0.90,0.90,1.2,1.1,1.2,2.2,0.5,0.1,0.5,1.0,1.1,0.5,50.0,20000,1400,1.0850\n",
         encoding="utf-8",
     )
 
@@ -211,14 +211,14 @@ def test_quality_score_penalizes_extreme_blowout_tail(tmp_path: Path):
     # Clean Broker: Median 1.0 bps, P95 1.2, P99.9 1.5, Max 2.0 (Tail blowout ratio 1.25x)
     (clean_broker / "spread_summary.csv").write_text(
         FULL_TEST_HEADER
-        + "EURUSD,pips,0.8,1.0,1.05,1.2,1.3,1.5,2.0,median,1.0,1.0,1.0,1.2,1.2,1.25,2.0,1.0,0.5,1.0,1.0,0.5,0,1.0,0.5,50.0,20000,1400,1.0850\n",
+        + "EURUSD,pips,0.8,1.0,1.05,1.2,1.3,1.5,2.0,median,1.0,1.0,1.0,1.2,1.2,1.25,2.0,1.0,0.5,1.0,1.0,1.0,0.5,50.0,20000,1400,1.0850\n",
         encoding="utf-8",
     )
 
     # Blowout Broker: Slightly lower median (0.95 bps), P95 1.2, BUT P99.9 blows out to 15.0 pips (Max 30.0 pips)
     (blowout_broker / "spread_summary.csv").write_text(
         FULL_TEST_HEADER
-        + "EURUSD,pips,0.7,0.95,1.15,1.2,3.0,15.0,30.0,median,0.95,0.95,0.95,1.2,1.26,12.5,31.5,1.0,0.5,1.0,1.0,0.5,0,1.0,0.5,50.0,20000,1400,1.0850\n",
+        + "EURUSD,pips,0.7,0.95,1.15,1.2,3.0,15.0,30.0,median,0.95,0.95,0.95,1.2,1.26,12.5,31.5,1.0,0.5,1.0,1.0,1.0,0.5,50.0,20000,1400,1.0850\n",
         encoding="utf-8",
     )
 
@@ -345,13 +345,13 @@ def test_cross_broker_ranking_with_commission_reversal(tmp_path: Path):
 
     (raw_dir / "spread_summary.csv").write_text(
         FULL_TEST_HEADER
-        + "EURUSD,pips,0.0,0.1,0.12,0.2,0.3,0.4,1.0,median,0.09,0.09,0.09,1.1,1.1,1.2,2.0,0.5,0.1,0.5,1.0,0.5,0,0.1,0.5,50.0,20000,1400,1.0850\n",
+        + "EURUSD,pips,0.0,0.1,0.12,0.2,0.3,0.4,1.0,median,0.09,0.09,0.09,1.1,1.1,1.2,2.0,0.5,0.1,0.5,1.0,0.1,0.5,50.0,20000,1400,1.0850\n",
         encoding="utf-8",
     )
 
     (std_dir / "spread_summary.csv").write_text(
         FULL_TEST_HEADER
-        + "EURUSD,pips,0.4,0.5,0.52,0.6,0.7,0.8,1.5,median,0.46,0.46,0.46,1.1,1.1,1.2,2.0,0.5,0.1,0.5,1.0,0.5,0,0.5,0.5,50.0,20000,1400,1.0850\n",
+        + "EURUSD,pips,0.4,0.5,0.52,0.6,0.7,0.8,1.5,median,0.46,0.46,0.46,1.1,1.1,1.2,2.0,0.5,0.1,0.5,1.0,0.5,0.5,50.0,20000,1400,1.0850\n",
         encoding="utf-8",
     )
 

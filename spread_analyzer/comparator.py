@@ -65,8 +65,6 @@ class BrokerSymbolRecord:
     core_spread_bps: float = 0.0
     rollover_multiplier: float = 1.0
     max_quote_gap_sec: float = 0.0
-    core_max_quote_gap_sec: float = 0.0
-    quote_freeze_count: int = 0
     # Extreme Tail Risk & Blowout Metrics
     p99_spread: float = 0.0
     p999_spread: float = 0.0
@@ -222,8 +220,6 @@ REQUIRED_SUMMARY_COLUMNS = {
     "widening_pct_20x_time",
     "widening_pct_15x_tick",
     "max_quote_gap_sec",
-    "core_max_quote_gap_sec",
-    "quote_freeze_count",
     "spread_to_vol_pct",
     "avg_daily_volatility_pct",
     "avg_daily_volatility",
@@ -286,8 +282,6 @@ def parse_summary_csv(
             blowout_r = float(row["tail_blowout_ratio"])
             max_med_r = float(row["max_to_median_ratio"])
             max_gap = float(row["max_quote_gap_sec"])
-            core_max_gap = float(row["core_max_quote_gap_sec"])
-            freeze_cnt = int(float(row["quote_freeze_count"]))
             mean_p = float(row["mean_price"])
 
             record = BrokerSymbolRecord(
@@ -319,8 +313,6 @@ def parse_summary_csv(
                 tail_blowout_ratio=blowout_r,
                 max_to_median_ratio=max_med_r,
                 max_quote_gap_sec=max_gap,
-                core_max_quote_gap_sec=core_max_gap,
-                quote_freeze_count=freeze_cnt,
                 mean_price=mean_p,
                 composite_score=spread_bps,
             )
@@ -589,8 +581,6 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
         "widening_pct_15x_tick",
         "core_spread_bps",
         "rollover_multiplier",
-        "core_max_quote_gap_sec",
-        "quote_freeze_count",
         "quality_score",
         "composite_score",
         "delta_vs_winner_bps",
@@ -632,8 +622,6 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
                     "widening_pct_15x_tick": round(r.widening_pct_15x_tick, 4),
                     "core_spread_bps": round(r.core_spread_bps, 4),
                     "rollover_multiplier": round(r.rollover_multiplier, 4),
-                    "core_max_quote_gap_sec": round(r.core_max_quote_gap_sec, 4),
-                    "quote_freeze_count": r.quote_freeze_count,
                     "quality_score": round(r.quality_score, 4),
                     "composite_score": round(r.composite_score, 4),
                     "delta_vs_winner_bps": round(r.delta_vs_winner_bps, 4),
@@ -719,8 +707,6 @@ def generate_comparison_html(
                 "widening_pct_15x_tick": round(float(r.widening_pct_15x_tick), 4),
                 "core_spread_bps": round(float(r.core_spread_bps), 4),
                 "rollover_multiplier": round(float(r.rollover_multiplier), 4),
-                "core_max_quote_gap_sec": round(float(r.core_max_quote_gap_sec), 4),
-                "quote_freeze_count": int(r.quote_freeze_count),
                 "quality_score": round(float(r.quality_score), 4),
                 "composite_score": round(float(r.composite_score), 4),
                 "rank": int(r.rank),
