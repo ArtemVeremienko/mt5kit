@@ -541,7 +541,7 @@
                                 <h2 class="text-lg font-semibold text-white">1-Minute Spread Dynamics</h2>
                                 <span class="px-2 py-0.5 rounded text-[11px] font-mono bg-blue-950/80 text-blue-400 border border-blue-800/60">Dual Subplot (Spread + Ticks)</span>
                             </div>
-                            <p class="text-xs text-gray-400 mt-0.5" x-text="viewMode === 'range_bars' ? 'Cyan 1-minute Min-Max floating bars with Average spread line overlay and Tick Activity volume' : '1-minute Min-Max step corridor (Emerald Min to Rose-Red Max) with Average spread step line and Tick Activity volume'"></p>
+                            <p class="text-xs text-gray-400 mt-0.5" x-text="viewMode === 'range_bars' ? 'Cyan 1-minute Min-Max floating bars and Tick Activity volume' : '1-minute Min-Max step corridor (Emerald Min to Rose-Red Max) and Tick Activity volume'"></p>
                         </div>
                         <div class="flex flex-wrap items-center gap-4">
                             <!-- View Mode Toggle -->
@@ -882,18 +882,6 @@
                             xaxis: 'x',
                             yaxis: 'y'
                         });
-
-                        traces.push({
-                            type: 'scatter',
-                            mode: 'lines',
-                            x: times,
-                            y: avgs,
-                            name: `Avg Spread (${unit})`,
-                            line: { color: '#F59E0B', width: 1.5 },
-                            hoverinfo: 'skip',
-                            xaxis: 'x',
-                            yaxis: 'y'
-                        });
                     } else {
                         traces.push({
                             type: 'scatter',
@@ -919,18 +907,6 @@
                             line: { color: 'rgba(244, 63, 94, 0.85)', width: 1.2, shape: 'hv' },
                             customdata: customdata,
                             hovertemplate: `<b>%{x|%Y-%m-%d %H:%M} UTC</b><br>Max: <b>%{customdata[2]:.2f} ${unit}</b><br>Avg: <b>%{customdata[1]:.2f} ${unit}</b><br>Min: <b>%{customdata[0]:.2f} ${unit}</b><br>Ticks: %{customdata[3]:,}<extra></extra>`,
-                            xaxis: 'x',
-                            yaxis: 'y'
-                        });
-
-                        traces.push({
-                            type: 'scatter',
-                            mode: 'lines',
-                            x: times,
-                            y: avgs,
-                            name: `Avg Spread (${unit})`,
-                            line: { color: '#F97316', width: 2.0, shape: 'hv' },
-                            hoverinfo: 'skip',
                             xaxis: 'x',
                             yaxis: 'y'
                         });
