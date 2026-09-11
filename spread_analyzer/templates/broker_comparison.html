@@ -120,10 +120,20 @@
 
                 <!-- Broker Win Leaderboard -->
                 <div>
-                    <h2 class="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-3">Broker Win Leaderboard</h2>
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <div class="flex items-center gap-2.5">
+                            <h2 class="text-sm font-semibold uppercase tracking-wider text-white">Broker Win Leaderboard</h2>
+                            <span class="px-2 py-0.5 rounded text-[11px] font-mono font-medium border transition-colors duration-200"
+                                  :class="includeCommission ? 'bg-purple-950/80 text-purple-300 border-purple-800/60' : 'bg-blue-950/80 text-blue-300 border-blue-800/60'"
+                                  x-text="includeCommission ? '⚡ All-In Rating (Spread + Commission)' : '💧 Raw Liquidity Rating (Interbank Feeds Only)'"></span>
+                        </div>
+                        <div class="text-xs text-gray-500 font-mono hidden sm:block">
+                            Points: 1st=10 · 2nd=6 · 3rd=4 · 4th=2 · 5th=1 (Ranked by Avg PTS/Symbol)
+                        </div>
+                    </div>
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         <template x-for="(s, idx) in leaderboardList" :key="s.broker_tag">
-                            <div class="p-4 rounded-xl border flex flex-col justify-between space-y-3"
+                            <div class="p-4 rounded-xl border flex flex-col justify-between space-y-3 transition-all duration-200"
                                  :class="idx === 0 ? 'border-amber-500/50 bg-gray-900/90 shadow-lg shadow-amber-500/5' : 'border-gray-800 bg-gray-900/60'">
                                 <div class="flex items-center justify-between gap-2">
                                     <div class="min-w-0 flex-1">
@@ -249,6 +259,9 @@
                                                     <template x-if="includeCommission && (r.commission_rt_usd > 0)">
                                                         <span class="px-1 py-0.2 rounded bg-purple-950/80 text-purple-300 border border-purple-800/40 text-[10px]" x-text="'+$' + formatNum(r.commission_rt_usd) + '/lot'"></span>
                                                     </template>
+                                                    <template x-if="!includeCommission && (r.commission_rt_usd > 0)">
+                                                        <span class="px-1 py-0.2 rounded bg-gray-900 text-gray-500 border border-gray-800 text-[10px] line-through" title="Commission excluded from raw liquidity rating" x-text="'$' + formatNum(r.commission_rt_usd) + '/lot'"></span>
+                                                    </template>
                                                 </div>
                                             </div>
                                         </div>
@@ -317,20 +330,20 @@
                                     <th class="px-3 py-2.5 whitespace-nowrap font-sans">Verdict</th>
                                     <th @click="sortBy('unit')" class="sort-th px-3 py-2.5 whitespace-nowrap"><span class="flex items-center gap-1">Unit <span class="text-[10px]" :class="sortCol === 'unit' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('unit')"></span></span></th>
                                     <th @click="sortBy('min_spread')" class="sort-th px-3 py-2.5 text-green-400 whitespace-nowrap"><span class="flex items-center gap-1">Min <span class="text-[10px]" :class="sortCol === 'min_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('min_spread')"></span></span></th>
-                                    <th @click="sortBy('median_spread')" class="sort-th px-3 py-2.5 text-gray-300 whitespace-nowrap"><span class="flex items-center gap-1">Raw Med <span class="text-[10px]" :class="sortCol === 'median_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('median_spread')"></span></span></th>
-                                    <th @click="sortBy('commission_rt_usd')" class="sort-th px-3 py-2.5 text-purple-400 whitespace-nowrap"><span class="flex items-center gap-1">Comm ($) <span class="text-[10px]" :class="sortCol === 'commission_rt_usd' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('commission_rt_usd')"></span></span></th>
-                                    <th @click="sortBy('effective_median_spread')" class="sort-th px-3 py-2.5 text-white whitespace-nowrap font-bold"><span class="flex items-center gap-1">All-In Med <span class="text-[10px]" :class="sortCol === 'effective_median_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('effective_median_spread')"></span></span></th>
+                                    <th @click="sortBy('median_spread')" class="sort-th px-3 py-2.5 whitespace-nowrap" :class="!includeCommission ? 'text-white font-bold' : 'text-gray-400'"><span class="flex items-center gap-1">Raw Med <span class="text-[10px]" :class="sortCol === 'median_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('median_spread')"></span></span></th>
+                                    <th @click="sortBy('commission_rt_usd')" class="sort-th px-3 py-2.5 whitespace-nowrap" :class="includeCommission ? 'text-purple-400' : 'text-gray-600 line-through'"><span class="flex items-center gap-1">Comm ($) <span class="text-[10px]" :class="sortCol === 'commission_rt_usd' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('commission_rt_usd')"></span></span></th>
+                                    <th @click="sortBy('effective_median_spread')" class="sort-th px-3 py-2.5 whitespace-nowrap" :class="includeCommission ? 'text-white font-bold' : 'text-gray-500'"><span class="flex items-center gap-1">All-In Med <span class="text-[10px]" :class="sortCol === 'effective_median_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('effective_median_spread')"></span></span></th>
                                     <th @click="sortBy('avg_spread')" class="sort-th px-3 py-2.5 text-amber-400 whitespace-nowrap"><span class="flex items-center gap-1">Avg <span class="text-[10px]" :class="sortCol === 'avg_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('avg_spread')"></span></span></th>
                                     <th @click="sortBy('p95_spread')" class="sort-th px-3 py-2.5 text-gray-300 whitespace-nowrap"><span class="flex items-center gap-1">P95 <span class="text-[10px]" :class="sortCol === 'p95_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('p95_spread')"></span></span></th>
                                     <th @click="sortBy('max_spread')" class="sort-th px-3 py-2.5 text-red-400 whitespace-nowrap"><span class="flex items-center gap-1">Max <span class="text-[10px]" :class="sortCol === 'max_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('max_spread')"></span></span></th>
-                                    <th @click="sortBy('spread_bps')" class="sort-th px-3 py-2.5 text-cyan-400 whitespace-nowrap font-bold"><span class="flex items-center gap-1">Raw (bps) <span class="text-[10px]" :class="sortCol === 'spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('spread_bps')"></span></span></th>
-                                    <th @click="sortBy('effective_spread_bps')" class="sort-th px-3 py-2.5 text-cyan-300 whitespace-nowrap font-bold"><span class="flex items-center gap-1">All-In (bps) <span class="text-[10px]" :class="sortCol === 'effective_spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('effective_spread_bps')"></span></span></th>
+                                    <th @click="sortBy('spread_bps')" class="sort-th px-3 py-2.5 whitespace-nowrap font-bold" :class="!includeCommission ? 'text-cyan-300' : 'text-gray-400'"><span class="flex items-center gap-1">Raw (bps) <span class="text-[10px]" :class="sortCol === 'spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('spread_bps')"></span></span></th>
+                                    <th @click="sortBy('effective_spread_bps')" class="sort-th px-3 py-2.5 whitespace-nowrap font-bold" :class="includeCommission ? 'text-cyan-300' : 'text-gray-500'"><span class="flex items-center gap-1">All-In (bps) <span class="text-[10px]" :class="sortCol === 'effective_spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('effective_spread_bps')"></span></span></th>
                                     <th @click="sortBy('core_spread_bps')" class="sort-th px-3 py-2.5 text-cyan-300 whitespace-nowrap font-bold" title="Core trading hours (07:00-20:00 UTC) spread"><span class="flex items-center gap-1">Core (bps) <span class="text-[10px]" :class="sortCol === 'core_spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('core_spread_bps')"></span></span></th>
                                     <th @click="sortBy('stability_ratio')" class="sort-th px-3 py-2.5 text-emerald-400 whitespace-nowrap"><span class="flex items-center gap-1">Stability <span class="text-[10px]" :class="sortCol === 'stability_ratio' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('stability_ratio')"></span></span></th>
                                     <th @click="sortBy('widening_pct_15x_time')" class="sort-th px-3 py-2.5 text-amber-400 whitespace-nowrap"><span class="flex items-center gap-1">Widen (>1.5x)% <span class="text-[10px]" :class="sortCol === 'widening_pct_15x_time' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('widening_pct_15x_time')"></span></span></th>
                                     <th @click="sortBy('rollover_multiplier')" class="sort-th px-3 py-2.5 text-purple-400 whitespace-nowrap" title="Rollover window (21:45-22:30 UTC) avg / Core median"><span class="flex items-center gap-1">Roll Mult <span class="text-[10px]" :class="sortCol === 'rollover_multiplier' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('rollover_multiplier')"></span></span></th>
-                                    <th @click="sortBy('quality_score')" class="sort-th px-3 py-2.5 text-purple-400 whitespace-nowrap font-bold"><span class="flex items-center gap-1">Raw Score <span class="text-[10px]" :class="sortCol === 'quality_score' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('quality_score')"></span></span></th>
-                                    <th @click="sortBy('effective_quality_score')" class="sort-th px-3 py-2.5 text-purple-300 whitespace-nowrap font-bold"><span class="flex items-center gap-1">All-In Score <span class="text-[10px]" :class="sortCol === 'effective_quality_score' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('effective_quality_score')"></span></span></th>
+                                    <th @click="sortBy('quality_score')" class="sort-th px-3 py-2.5 whitespace-nowrap font-bold" :class="!includeCommission ? 'text-purple-300' : 'text-gray-400'"><span class="flex items-center gap-1">Raw Score <span class="text-[10px]" :class="sortCol === 'quality_score' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('quality_score')"></span></span></th>
+                                    <th @click="sortBy('effective_quality_score')" class="sort-th px-3 py-2.5 whitespace-nowrap font-bold" :class="includeCommission ? 'text-purple-300' : 'text-gray-500'"><span class="flex items-center gap-1">All-In Score <span class="text-[10px]" :class="sortCol === 'effective_quality_score' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('effective_quality_score')"></span></span></th>
                                     <th @click="sortBy('delta_vs_winner_bps')" class="sort-th px-3 py-2.5 text-emerald-400 whitespace-nowrap min-w-[140px]"><span class="flex items-center gap-1">Delta vs #1 <span class="text-[10px]" :class="sortCol === 'delta_vs_winner_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('delta_vs_winner_bps')"></span></span></th>
                                 </tr>
                             </thead>
@@ -352,19 +365,19 @@
                                         </td>
                                         <td class="px-3 py-2.5 whitespace-nowrap font-sans">
                                             <span class="px-2 py-0.5 rounded text-[11px] font-semibold border"
-                                                  :class="getVerdictBadgeClass(getVerdict(r).tier)"
-                                                  x-text="getVerdict(r).label"></span>
+                                                   :class="getVerdictBadgeClass(getVerdict(r).tier)"
+                                                   x-text="getVerdict(r).label"></span>
                                         </td>
                                         <td class="px-3 py-2.5 text-gray-400" x-text="r.unit"></td>
                                         <td class="px-3 py-2.5 text-green-400" x-text="formatNum(r.min_spread)"></td>
-                                        <td class="px-3 py-2.5 text-gray-300" x-text="formatNum(r.median_spread)"></td>
-                                        <td class="px-3 py-2.5" :class="r.commission_rt_usd > 0 ? 'text-purple-300 font-bold' : 'text-gray-500'" x-text="r.commission_rt_usd > 0 ? '$' + formatNum(r.commission_rt_usd) : '-'"></td>
-                                        <td class="px-3 py-2.5 text-white font-bold" x-text="formatNum(r.effective_median_spread || r.median_spread)"></td>
+                                        <td class="px-3 py-2.5" :class="!includeCommission ? 'text-white font-bold' : 'text-gray-300'" x-text="formatNum(r.median_spread)"></td>
+                                        <td class="px-3 py-2.5" :class="includeCommission ? (r.commission_rt_usd > 0 ? 'text-purple-300 font-bold' : 'text-gray-500') : 'text-gray-600 line-through'" x-text="r.commission_rt_usd > 0 ? '$' + formatNum(r.commission_rt_usd) : '-'"></td>
+                                        <td class="px-3 py-2.5 font-bold" :class="includeCommission ? 'text-white' : 'text-gray-500'" x-text="formatNum(r.effective_median_spread || r.median_spread)"></td>
                                         <td class="px-3 py-2.5 text-amber-400" x-text="formatNum(r.avg_spread)"></td>
                                         <td class="px-3 py-2.5 text-gray-300" x-text="formatNum(r.p95_spread)"></td>
                                         <td class="px-3 py-2.5 text-red-400" x-text="formatNum(r.max_spread)"></td>
-                                        <td class="px-3 py-2.5 text-cyan-400 font-bold whitespace-nowrap" x-text="formatNum(r.spread_bps) + ' bps'"></td>
-                                        <td class="px-3 py-2.5 text-cyan-300 font-bold whitespace-nowrap" x-text="formatNum(r.effective_spread_bps || r.spread_bps) + ' bps'"></td>
+                                        <td class="px-3 py-2.5 font-bold whitespace-nowrap" :class="!includeCommission ? 'text-cyan-300' : 'text-gray-400'" x-text="formatNum(r.spread_bps) + ' bps'"></td>
+                                        <td class="px-3 py-2.5 font-bold whitespace-nowrap" :class="includeCommission ? 'text-cyan-300' : 'text-gray-500'" x-text="formatNum(r.effective_spread_bps || r.spread_bps) + ' bps'"></td>
                                         <td class="px-3 py-2.5 text-cyan-300 font-semibold whitespace-nowrap" x-text="formatNum(r.core_spread_bps || r.spread_bps) + ' bps'"></td>
                                         <td class="px-3 py-2.5">
                                             <span class="px-2 py-0.5 rounded text-xs font-medium border"
@@ -381,8 +394,8 @@
                                                   :class="(r.rollover_multiplier || 1) < 2.0 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((r.rollover_multiplier || 1) <= 5.0 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
                                                   x-text="formatNum(r.rollover_multiplier || 1) + 'x'"></span>
                                         </td>
-                                        <td class="px-3 py-2.5 text-purple-400 font-bold whitespace-nowrap" x-text="formatNum(r.quality_score, 3)"></td>
-                                        <td class="px-3 py-2.5 text-purple-300 font-bold whitespace-nowrap" x-text="formatNum(r.effective_quality_score || r.composite_score || r.quality_score, 3)"></td>
+                                        <td class="px-3 py-2.5 font-bold whitespace-nowrap" :class="!includeCommission ? 'text-purple-300' : 'text-gray-400'" x-text="formatNum(r.quality_score, 3)"></td>
+                                        <td class="px-3 py-2.5 font-bold whitespace-nowrap" :class="includeCommission ? 'text-purple-300' : 'text-gray-500'" x-text="formatNum(r.effective_quality_score || r.composite_score || r.quality_score, 3)"></td>
                                         <td class="px-3 py-2.5 whitespace-nowrap text-xs">
                                             <template x-if="(r.active_rank || r.rank) === 1 && r.is_contested">
                                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 font-bold whitespace-nowrap">
@@ -473,22 +486,10 @@
                     return 'bg-rose-950/80 text-rose-400 border-rose-800/60';
                 },
 
-                get filteredShowdownGroups() {
+                get activeComparisonGroups() {
                     if (!this.data || !this.data.groups) return [];
-                    let groups = this.data.groups;
-                    if (this.search.trim()) {
-                        const q = this.search.trim().toUpperCase();
-                        groups = groups.filter(g => {
-                            if (g.canonical_symbol && g.canonical_symbol.toUpperCase().includes(q)) return true;
-                            return g.records && g.records.some(r => 
-                                (r.broker_tag && r.broker_tag.toUpperCase().includes(q)) ||
-                                (r.symbol && r.symbol.toUpperCase().includes(q))
-                            );
-                        });
-                    }
-
-                    return groups.map(g => {
-                        const recs = [...g.records].sort((a, b) => {
+                    return this.data.groups.map(g => {
+                        const recs = [...(g.records || [])].sort((a, b) => {
                             const scoreA = this.includeCommission ? (a.effective_quality_score ?? a.composite_score ?? a.quality_score) : a.quality_score;
                             const scoreB = this.includeCommission ? (b.effective_quality_score ?? b.composite_score ?? b.quality_score) : b.quality_score;
                             if (scoreA !== scoreB) return scoreA - scoreB;
@@ -519,6 +520,21 @@
                             winner_lead_bps: lead,
                         };
                     });
+                },
+
+                get filteredShowdownGroups() {
+                    let groups = this.activeComparisonGroups;
+                    if (this.search.trim()) {
+                        const q = this.search.trim().toUpperCase();
+                        groups = groups.filter(g => {
+                            if (g.canonical_symbol && g.canonical_symbol.toUpperCase().includes(q)) return true;
+                            return g.records && g.records.some(r => 
+                                (r.broker_tag && r.broker_tag.toUpperCase().includes(q)) ||
+                                (r.symbol && r.symbol.toUpperCase().includes(q))
+                            );
+                        });
+                    }
+                    return groups;
                 },
 
                 init() {
@@ -570,11 +586,68 @@
                     reader.readAsText(file);
                 },
 
-                get leaderboardList() {
-                    if (!this.data || !this.data.leaderboard) return [];
-                    const list = Array.isArray(this.data.leaderboard) 
-                        ? [...this.data.leaderboard] 
-                        : Object.values(this.data.leaderboard);
+                recalculateLeaderboard(includeComm) {
+                    if (!this.data || !this.data.groups) return [];
+                    const POINTS_TABLE = { 1: 10.0, 2: 6.0, 3: 4.0, 4: 2.0, 5: 1.0 };
+                    const statsMap = {};
+
+                    // Collect all brokers
+                    this.data.groups.forEach(g => {
+                        if (g.records) {
+                            g.records.forEach(r => {
+                                if (!statsMap[r.broker_tag]) {
+                                    statsMap[r.broker_tag] = {
+                                        broker_tag: r.broker_tag,
+                                        total_points: 0,
+                                        contested_symbols: 0,
+                                        avg_points: 0,
+                                        first_places: 0,
+                                        second_places: 0,
+                                        third_places: 0,
+                                        other_places: 0,
+                                        total_symbols: 0,
+                                    };
+                                }
+                            });
+                        }
+                    });
+
+                    // Score contested symbols across groups
+                    this.data.groups.forEach(g => {
+                        if (!g.records || g.records.length === 0) return;
+                        const sorted = [...g.records].sort((a, b) => {
+                            const scoreA = includeComm ? (a.effective_quality_score ?? a.composite_score ?? a.quality_score) : a.quality_score;
+                            const scoreB = includeComm ? (b.effective_quality_score ?? b.composite_score ?? b.quality_score) : b.quality_score;
+                            if (scoreA !== scoreB) return scoreA - scoreB;
+                            const bpsA = includeComm ? (a.effective_spread_bps ?? a.spread_bps) : a.spread_bps;
+                            const bpsB = includeComm ? (b.effective_spread_bps ?? b.spread_bps) : b.spread_bps;
+                            return bpsA - bpsB;
+                        });
+
+                        const isContested = sorted.length > 1;
+                        sorted.forEach((r, idx) => {
+                            const bStats = statsMap[r.broker_tag];
+                            if (!bStats) return;
+                            bStats.total_symbols += 1;
+                            if (isContested) {
+                                bStats.contested_symbols += 1;
+                                const rank = idx + 1;
+                                const pts = POINTS_TABLE[rank] || 0;
+                                bStats.total_points += pts;
+                                if (rank === 1) bStats.first_places += 1;
+                                else if (rank === 2) bStats.second_places += 1;
+                                else if (rank === 3) bStats.third_places += 1;
+                                else bStats.other_places += 1;
+                            }
+                        });
+                    });
+
+                    const list = Object.values(statsMap);
+                    list.forEach(s => {
+                        s.avg_points = s.contested_symbols > 0 ? Number((s.total_points / s.contested_symbols).toFixed(4)) : 0;
+                        s.total_points = Number(s.total_points.toFixed(2));
+                    });
+
                     return list.sort((a, b) => {
                         if (b.avg_points !== a.avg_points) return b.avg_points - a.avg_points;
                         if (b.total_points !== a.total_points) return b.total_points - a.total_points;
@@ -582,10 +655,22 @@
                     });
                 },
 
+                get leaderboardList() {
+                    if (!this.data) return [];
+                    const modeKey = this.includeCommission ? 'leaderboard_all_in' : 'leaderboard_raw';
+                    if (this.data[modeKey] && Array.isArray(this.data[modeKey]) && this.data[modeKey].length > 0) {
+                        return [...this.data[modeKey]].sort((a, b) => {
+                            if (b.avg_points !== a.avg_points) return b.avg_points - a.avg_points;
+                            if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+                            return b.first_places - a.first_places;
+                        });
+                    }
+                    return this.recalculateLeaderboard(this.includeCommission);
+                },
+
                 get allComparisonRows() {
-                    if (!this.data || !this.data.groups) return [];
                     let rows = [];
-                    this.filteredShowdownGroups.forEach(g => {
+                    this.activeComparisonGroups.forEach(g => {
                         const is_contested = g.records && g.records.length > 1;
                         if (g.records) {
                             g.records.forEach(r => {
@@ -601,7 +686,7 @@
                 },
 
                 get sortedComparisonRows() {
-                    let rows = this.allComparisonRows;
+                    let rows = [...this.allComparisonRows];
                     if (this.search.trim()) {
                         const q = this.search.trim().toUpperCase();
                         rows = rows.filter(r => 
@@ -617,8 +702,8 @@
                         let valB = b[col];
 
                         if (col === 'rank') {
-                            valA = a.active_rank || a.rank;
-                            valB = b.active_rank || b.rank;
+                            valA = a.active_rank ?? a.rank;
+                            valB = b.active_rank ?? b.rank;
                         } else if (col === 'delta_vs_winner_bps') {
                             valA = a.active_delta ?? a.delta_vs_winner_bps;
                             valB = b.active_delta ?? b.delta_vs_winner_bps;

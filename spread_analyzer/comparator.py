@@ -84,9 +84,15 @@ class BrokerSymbolRecord:
     quality_score: float = 0.0
     composite_score: float = 0.0
     rank: int = 0
+    rank_raw: int = 0
+    rank_all_in: int = 0
     savings_vs_worst_bps: float = 0.0
     delta_vs_winner_bps: float = 0.0
+    delta_vs_winner_raw: float = 0.0
+    delta_vs_winner_all_in: float = 0.0
     winner_lead_bps: float = 0.0
+    winner_lead_raw: float = 0.0
+    winner_lead_all_in: float = 0.0
 
 
 @dataclass
@@ -100,6 +106,15 @@ class BrokerLeaderboardStats:
     third_places: int = 0
     other_places: int = 0
     total_symbols: int = 0
+
+
+class ComparisonLeaderboards(dict):
+    """Leaderboards container behaving as a standard dict with all_in and raw accessors."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.all_in: Dict[str, BrokerLeaderboardStats] = {}
+        self.raw: Dict[str, BrokerLeaderboardStats] = {}
 
 
 @dataclass
@@ -354,7 +369,10 @@ def run_cross_broker_comparison(
     # 1st: 10 pts, 2nd: 6 pts, 3rd: 4 pts, 4th: 2 pts, 5th: 1 pt
     POINTS_TABLE = {1: 10.0, 2: 6.0, 3: 4.0, 4: 2.0, 5: 1.0}
 
-    leaderboard: Dict[str, BrokerLeaderboardStats] = {
+    leaderboard_all_in: Dict[str, BrokerLeaderboardStats] = {
+        b: BrokerLeaderboardStats(broker_tag=b) for b in broker_tags
+    }
+    leaderboard_raw: Dict[str, BrokerLeaderboardStats] = {
         b: BrokerLeaderboardStats(broker_tag=b) for b in broker_tags
     }
 
@@ -404,52 +422,96 @@ def run_cross_broker_comparison(
             eff_base_bps = base_bps + r.commission_bps
             r.effective_quality_score = round(eff_base_bps + 0.4 * tail_bps + 0.2 * blowout_bps + 1.0 * widen_friction, 4)
 
-            # Composite score used for ranking
-            r.composite_score = r.effective_quality_score if enable_commission else r.quality_score
-
-        # Rank by composite score, tie-break with spread_bps then median_spread
-        recs_sorted = sorted(
+        # 1. All-In Ranking & Leaderboard scoring
+        recs_all_in = sorted(
             recs,
             key=lambda x: (
-                x.composite_score,
-                x.effective_spread_bps if enable_commission else x.spread_bps,
-                x.effective_median_spread if enable_commission else x.median_spread,
+                x.effective_quality_score,
+                x.effective_spread_bps,
+                x.effective_median_spread,
             ),
         )
+        is_contested = (len(recs) > 1)
+        w_all_in = recs_all_in[0] if recs_all_in else None
+        ru_all_in = recs_all_in[1] if len(recs_all_in) > 1 else None
+        lead_all_in = round(ru_all_in.effective_quality_score - w_all_in.effective_quality_score, 4) if (w_all_in and ru_all_in) else 0.0
 
-        is_contested = (len(recs_sorted) > 1)
-        winner = recs_sorted[0] if recs_sorted else None
-        runner_up = recs_sorted[1] if len(recs_sorted) > 1 else None
-        winner_lead = round(runner_up.composite_score - winner.composite_score, 4) if (winner and runner_up) else 0.0
+        for r_idx, r in enumerate(recs_all_in, start=1):
+            r.rank_all_in = r_idx
+            r.winner_lead_all_in = lead_all_in
+            r.delta_vs_winner_all_in = 0.0 if r_idx == 1 else round(w_all_in.effective_quality_score - r.effective_quality_score, 4)
 
-        for rank_idx, r in enumerate(recs_sorted, start=1):
-            r.rank = rank_idx
-            r.winner_lead_bps = winner_lead
-
-            if rank_idx == 1:
-                r.delta_vs_winner_bps = 0.0
-                r.savings_vs_worst_bps = winner_lead  # preserve for backwards compatibility
-            else:
-                # Negative delta representing deficit vs winner in execution quality score
-                r.delta_vs_winner_bps = round(winner.composite_score - r.composite_score, 4)
-                r.savings_vs_worst_bps = 0.0
-
-            stats = leaderboard[r.broker_tag]
-            stats.total_symbols += 1
-
+            stats_all_in = leaderboard_all_in[r.broker_tag]
+            stats_all_in.total_symbols += 1
             if is_contested:
-                stats.contested_symbols += 1
-                pts = POINTS_TABLE.get(rank_idx, 0.0)
-                stats.total_points += pts
-
-                if rank_idx == 1:
-                    stats.first_places += 1
-                elif rank_idx == 2:
-                    stats.second_places += 1
-                elif rank_idx == 3:
-                    stats.third_places += 1
+                stats_all_in.contested_symbols += 1
+                pts = POINTS_TABLE.get(r_idx, 0.0)
+                stats_all_in.total_points += pts
+                if r_idx == 1:
+                    stats_all_in.first_places += 1
+                elif r_idx == 2:
+                    stats_all_in.second_places += 1
+                elif r_idx == 3:
+                    stats_all_in.third_places += 1
                 else:
-                    stats.other_places += 1
+                    stats_all_in.other_places += 1
+
+        # 2. Raw Ranking & Leaderboard scoring
+        recs_raw = sorted(
+            recs,
+            key=lambda x: (
+                x.quality_score,
+                x.spread_bps,
+                x.median_spread,
+            ),
+        )
+        w_raw = recs_raw[0] if recs_raw else None
+        ru_raw = recs_raw[1] if len(recs_raw) > 1 else None
+        lead_raw = round(ru_raw.quality_score - w_raw.quality_score, 4) if (w_raw and ru_raw) else 0.0
+
+        for r_idx, r in enumerate(recs_raw, start=1):
+            r.rank_raw = r_idx
+            r.winner_lead_raw = lead_raw
+            r.delta_vs_winner_raw = 0.0 if r_idx == 1 else round(w_raw.quality_score - r.quality_score, 4)
+
+            stats_raw = leaderboard_raw[r.broker_tag]
+            stats_raw.total_symbols += 1
+            if is_contested:
+                stats_raw.contested_symbols += 1
+                pts = POINTS_TABLE.get(r_idx, 0.0)
+                stats_raw.total_points += pts
+                if r_idx == 1:
+                    stats_raw.first_places += 1
+                elif r_idx == 2:
+                    stats_raw.second_places += 1
+                elif r_idx == 3:
+                    stats_raw.third_places += 1
+                else:
+                    stats_raw.other_places += 1
+
+        # 3. Assign active ranking attributes based on enable_commission
+        if enable_commission:
+            recs_sorted = recs_all_in
+            winner = w_all_in
+            runner_up = ru_all_in
+            winner_lead = lead_all_in
+            for r in recs:
+                r.rank = r.rank_all_in
+                r.winner_lead_bps = r.winner_lead_all_in
+                r.delta_vs_winner_bps = r.delta_vs_winner_all_in
+                r.savings_vs_worst_bps = r.winner_lead_all_in if r.rank == 1 else 0.0
+                r.composite_score = r.effective_quality_score
+        else:
+            recs_sorted = recs_raw
+            winner = w_raw
+            runner_up = ru_raw
+            winner_lead = lead_raw
+            for r in recs:
+                r.rank = r.rank_raw
+                r.winner_lead_bps = r.winner_lead_raw
+                r.delta_vs_winner_bps = r.delta_vs_winner_raw
+                r.savings_vs_worst_bps = r.winner_lead_raw if r.rank == 1 else 0.0
+                r.composite_score = r.quality_score
 
         group = CanonicalComparisonGroup(
             canonical_symbol=canonical,
@@ -461,12 +523,17 @@ def run_cross_broker_comparison(
         )
         comparison_groups.append(group)
 
-    # Compute normalized average points per contested symbol
-    for stats in leaderboard.values():
-        if stats.contested_symbols > 0:
-            stats.avg_points = stats.total_points / stats.contested_symbols
-        else:
-            stats.avg_points = 0.0
+    # Compute normalized average points per contested symbol for both
+    for stats in leaderboard_all_in.values():
+        stats.avg_points = (stats.total_points / stats.contested_symbols) if stats.contested_symbols > 0 else 0.0
+
+    for stats in leaderboard_raw.values():
+        stats.avg_points = (stats.total_points / stats.contested_symbols) if stats.contested_symbols > 0 else 0.0
+
+    active_lb = leaderboard_all_in if enable_commission else leaderboard_raw
+    leaderboard = ComparisonLeaderboards(active_lb)
+    leaderboard.all_in = leaderboard_all_in
+    leaderboard.raw = leaderboard_raw
 
     return comparison_groups, leaderboard
 
@@ -583,6 +650,10 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
         "rollover_multiplier",
         "quality_score",
         "composite_score",
+        "rank_raw",
+        "rank_all_in",
+        "delta_vs_winner_raw",
+        "delta_vs_winner_all_in",
         "delta_vs_winner_bps",
         "winner_lead_bps",
         "total_ticks",
@@ -624,6 +695,10 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
                     "rollover_multiplier": round(r.rollover_multiplier, 4),
                     "quality_score": round(r.quality_score, 4),
                     "composite_score": round(r.composite_score, 4),
+                    "rank_raw": getattr(r, "rank_raw", r.rank),
+                    "rank_all_in": getattr(r, "rank_all_in", r.rank),
+                    "delta_vs_winner_raw": round(getattr(r, "delta_vs_winner_raw", r.delta_vs_winner_bps), 4),
+                    "delta_vs_winner_all_in": round(getattr(r, "delta_vs_winner_all_in", r.delta_vs_winner_bps), 4),
                     "delta_vs_winner_bps": round(r.delta_vs_winner_bps, 4),
                     "winner_lead_bps": round(r.winner_lead_bps, 4),
                     "total_ticks": r.total_ticks,
@@ -637,10 +712,12 @@ def generate_comparison_html(
     leaderboard: Dict[str, BrokerLeaderboardStats],
     output_path: Path,
     enable_commission: bool = True,
+    leaderboard_all_in: Optional[Dict[str, BrokerLeaderboardStats]] = None,
+    leaderboard_raw: Optional[Dict[str, BrokerLeaderboardStats]] = None,
 ) -> Path:
     """
     Generates a decoupled cross-broker comparison package:
-    - report_data.json: Structured JSON comparison data (leaderboard + groups)
+    - report_data.json: Structured JSON comparison data (both all_in & raw leaderboards + groups)
     - report_data.js: Script shim assigning window.__REPORT_DATA__ for local file:// viewing
     - index.html (or specified output_path): Static Alpine.js comparison dashboard copied from templates
     """
@@ -653,24 +730,31 @@ def generate_comparison_html(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    leaderboard_data = []
-    sorted_leaderboard = sorted(
-        leaderboard.values(),
-        key=lambda x: (x.avg_points, x.total_points, x.first_places),
-        reverse=True
-    )
-    for s in sorted_leaderboard:
-        leaderboard_data.append({
-            "broker_tag": s.broker_tag,
-            "total_points": round(float(s.total_points), 2),
-            "contested_symbols": int(s.contested_symbols),
-            "avg_points": round(float(s.avg_points), 4),
-            "first_places": int(s.first_places),
-            "second_places": int(s.second_places),
-            "third_places": int(s.third_places),
-            "other_places": int(s.other_places),
-            "total_symbols": int(s.total_symbols),
-        })
+    def serialize_leaderboard(lb_dict: Optional[Dict[str, BrokerLeaderboardStats]]) -> List[Dict[str, Any]]:
+        if not lb_dict:
+            return []
+        sorted_lb = sorted(
+            lb_dict.values(),
+            key=lambda x: (x.avg_points, x.total_points, x.first_places),
+            reverse=True
+        )
+        return [
+            {
+                "broker_tag": s.broker_tag,
+                "total_points": round(float(s.total_points), 2),
+                "contested_symbols": int(s.contested_symbols),
+                "avg_points": round(float(s.avg_points), 4),
+                "first_places": int(s.first_places),
+                "second_places": int(s.second_places),
+                "third_places": int(s.third_places),
+                "other_places": int(s.other_places),
+                "total_symbols": int(s.total_symbols),
+            }
+            for s in sorted_lb
+        ]
+
+    lb_all_in = leaderboard_all_in or getattr(leaderboard, "all_in", None) or leaderboard
+    lb_raw = leaderboard_raw or getattr(leaderboard, "raw", None) or leaderboard
 
     groups_data = []
     for g in groups:
@@ -710,8 +794,14 @@ def generate_comparison_html(
                 "quality_score": round(float(r.quality_score), 4),
                 "composite_score": round(float(r.composite_score), 4),
                 "rank": int(r.rank),
+                "rank_raw": int(getattr(r, "rank_raw", r.rank)),
+                "rank_all_in": int(getattr(r, "rank_all_in", r.rank)),
                 "delta_vs_winner_bps": round(float(r.delta_vs_winner_bps), 4),
+                "delta_vs_winner_raw": round(float(getattr(r, "delta_vs_winner_raw", r.delta_vs_winner_bps)), 4),
+                "delta_vs_winner_all_in": round(float(getattr(r, "delta_vs_winner_all_in", r.delta_vs_winner_bps)), 4),
                 "winner_lead_bps": round(float(r.winner_lead_bps), 4),
+                "winner_lead_raw": round(float(getattr(r, "winner_lead_raw", r.winner_lead_bps)), 4),
+                "winner_lead_all_in": round(float(getattr(r, "winner_lead_all_in", r.winner_lead_bps)), 4),
                 "total_ticks": int(r.total_ticks),
                 "sampled_minutes": int(r.sampled_minutes),
             })
@@ -719,6 +809,8 @@ def generate_comparison_html(
             "canonical_symbol": g.canonical_symbol,
             "records": records_data,
             "winner_lead_bps": round(float(g.winner_lead_bps), 4),
+            "winner_lead_raw": round(float(getattr(g.winner, "winner_lead_raw", g.winner_lead_bps) if g.winner else g.winner_lead_bps), 4),
+            "winner_lead_all_in": round(float(getattr(g.winner, "winner_lead_all_in", g.winner_lead_bps) if g.winner else g.winner_lead_bps), 4),
         })
 
     metric_title = "Execution Quality Score (bps: TWAS + 0.4·Tail + 0.2·Blowout + 1.0·Widening)"
@@ -726,7 +818,9 @@ def generate_comparison_html(
         "metric": metric_title,
         "rank_by": "quality",
         "enable_commission": enable_commission,
-        "leaderboard": leaderboard_data,
+        "leaderboard": serialize_leaderboard(leaderboard),
+        "leaderboard_all_in": serialize_leaderboard(lb_all_in),
+        "leaderboard_raw": serialize_leaderboard(lb_raw),
         "groups": groups_data,
     }
 

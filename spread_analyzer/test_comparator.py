@@ -363,11 +363,27 @@ def test_cross_broker_ranking_with_commission_reversal(tmp_path: Path):
         enable_commission=True,
     )
     assert len(groups_with_comm) == 1
-    # StdBroker wins because 0.46 bps < 0.09 + 0.65 (0.74 bps)
+    # StdBroker wins all-in because 0.46 bps < 0.09 + 0.65 (0.74 bps)
     assert groups_with_comm[0].winner.broker_tag == "StdBroker"
     assert groups_with_comm[0].winner.rank == 1
     assert groups_with_comm[0].runner_up.broker_tag == "RawBroker"
     assert groups_with_comm[0].runner_up.rank == 2
+
+    # Verify pre-computed dual-mode leaderboards
+    assert hasattr(lb_comm, "all_in")
+    assert hasattr(lb_comm, "raw")
+    assert lb_comm.all_in["StdBroker"].first_places == 1
+    assert lb_comm.all_in["StdBroker"].total_points == 10.0
+    assert lb_comm.raw["RawBroker"].first_places == 1
+    assert lb_comm.raw["RawBroker"].total_points == 10.0
+
+    # Verify records contain dual ranks
+    std_rec = [r for r in groups_with_comm[0].records if r.broker_tag == "StdBroker"][0]
+    raw_rec = [r for r in groups_with_comm[0].records if r.broker_tag == "RawBroker"][0]
+    assert std_rec.rank_all_in == 1
+    assert std_rec.rank_raw == 2
+    assert raw_rec.rank_all_in == 2
+    assert raw_rec.rank_raw == 1
 
     # 2. Compare WITHOUT commission (Raw ranking)
     groups_no_comm, lb_no_comm = run_cross_broker_comparison(
@@ -376,11 +392,23 @@ def test_cross_broker_ranking_with_commission_reversal(tmp_path: Path):
         commissions_file=comm_file,
         enable_commission=False,
     )
-    # RawBroker wins because raw 0.09 bps < 0.46 bps
+    # RawBroker wins raw because 0.09 bps < 0.46 bps
     assert groups_no_comm[0].winner.broker_tag == "RawBroker"
     assert groups_no_comm[0].winner.rank == 1
     assert groups_no_comm[0].runner_up.broker_tag == "StdBroker"
     assert groups_no_comm[0].runner_up.rank == 2
+
+    # Verify report_data.json exports both leaderboards
+    out_html = output_dir / "index.html"
+    generate_comparison_html(groups_with_comm, lb_comm, out_html, enable_commission=True)
+    report_json_path = output_dir / "report_data.json"
+    assert report_json_path.exists()
+    data = json.loads(report_json_path.read_text(encoding="utf-8"))
+    assert "leaderboard_all_in" in data
+    assert "leaderboard_raw" in data
+    assert data["leaderboard_all_in"][0]["broker_tag"] == "StdBroker"
+    assert data["leaderboard_raw"][0]["broker_tag"] == "RawBroker"
+
 
 
 
