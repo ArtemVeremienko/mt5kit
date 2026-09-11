@@ -188,12 +188,13 @@ def process_ticks_and_resample(
     total_ticks = int(len(spreads_scaled))
 
     # 1. Spread Stability & Extreme Tail Blowout Ratios
-    # Stability: P95 / Median (1.0 - 1.3 is clean; > 2.0 indicates frequent widening)
-    stability_ratio = (p95_spread / median_spread) if median_spread > 0.0 else 1.0
-    # Tail Blowout Ratio: P99.9 / P95 (<= 2.0 is well-behaved; > 3.0 indicates severe tail blowouts / stop-out risks)
-    tail_blowout_ratio = (p999_spread / p95_spread) if p95_spread > 0.0 else 1.0
-    # Max to Median Ratio: Peak tick spike vs typical baseline
-    max_to_median_ratio = (max_spread / median_spread) if median_spread > 0.0 else 1.0
+    # ECN baseline floor (0.5 unit) prevents small-denominator division explosions (e.g. 0.4 pips / 0.1 pips = 4.0x)
+    effective_median = max(median_spread, 0.5)
+    effective_p95 = max(p95_spread, 0.5)
+
+    stability_ratio = max(p95_spread / effective_median, 1.0) if median_spread > 0.0 else 1.0
+    tail_blowout_ratio = max(p999_spread / effective_p95, 1.0) if p95_spread > 0.0 else 1.0
+    max_to_median_ratio = max(max_spread / effective_median, 1.0) if median_spread > 0.0 else 1.0
 
     # 2. Time-Weighted Average Spread (TWAS) and Max Quote Gap (Excluding Weekend / Session Breaks)
     # Compute quote duration delta_t.
@@ -247,21 +248,32 @@ def process_ticks_and_resample(
         widening_pct_15x_time = widening_pct_15x_tick
         widening_pct_20x_time = widening_pct_20x_tick
 
-    # 4. Session Segmentation: Core Hours (07:00-20:00 UTC) vs DST-Aware NY Rollover
-    # Convert datetimes to Eastern Time (America/New_York) to accurately track the 17:00 NY rollover
-    # irrespective of summer (EDT, UTC-4) or winter (EST, UTC-5) shifts
-    hours_utc = datetimes.hour
-    core_mask = (hours_utc >= 7) & (hours_utc < 20)
+    # 4. Session Segmentation: Core Hours vs Daily Bank Rollover
+    # Dynamic Alignment: Supports both MT5 Broker Server Time (00:00 rollover convention)
+    # and standard UTC timestamps (21:45-22:45 UTC rollover).
+    hours = datetimes.hour
+    minutes = datetimes.minute
 
-    try:
-        datetimes_ny = datetimes.tz_convert("America/New_York")
-        ny_hours = datetimes_ny.hour
-        ny_minutes = datetimes_ny.minute
-        # NY Rollover is strictly 16:45 - 17:30 Eastern Time
-        rollover_mask = ((ny_hours == 16) & (ny_minutes >= 45)) | ((ny_hours == 17) & (ny_minutes < 30))
-    except Exception:
-        # Fallback to UTC if tz_convert fails
-        rollover_mask = ((hours_utc == 21) & (datetimes.minute >= 45)) | ((hours_utc == 22) & (datetimes.minute < 30))
+    # MT5 Broker Server Time: rollover is 23:45 - 00:45 server time; core is 08:00 - 22:00
+    roll_server_mask = ((hours == 23) & (minutes >= 45)) | ((hours == 0) & (minutes <= 45))
+    core_server_mask = (hours >= 8) & (hours < 22)
+
+    # UTC timestamps: rollover is 21:45 - 22:45 UTC; core is 07:00 - 20:00 UTC
+    roll_utc_mask = ((hours == 21) & (minutes >= 45)) | ((hours == 22) & (minutes <= 45))
+    core_utc_mask = (hours >= 7) & (hours < 20)
+
+    # Detect whether the feed is MT5 Server Time (00:00) or UTC (22:00) by comparing rollover widening
+    s_server = spreads_scaled[roll_server_mask] if np.any(roll_server_mask) else np.array([])
+    s_utc = spreads_scaled[roll_utc_mask] if np.any(roll_utc_mask) else np.array([])
+    mean_server = float(np.mean(s_server)) if len(s_server) > 0 else 0.0
+    mean_utc = float(np.mean(s_utc)) if len(s_utc) > 0 else 0.0
+
+    if mean_server >= mean_utc:
+        rollover_mask = roll_server_mask
+        core_mask = core_server_mask
+    else:
+        rollover_mask = roll_utc_mask
+        core_mask = core_utc_mask
 
     valid_asks = asks[valid_mask]
     if not is_24_7:

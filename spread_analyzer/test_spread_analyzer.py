@@ -407,3 +407,61 @@ def test_extreme_tail_percentiles_and_blowout_ratio():
     assert m.tail_blowout_ratio > 1.0
     assert pytest.approx(m.max_to_median_ratio, abs=0.1) == 30.0
 
+
+def test_ecn_small_denominator_stability_and_blowout():
+    # Scenario: Raw ECN feed with sub-pip spreads (0.1 pip median, 0.4 pip P95)
+    # Previously, 0.4 / 0.1 resulted in stability_ratio = 4.0 (false severe friction).
+    # With the 0.5 unit floor, max(0.4 / max(0.1, 0.5), 1.0) = 1.0x (ultra stable).
+    base_ms = 1700000000000
+    spreads = np.concatenate([
+        np.array([0.00001] * 900),  # 0.1 pip
+        np.array([0.00004] * 100),  # 0.4 pip
+    ])
+    ticks = make_mock_ticks(base_ms, 1000, spreads, interval_ms=100)
+
+    _, m = process_ticks_and_resample(
+        ticks=ticks,
+        symbol="USDCAD",
+        point=0.00001,
+        digits=5,
+        unit_type="standard",
+    )
+
+    assert pytest.approx(m.median_spread, abs=0.01) == 0.1
+    assert pytest.approx(m.p95_spread, abs=0.05) == 0.4
+    # Stability ratio must be protected against small-denominator explosion
+    assert m.stability_ratio <= 1.2
+
+
+def test_dynamic_rollover_server_time_detection():
+    # Wednesday 10:00 server time (core session) vs 00:15 server time (rollover)
+    # 2026-09-02 10:00:00 UTC
+    from datetime import datetime, timezone
+    core_dt = datetime(2026, 9, 2, 10, 0, tzinfo=timezone.utc)
+    roll_dt = datetime(2026, 9, 2, 0, 15, tzinfo=timezone.utc)
+
+    core_ms = int(core_dt.timestamp() * 1000)
+    roll_ms = int(roll_dt.timestamp() * 1000)
+
+    # 100 ticks during core at 0.1 pip
+    ticks_core = make_mock_ticks(core_ms, 100, np.array([0.00001] * 100), interval_ms=100)
+    # 100 ticks during rollover at 6.0 pips
+    ticks_roll = make_mock_ticks(roll_ms, 100, np.array([0.00060] * 100), interval_ms=100)
+
+    combined = np.concatenate([ticks_core, ticks_roll])
+    # sort by time_msc
+    combined = combined[np.argsort(combined["time_msc"])]
+
+    _, m = process_ticks_and_resample(
+        ticks=combined,
+        symbol="USDCAD",
+        point=0.00001,
+        digits=5,
+        unit_type="standard",
+    )
+
+    # Rollover avg should capture the 6.0 pips, core median should capture ~0.1 pips
+    assert pytest.approx(m.rollover_avg_spread, rel=0.1) == 6.0
+    assert m.rollover_multiplier > 10.0
+
+

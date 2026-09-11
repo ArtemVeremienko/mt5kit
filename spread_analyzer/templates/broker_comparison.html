@@ -442,16 +442,18 @@
                     const blowout = m.tail_blowout_ratio || 1.0;
 
                     // 1. Hard Stop / Skip (Toxic execution, chronic instability, or severe friction)
-                    // Note: Blowout only forces Skip if the spread itself represents actual friction (bps > 2.5 or spVol > 5.0%)
-                    const isSevereFriction = stab > 2.2 || widen > 12.0 || spVol > 7.5;
+                    // Note: Blowout, widening, and stability ratio only force Skip if the spread itself represents actual friction (bps > 2.5 or spVol > 5.0%)
+                    // On raw ECN feeds, tight daytime spreads that expand at rollover belong in Day-Only, not Skip!
+                    const isSevereFriction = (stab > 2.2 || widen > 12.0) && (bps > 2.5 || spVol > 5.0);
+                    const isSevereVolDrag = spVol > 7.5;
                     const isSevereBlowout = (blowout > 4.0 && (bps > 2.5 || spVol > 5.0));
 
-                    if (isSevereFriction || isSevereBlowout) {
+                    if (isSevereFriction || isSevereVolDrag || isSevereBlowout) {
                         return { tier: 'skip', label: '🔴 HIGH FRICTION / SKIP' };
                     }
 
                     // 2. Prime Intraday
-                    if (bps <= 2.5 && stab <= 1.4 && widen <= 3.0 && spVol <= 3.5 && blowout <= 2.5) {
+                    if (bps <= 2.5 && stab <= 1.4 && widen <= 3.0 && spVol <= 3.5 && blowout <= 2.5 && roll <= 2.5) {
                         return { tier: 'prime', label: '🟢 PRIME' };
                     }
 
