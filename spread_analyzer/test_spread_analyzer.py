@@ -406,3 +406,32 @@ def test_extreme_tail_percentiles_and_blowout_ratio():
     assert m.p999_spread > m.p95_spread
     assert m.tail_blowout_ratio > 1.0
     assert pytest.approx(m.max_to_median_ratio, abs=0.1) == 30.0
+
+
+def test_core_session_quote_gap_and_freeze_detection():
+    # Wednesday 10:00 UTC (core session: 07:00-20:00 UTC)
+    core_dt = datetime(2026, 9, 2, 10, 0, tzinfo=timezone.utc)
+    base_ms = int(core_dt.timestamp() * 1000)
+
+    # 50 ticks at 100ms interval (normal streaming)
+    ticks_normal = make_mock_ticks(base_ms, 50, np.array([0.00010] * 50), interval_ms=100)
+
+    # Then a 25-second freeze occurs! Next tick at base_ms + 50*100 + 25,000 ms
+    freeze_ms = base_ms + 50 * 100 + 25000
+    ticks_post_freeze = make_mock_ticks(freeze_ms, 50, np.array([0.00010] * 50), interval_ms=100)
+
+    combined = np.concatenate([ticks_normal, ticks_post_freeze])
+
+    _, m = process_ticks_and_resample(
+        ticks=combined,
+        symbol="EURUSD",
+        point=0.00001,
+        digits=5,
+        unit_type="standard",
+    )
+
+    # Check that core_max_quote_gap_sec captured the ~25.0s freeze
+    assert pytest.approx(m.core_max_quote_gap_sec, rel=0.1) == 25.0
+    # Exactly 1 freeze >= 10.0s
+    assert m.quote_freeze_count == 1
+

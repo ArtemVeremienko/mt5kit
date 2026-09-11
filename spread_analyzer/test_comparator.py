@@ -47,6 +47,15 @@ def test_symbol_mappings_and_normalization(tmp_path: Path):
     assert normalize_symbol("GBPJPY", reverse_map) == "GBPJPY"
 
 
+FULL_TEST_HEADER = (
+    "symbol,unit,min_spread,median_spread,avg_spread,p95_spread,p99_spread,p999_spread,max_spread,metric_basis,"
+    "spread_bps,time_weighted_bps,core_spread_bps,rollover_multiplier,stability_ratio,tail_blowout_ratio,"
+    "max_to_median_ratio,widening_pct_15x_time,widening_pct_20x_time,widening_pct_15x_tick,max_quote_gap_sec,"
+    "core_max_quote_gap_sec,quote_freeze_count,spread_to_vol_pct,avg_daily_volatility_pct,avg_daily_volatility,"
+    "total_ticks,sampled_minutes\n"
+)
+
+
 def test_cross_broker_comparison_and_scoring(tmp_path: Path):
     mappings = {"XAUUSD": ["XAUUSD", "GOLD"]}
     map_file = tmp_path / "mappings.json"
@@ -61,16 +70,16 @@ def test_cross_broker_comparison_and_scoring(tmp_path: Path):
     # Broker A has tighter spread on Gold (0.10 bps vs 0.30 bps)
     csv_a = broker_a / "spread_summary.csv"
     csv_a.write_text(
-        "symbol,unit,min_spread,median_spread,avg_spread,p95_spread,max_spread,metric_basis,spread_bps,spread_to_vol_pct,avg_daily_volatility_pct,avg_daily_volatility,total_ticks,sampled_minutes\n"
-        "XAUUSD,cents,5.0,8.0,10.0,15.0,50.0,median,0.10,0.10,2.0,1000.0,50000,1400\n",
+        FULL_TEST_HEADER
+        + "XAUUSD,cents,5.0,8.0,10.0,15.0,18.0,22.0,50.0,median,0.10,0.10,0.10,1.2,1.5,1.4,5.0,1.0,0.5,1.0,2.0,1.5,0,0.10,2.0,1000.0,50000,1400\n",
         encoding="utf-8",
     )
 
     # Broker B has wider spread on Gold (GOLD ticker)
     csv_b = broker_b / "spread_summary.csv"
     csv_b.write_text(
-        "symbol,unit,min_spread,median_spread,avg_spread,p95_spread,max_spread,metric_basis,spread_bps,spread_to_vol_pct,avg_daily_volatility_pct,avg_daily_volatility,total_ticks,sampled_minutes\n"
-        "GOLD,cents,15.0,20.0,22.0,30.0,80.0,median,0.30,0.30,2.0,1000.0,40000,1400\n",
+        FULL_TEST_HEADER
+        + "GOLD,cents,15.0,20.0,22.0,30.0,35.0,40.0,80.0,median,0.30,0.30,0.30,1.5,1.5,1.3,4.0,2.0,1.0,2.0,3.0,2.0,0,0.30,2.0,1000.0,40000,1400\n",
         encoding="utf-8",
     )
 
@@ -153,21 +162,17 @@ def test_quality_score_ranking_vs_raw_bps(tmp_path: Path):
     broker_a.mkdir(parents=True)
     broker_b.mkdir(parents=True)
 
-    header = (
-        "symbol,unit,min_spread,median_spread,avg_spread,p95_spread,max_spread,metric_basis,spread_bps,"
-        "stability_ratio,widening_pct_15x_time,widening_pct_20x_time,widening_pct_15x_tick,core_spread_bps,"
-        "rollover_multiplier,spread_to_vol_pct,avg_daily_volatility_pct,avg_daily_volatility,total_ticks,sampled_minutes\n"
-    )
-
     # Broker A: Tight median (0.8 bps), but volatile (stability 3.5x, widen 35%)
     (broker_a / "spread_summary.csv").write_text(
-        header + "EURUSD,pips,0.5,0.8,1.4,2.8,8.0,median,0.80,3.5,35.0,20.0,30.0,0.80,4.0,1.0,0.5,50.0,20000,1400\n",
+        FULL_TEST_HEADER
+        + "EURUSD,pips,0.5,0.8,1.4,2.8,3.2,4.0,8.0,median,0.80,0.80,0.80,4.0,3.5,1.4,10.0,35.0,20.0,30.0,2.0,1.5,0,1.0,0.5,50.0,20000,1400\n",
         encoding="utf-8",
     )
 
     # Broker B: Slightly higher median (0.9 bps), but rock-solid (stability 1.1x, widen 0.5%)
     (broker_b / "spread_summary.csv").write_text(
-        header + "EURUSD,pips,0.8,0.9,0.92,1.0,2.0,median,0.90,1.1,0.5,0.1,0.5,0.90,1.2,1.1,0.5,50.0,20000,1400\n",
+        FULL_TEST_HEADER
+        + "EURUSD,pips,0.8,0.9,0.92,1.0,1.1,1.2,2.0,median,0.90,0.90,0.90,1.2,1.1,1.2,2.2,0.5,0.1,0.5,1.0,0.8,0,1.1,0.5,50.0,20000,1400\n",
         encoding="utf-8",
     )
 
@@ -203,21 +208,17 @@ def test_quality_score_penalizes_extreme_blowout_tail(tmp_path: Path):
     clean_broker.mkdir(parents=True)
     blowout_broker.mkdir(parents=True)
 
-    header = (
-        "symbol,unit,min_spread,median_spread,avg_spread,p95_spread,p99_spread,p999_spread,max_spread,metric_basis,spread_bps,"
-        "time_weighted_bps,stability_ratio,tail_blowout_ratio,max_to_median_ratio,widening_pct_15x_time,widening_pct_20x_time,"
-        "widening_pct_15x_tick,core_spread_bps,rollover_multiplier,spread_to_vol_pct,avg_daily_volatility_pct,avg_daily_volatility,total_ticks,sampled_minutes\n"
-    )
-
     # Clean Broker: Median 1.0 bps, P95 1.2, P99.9 1.5, Max 2.0 (Tail blowout ratio 1.25x)
     (clean_broker / "spread_summary.csv").write_text(
-        header + "EURUSD,pips,0.8,1.0,1.05,1.2,1.3,1.5,2.0,median,1.0,1.0,1.2,1.25,2.0,1.0,0.5,1.0,1.0,1.2,1.0,0.5,50.0,20000,1400\n",
+        FULL_TEST_HEADER
+        + "EURUSD,pips,0.8,1.0,1.05,1.2,1.3,1.5,2.0,median,1.0,1.0,1.0,1.2,1.2,1.25,2.0,1.0,0.5,1.0,1.0,0.5,0,1.0,0.5,50.0,20000,1400\n",
         encoding="utf-8",
     )
 
     # Blowout Broker: Slightly lower median (0.95 bps), P95 1.2, BUT P99.9 blows out to 15.0 pips (Max 30.0 pips)
     (blowout_broker / "spread_summary.csv").write_text(
-        header + "EURUSD,pips,0.7,0.95,1.15,1.2,3.0,15.0,30.0,median,0.95,0.95,1.26,12.5,31.5,1.0,0.5,1.0,0.95,1.2,1.0,0.5,50.0,20000,1400\n",
+        FULL_TEST_HEADER
+        + "EURUSD,pips,0.7,0.95,1.15,1.2,3.0,15.0,30.0,median,0.95,0.95,0.95,1.2,1.26,12.5,31.5,1.0,0.5,1.0,1.0,0.5,0,1.0,0.5,50.0,20000,1400\n",
         encoding="utf-8",
     )
 
@@ -231,6 +232,21 @@ def test_quality_score_penalizes_extreme_blowout_tail(tmp_path: Path):
     assert runner_up.broker_tag == "BlowoutBroker"
     assert winner.rank == 1
     assert runner_up.rank == 2
+
+
+def test_strict_schema_validation_rejects_missing_columns(tmp_path: Path):
+    broker_dir = tmp_path / "IncompleteBroker"
+    broker_dir.mkdir(parents=True)
+    incomplete_csv = broker_dir / "spread_summary.csv"
+    # Legacy CSV missing new tail and freeze metrics
+    incomplete_csv.write_text(
+        "symbol,unit,min_spread,median_spread,avg_spread,p95_spread,max_spread,metric_basis,spread_bps\n"
+        "EURUSD,pips,0.5,0.8,1.0,1.5,3.0,median,0.80\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="missing required column"):
+        parse_summary_csv("IncompleteBroker", incomplete_csv, {})
 
 
 

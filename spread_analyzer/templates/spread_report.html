@@ -408,6 +408,7 @@
                                     <th @click="sortBy('stability_ratio')" class="sort-th px-4 py-3 text-emerald-400 whitespace-nowrap" title="P95 Spread / Median Spread"><span class="flex items-center gap-1.5">Stability (P95/Med) <span class="text-[10px]" :class="sortCol === 'stability_ratio' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('stability_ratio')"></span></span></th>
                                     <th @click="sortBy('widening_pct_15x_time')" class="sort-th px-4 py-3 text-amber-400 whitespace-nowrap" title="% of session time spread exceeded 1.5x median"><span class="flex items-center gap-1.5">Widening (>1.5x)% <span class="text-[10px]" :class="sortCol === 'widening_pct_15x_time' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('widening_pct_15x_time')"></span></span></th>
                                     <th @click="sortBy('rollover_multiplier')" class="sort-th px-4 py-3 text-purple-400 whitespace-nowrap" title="Rollover / Core Multiplier"><span class="flex items-center gap-1.5">Roll Mult <span class="text-[10px]" :class="sortCol === 'rollover_multiplier' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('rollover_multiplier')"></span></span></th>
+                                    <th @click="sortBy('core_max_quote_gap_sec')" class="sort-th px-4 py-3 text-cyan-300 whitespace-nowrap" title="Worst quote pause (sec) and freeze count (>=10s) during 07:00-20:00 UTC core hours"><span class="flex items-center gap-1.5">Core Gap (Freeze) <span class="text-[10px]" :class="sortCol === 'core_max_quote_gap_sec' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('core_max_quote_gap_sec')"></span></span></th>
                                     <th @click="sortBy('total_ticks')" class="sort-th px-4 py-3 text-gray-400"><span class="flex items-center gap-1.5">Total Ticks <span class="text-[10px]" :class="sortCol === 'total_ticks' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('total_ticks')"></span></span></th>
                                 </tr>
                             </thead>
@@ -436,6 +437,13 @@
                                             <span class="px-2 py-0.5 rounded font-medium border"
                                                   :class="(m.rollover_multiplier || 1) < 2.0 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((m.rollover_multiplier || 1) <= 5.0 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')"
                                                   x-text="formatNum(m.rollover_multiplier || 1) + 'x'"></span>
+                                        </td>
+                                        <td class="px-4 py-3 whitespace-nowrap">
+                                            <span class="px-2 py-0.5 rounded font-medium border text-xs"
+                                                  :class="(m.core_max_quote_gap_sec || 0) <= 5.0 ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60' : ((m.core_max_quote_gap_sec || 0) <= 15.0 ? 'bg-amber-950/80 text-amber-400 border-amber-800/60' : 'bg-rose-950/80 text-rose-400 border-rose-800/60')">
+                                                <span x-text="formatNum(m.core_max_quote_gap_sec || 0, 1) + 's'"></span>
+                                                <span x-show="m.quote_freeze_count > 0" class="text-[10px] text-rose-300 font-bold ml-1" :title="m.quote_freeze_count + ' freezes (>=10s) in core hours'" x-text="'(' + m.quote_freeze_count + 'x ❄️)'"></span>
+                                            </span>
                                         </td>
                                         <td class="px-4 py-3 text-gray-400" x-text="formatInt(m.total_ticks)"></td>
                                     </tr>
@@ -606,36 +614,42 @@
                     
                     // Tail Blowout Metrics (default 1.0)
                     const blowout = m.tail_blowout_ratio || 1.0;
+                    const coreGap = m.core_max_quote_gap_sec || 0;
+                    const freezeCnt = m.quote_freeze_count || 0;
 
-                    // 1. Hard Stop / Skip (Toxic execution, chronic instability, or severe friction)
+                    // 1. Hard Stop / Skip (Toxic execution, chronic instability, severe friction, or broken feed)
                     // Note: Blowout only forces Skip if the spread itself represents actual friction (bps > 2.5 or spVol > 5.0%)
                     // On raw ECN feeds, tight daytime spreads that expand at rollover belong in Day-Only, not Skip!
                     const isSevereFriction = stab > 2.2 || widen > 12.0 || spVol > 7.5;
                     const isSevereBlowout = (blowout > 4.0 && (bps > 2.5 || spVol > 5.0));
+                    const isSevereFreeze = coreGap > 120.0 || freezeCnt > 50;
 
-                    if (isSevereFriction || isSevereBlowout) {
+                    if (isSevereFriction || isSevereBlowout || isSevereFreeze) {
                         return { 
                             tier: 'skip', 
                             label: '🔴 HIGH FRICTION / SKIP', 
-                            reason: `Severe risk: Stability ${stab.toFixed(2)}x, Widening ${widen.toFixed(1)}%, Spread/Vol ${spVol.toFixed(1)}%, or Tail Blowout ${blowout.toFixed(1)}x` 
+                            reason: isSevereFreeze 
+                                ? `Feed failure: Core quote gap of ${coreGap.toFixed(1)}s (${freezeCnt} freezes) in active hours.`
+                                : `Severe risk: Stability ${stab.toFixed(2)}x, Widening ${widen.toFixed(1)}%, Spread/Vol ${spVol.toFixed(1)}%, or Tail Blowout ${blowout.toFixed(1)}x` 
                         };
                     }
 
-                    // 2. Prime Intraday (Ultra-tight spread, rock-solid stability, negligible widening, clean tail)
-                    if (bps <= 2.5 && stab <= 1.4 && widen <= 3.0 && spVol <= 3.5 && blowout <= 2.5) {
+                    // 2. Prime Intraday (Ultra-tight spread, rock-solid stability, negligible widening, clean tail, continuous feed)
+                    if (bps <= 2.5 && stab <= 1.4 && widen <= 3.0 && spVol <= 3.5 && blowout <= 2.5 && coreGap <= 15.0 && freezeCnt <= 5) {
                         return { 
                             tier: 'prime', 
                             label: '🟢 PRIME INTRADAY', 
-                            reason: 'Tight spread, minimal tail widening, clean tail (no blowout spikes), and low volatility drag.' 
+                            reason: 'Tight spread, minimal tail widening, clean tail (no blowout spikes), continuous active feed, and low volatility drag.' 
                         };
                     }
 
-                    // 3. Day-Only (Tight intraday spreads with rollover or off-hours widening, close before NY rollover)
-                    if (bps <= 2.5 || roll > 2.5 || blowout > 2.5) {
+                    // 3. Day-Only (Tight intraday spreads with rollover or off-hours widening, or moderate quote freeze)
+                    if (bps <= 2.5 || roll > 2.5 || blowout > 2.5 || coreGap > 15.0 || freezeCnt > 5) {
+                        const freezeReason = (coreGap > 15.0 || freezeCnt > 5) ? ` Feed freeze (${coreGap.toFixed(1)}s gap, ${freezeCnt}x >=10s).` : '';
                         return { 
                             tier: 'day_only', 
                             label: '🟡 DAY-ONLY', 
-                            reason: `Intraday spread ${bps.toFixed(2)} bps. Widening ${widen.toFixed(1)}%, Rollover ${roll.toFixed(1)}x, or Tail Blowout ${blowout.toFixed(1)}x — close before NY rollover.` 
+                            reason: `Intraday spread ${bps.toFixed(2)} bps. Widening ${widen.toFixed(1)}%, Rollover ${roll.toFixed(1)}x, or Tail Blowout ${blowout.toFixed(1)}x.${freezeReason} Close before NY rollover.` 
                         };
                     }
 

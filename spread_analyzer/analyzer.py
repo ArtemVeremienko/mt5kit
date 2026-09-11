@@ -53,6 +53,9 @@ class SymbolSpreadMetrics:
     rollover_max_spread: float = 0.0
     rollover_multiplier: float = 1.0
     max_quote_gap_sec: float = 0.0
+    # Core Session Quote Continuity & Freeze Detection
+    core_max_quote_gap_sec: float = 0.0  # Longest quote gap (sec) within 07:00-20:00 UTC on same day
+    quote_freeze_count: int = 0  # Number of core-session quote gaps >= 10.0 seconds
     # Extreme Tail Risk & Microstructure Blowout Metrics
     p99_spread: float = 0.0
     p999_spread: float = 0.0
@@ -267,11 +270,29 @@ def process_ticks_and_resample(
         valid_asks = valid_asks[trading_mask]
     mid_prices = (valid_bids + valid_asks) / 2.0
 
+    core_max_quote_gap_sec = 0.0
+    quote_freeze_count = 0
+
     if np.any(core_mask):
         core_median_spread = float(np.median(spreads_scaled[core_mask]))
         core_median_raw = float(np.median(valid_spread_raw[core_mask]))
         core_mid_price = float(np.mean(mid_prices[core_mask]))
         core_spread_bps = (core_median_raw / core_mid_price * 10000.0) if core_mid_price > 0.0 else 0.0
+
+        # Core session quote continuity & freeze detection (07:00-20:00 UTC)
+        if np.sum(core_mask) > 1:
+            core_times_msc = valid_time_msc[core_mask]
+            core_datetimes = datetimes[core_mask]
+            core_time_diffs_ms = np.diff(core_times_msc)
+            # Ensure consecutive ticks belong to the same calendar day (exclude overnight 19:59->07:01 gap)
+            same_day_mask = (core_datetimes[:-1].dayofyear == core_datetimes[1:].dayofyear) & (
+                core_datetimes[:-1].year == core_datetimes[1:].year
+            )
+            intraday_core_diffs_ms = core_time_diffs_ms[same_day_mask]
+            if len(intraday_core_diffs_ms) > 0:
+                intraday_core_diffs_sec = intraday_core_diffs_ms / 1000.0
+                core_max_quote_gap_sec = float(np.max(intraday_core_diffs_sec))
+                quote_freeze_count = int(np.sum(intraday_core_diffs_sec >= 10.0))
     else:
         core_median_spread = median_spread
         core_spread_bps = 0.0
@@ -355,6 +376,8 @@ def process_ticks_and_resample(
         rollover_max_spread=rollover_max_spread,
         rollover_multiplier=rollover_multiplier,
         max_quote_gap_sec=max_quote_gap_sec,
+        core_max_quote_gap_sec=core_max_quote_gap_sec,
+        quote_freeze_count=quote_freeze_count,
         p99_spread=p99_spread,
         p999_spread=p999_spread,
         tail_blowout_ratio=tail_blowout_ratio,

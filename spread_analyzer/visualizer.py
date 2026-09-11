@@ -336,6 +336,8 @@ def generate_html_report(
             "rollover_max_spread": round(float(getattr(m, "rollover_max_spread", m.max_spread)), 4),
             "rollover_multiplier": round(float(getattr(m, "rollover_multiplier", 1.0)), 4),
             "max_quote_gap_sec": round(float(getattr(m, "max_quote_gap_sec", 0.0)), 4),
+            "core_max_quote_gap_sec": round(float(getattr(m, "core_max_quote_gap_sec", 0.0)), 4),
+            "quote_freeze_count": int(getattr(m, "quote_freeze_count", 0)),
             "avg_daily_volatility_pct": round(float(m.avg_daily_volatility_pct), 4),
             "avg_daily_volatility": round(float(m.avg_daily_volatility), 4),
             "total_ticks": int(m.total_ticks),

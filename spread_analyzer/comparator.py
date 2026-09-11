@@ -58,6 +58,9 @@ class BrokerSymbolRecord:
     time_weighted_bps: float = 0.0
     core_spread_bps: float = 0.0
     rollover_multiplier: float = 1.0
+    max_quote_gap_sec: float = 0.0
+    core_max_quote_gap_sec: float = 0.0
+    quote_freeze_count: int = 0
     # Extreme Tail Risk & Blowout Metrics
     p99_spread: float = 0.0
     p999_spread: float = 0.0
@@ -181,6 +184,38 @@ def discover_summary_files(base_dir: Path) -> List[Tuple[str, Path]]:
     return found
 
 
+REQUIRED_SUMMARY_COLUMNS = {
+    "symbol",
+    "unit",
+    "min_spread",
+    "median_spread",
+    "avg_spread",
+    "p95_spread",
+    "p99_spread",
+    "p999_spread",
+    "max_spread",
+    "metric_basis",
+    "spread_bps",
+    "time_weighted_bps",
+    "core_spread_bps",
+    "rollover_multiplier",
+    "stability_ratio",
+    "tail_blowout_ratio",
+    "max_to_median_ratio",
+    "widening_pct_15x_time",
+    "widening_pct_20x_time",
+    "widening_pct_15x_tick",
+    "max_quote_gap_sec",
+    "core_max_quote_gap_sec",
+    "quote_freeze_count",
+    "spread_to_vol_pct",
+    "avg_daily_volatility_pct",
+    "avg_daily_volatility",
+    "total_ticks",
+    "sampled_minutes",
+}
+
+
 def parse_summary_csv(
     broker_tag: str,
     csv_path: Path,
@@ -189,40 +224,53 @@ def parse_summary_csv(
     records = []
     with open(csv_path, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
+        if not reader.fieldnames:
+            raise ValueError(f"Spread summary CSV {csv_path} is empty or has no header.")
+
+        missing_cols = sorted(REQUIRED_SUMMARY_COLUMNS - set(reader.fieldnames))
+        if missing_cols:
+            raise ValueError(
+                f"Invalid spread summary CSV {csv_path}: missing required column(s): {missing_cols}. "
+                "Please re-run spread analysis to generate up-to-date summary data."
+            )
+
         for row in reader:
-            sym = row.get("symbol", "").strip()
+            sym = row["symbol"].strip()
             if not sym:
                 continue
 
-            unit = row.get("unit", "standard")
-            min_s = float(row.get("min_spread", 0.0))
-            med_s = float(row.get("median_spread", row.get("avg_spread", 0.0)))
-            avg_s = float(row.get("avg_spread", 0.0))
-            p95_s = float(row.get("p95_spread", avg_s))
-            max_s = float(row.get("max_spread", avg_s))
-            basis = row.get("metric_basis", "median")
+            unit = row["unit"]
+            min_s = float(row["min_spread"])
+            med_s = float(row["median_spread"])
+            avg_s = float(row["avg_spread"])
+            p95_s = float(row["p95_spread"])
+            p99_s = float(row["p99_spread"])
+            p999_s = float(row["p999_spread"])
+            max_s = float(row["max_spread"])
+            basis = row["metric_basis"]
 
-            spread_bps = float(row.get("spread_bps", 0.0))
-            spread_to_vol_pct = float(row.get("spread_to_vol_pct", 0.0))
-            daily_vol_pct = float(row.get("avg_daily_volatility_pct", 0.0))
-            daily_vol = float(row.get("avg_daily_volatility", 0.0))
-            ticks = int(float(row.get("total_ticks", 0)))
-            m1_bars = int(float(row.get("sampled_minutes", 0)))
+            spread_bps = float(row["spread_bps"])
+            spread_to_vol_pct = float(row["spread_to_vol_pct"])
+            daily_vol_pct = float(row["avg_daily_volatility_pct"])
+            daily_vol = float(row["avg_daily_volatility"])
+            ticks = int(float(row["total_ticks"]))
+            m1_bars = int(float(row["sampled_minutes"]))
 
             canonical = normalize_symbol(sym, reverse_map)
 
             # Advanced Quote Quality & Widening Metrics
-            stab = float(row.get("stability_ratio", 1.0))
-            widen_15_time = float(row.get("widening_pct_15x_time", 0.0))
-            widen_20_time = float(row.get("widening_pct_20x_time", 0.0))
-            widen_15_tick = float(row.get("widening_pct_15x_tick", 0.0))
-            tw_bps = float(row.get("time_weighted_bps", spread_bps))
-            core_bps = float(row.get("core_spread_bps", spread_bps))
-            roll_mult = float(row.get("rollover_multiplier", 1.0))
-            p99_s = float(row.get("p99_spread", p95_s))
-            p999_s = float(row.get("p999_spread", max_s))
-            blowout_r = float(row.get("tail_blowout_ratio", (p999_s / p95_s) if p95_s > 0.0 else 1.0))
-            max_med_r = float(row.get("max_to_median_ratio", (max_s / med_s) if med_s > 0.0 else 1.0))
+            stab = float(row["stability_ratio"])
+            widen_15_time = float(row["widening_pct_15x_time"])
+            widen_20_time = float(row["widening_pct_20x_time"])
+            widen_15_tick = float(row["widening_pct_15x_tick"])
+            tw_bps = float(row["time_weighted_bps"])
+            core_bps = float(row["core_spread_bps"])
+            roll_mult = float(row["rollover_multiplier"])
+            blowout_r = float(row["tail_blowout_ratio"])
+            max_med_r = float(row["max_to_median_ratio"])
+            max_gap = float(row["max_quote_gap_sec"])
+            core_max_gap = float(row["core_max_quote_gap_sec"])
+            freeze_cnt = int(float(row["quote_freeze_count"]))
 
             record = BrokerSymbolRecord(
                 broker_tag=broker_tag,
@@ -252,6 +300,9 @@ def parse_summary_csv(
                 p999_spread=p999_s,
                 tail_blowout_ratio=blowout_r,
                 max_to_median_ratio=max_med_r,
+                max_quote_gap_sec=max_gap,
+                core_max_quote_gap_sec=core_max_gap,
+                quote_freeze_count=freeze_cnt,
                 composite_score=spread_bps,
             )
             records.append(record)
@@ -474,6 +525,8 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
         "widening_pct_15x_tick",
         "core_spread_bps",
         "rollover_multiplier",
+        "core_max_quote_gap_sec",
+        "quote_freeze_count",
         "quality_score",
         "delta_vs_winner_bps",
         "winner_lead_bps",
@@ -505,6 +558,8 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
                     "widening_pct_15x_tick": round(r.widening_pct_15x_tick, 4),
                     "core_spread_bps": round(r.core_spread_bps, 4),
                     "rollover_multiplier": round(r.rollover_multiplier, 4),
+                    "core_max_quote_gap_sec": round(r.core_max_quote_gap_sec, 4),
+                    "quote_freeze_count": r.quote_freeze_count,
                     "quality_score": round(r.quality_score, 4),
                     "delta_vs_winner_bps": round(r.delta_vs_winner_bps, 4),
                     "winner_lead_bps": round(r.winner_lead_bps, 4),
@@ -579,6 +634,8 @@ def generate_comparison_html(
                 "widening_pct_15x_tick": round(float(r.widening_pct_15x_tick), 4),
                 "core_spread_bps": round(float(r.core_spread_bps), 4),
                 "rollover_multiplier": round(float(r.rollover_multiplier), 4),
+                "core_max_quote_gap_sec": round(float(r.core_max_quote_gap_sec), 4),
+                "quote_freeze_count": int(r.quote_freeze_count),
                 "quality_score": round(float(r.quality_score), 4),
                 "rank": int(r.rank),
                 "delta_vs_winner_bps": round(float(r.delta_vs_winner_bps), 4),
