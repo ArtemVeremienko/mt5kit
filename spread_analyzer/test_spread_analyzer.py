@@ -465,3 +465,41 @@ def test_dynamic_rollover_server_time_detection():
     assert m.rollover_multiplier > 10.0
 
 
+def test_zero_median_rollover_multiplier():
+    # Scenario: Raw ECN EURUSD where core median is 0.0 pips
+    # Rollover spread expands to 3.0 pips.
+    # Previously, 0.0 baseline fell back to 1.0x (ignoring rollover).
+    # Now it should fall back to core average or overall average and compute a realistic multiplier.
+    from datetime import datetime, timezone
+    core_dt = datetime(2026, 9, 2, 10, 0, tzinfo=timezone.utc)
+    roll_dt = datetime(2026, 9, 2, 0, 15, tzinfo=timezone.utc)
+
+    core_ms = int(core_dt.timestamp() * 1000)
+    roll_ms = int(roll_dt.timestamp() * 1000)
+
+    # 100 ticks during core at 0.0 pips (spread = 0.00000) and a few at 0.1 pips (spread = 0.00001)
+    # Median is 0.0, but average is > 0.0
+    core_spreads = np.array([0.0] * 80 + [0.00001] * 20)
+    ticks_core = make_mock_ticks(core_ms, 100, core_spreads, interval_ms=100)
+
+    # 100 ticks during rollover at 3.0 pips (spread = 0.00030)
+    ticks_roll = make_mock_ticks(roll_ms, 100, np.array([0.00030] * 100), interval_ms=100)
+
+    combined = np.concatenate([ticks_core, ticks_roll])
+    combined = combined[np.argsort(combined["time_msc"])]
+
+    _, m = process_ticks_and_resample(
+        ticks=combined,
+        symbol="EURUSD",
+        point=0.00001,
+        digits=5,
+        unit_type="standard",
+    )
+
+    assert m.core_median_spread == 0.0
+    assert pytest.approx(m.rollover_avg_spread, rel=0.1) == 3.0
+    # Must NOT be 1.0x! It must reflect real widening relative to average baseline
+    assert m.rollover_multiplier > 10.0
+
+
+

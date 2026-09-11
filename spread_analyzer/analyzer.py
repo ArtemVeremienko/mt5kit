@@ -297,7 +297,19 @@ def process_ticks_and_resample(
         rollover_max_spread = max_spread
 
     # Rollover multiplier vs Core median spread
-    ref_baseline = core_median_spread if core_median_spread > 0.0 else median_spread
+    # When core median is 0.0 (e.g. raw ECN EURUSD where >50% ticks have 0 spread),
+    # fallback to core average (or overall average) to accurately measure real rollover expansion.
+    if core_median_spread > 0.0:
+        ref_baseline = core_median_spread
+    elif np.any(core_mask) and float(np.mean(spreads_scaled[core_mask])) > 0.0:
+        ref_baseline = float(np.mean(spreads_scaled[core_mask]))
+    elif median_spread > 0.0:
+        ref_baseline = median_spread
+    elif avg_spread > 0.0:
+        ref_baseline = avg_spread
+    else:
+        ref_baseline = 0.1
+
     rollover_multiplier = (rollover_avg_spread / ref_baseline) if ref_baseline > 0.0 else 1.0
 
     # Execution Efficiency Metrics: Institutional Mid-Price basis
