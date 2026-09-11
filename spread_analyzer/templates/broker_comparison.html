@@ -27,6 +27,7 @@
             color: #FFFFFF !important;
         }
         .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
             height: 6px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
@@ -39,6 +40,13 @@
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: #374151;
+        }
+        .sticky-header th {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            background-color: #030712;
+            box-shadow: inset 0 -1px 0 #1f2937;
         }
         [x-cloak] { display: none !important; }
     </style>
@@ -176,7 +184,23 @@
                             </button>
                         </div>
 
-                        <div class="relative w-full sm:w-72">
+                        <!-- Commission Mode Toggle -->
+                        <div class="inline-flex rounded-lg p-1 bg-gray-950 border border-gray-800 text-xs font-medium items-center">
+                            <button @click="includeCommission = true" 
+                                    :class="includeCommission ? 'bg-purple-600 text-white shadow' : 'text-gray-400 hover:text-white'" 
+                                    class="px-2.5 py-1.5 rounded-md transition flex items-center gap-1.5"
+                                    title="Include broker commission in all-in spread, friction, and ranking">
+                                <span>⚡</span> All-In (+Comm)
+                            </button>
+                            <button @click="includeCommission = false" 
+                                    :class="!includeCommission ? 'bg-gray-800 text-white shadow' : 'text-gray-400 hover:text-white'" 
+                                    class="px-2.5 py-1.5 rounded-md transition flex items-center gap-1.5"
+                                    title="Evaluate pure interbank feed spreads without commission">
+                                <span>💧</span> Raw Spread Only
+                            </button>
+                        </div>
+
+                        <div class="relative w-full sm:w-64">
                             <input type="text" x-model="search" placeholder="Search symbol or broker (e.g. EURUSD, GOLD)..." class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 font-mono">
                         </div>
                     </div>
@@ -209,18 +233,23 @@
                             <div class="divide-y divide-gray-800/50">
                                 <template x-for="r in g.records" :key="r.broker_tag">
                                     <div class="p-3.5 grid grid-cols-1 md:grid-cols-12 items-center gap-3 text-xs font-mono"
-                                         :class="r.rank === 1 ? 'bg-emerald-950/10' : ''">
+                                         :class="(r.active_rank || r.rank) === 1 ? 'bg-emerald-950/10' : ''">
                                         <!-- Broker Info & Rank (col 1-4) -->
                                         <div class="md:col-span-4 flex items-center gap-3 min-w-0">
-                                            <template x-if="r.rank === 1">
+                                            <template x-if="(r.active_rank || r.rank) === 1">
                                                 <span class="px-2 py-0.5 rounded text-xs bg-emerald-950/90 text-emerald-400 border border-emerald-800/80 font-bold whitespace-nowrap flex-shrink-0">#1 🏆</span>
                                             </template>
-                                            <template x-if="r.rank !== 1">
-                                                <span class="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 font-bold whitespace-nowrap flex-shrink-0" x-text="'#' + r.rank"></span>
+                                            <template x-if="(r.active_rank || r.rank) !== 1">
+                                                <span class="px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 font-bold whitespace-nowrap flex-shrink-0" x-text="'#' + (r.active_rank || r.rank)"></span>
                                             </template>
                                             <div class="min-w-0">
-                                                <div class="text-sm font-bold font-sans truncate" :class="r.rank === 1 ? 'text-white' : 'text-gray-300'" :title="r.broker_tag" x-text="r.broker_tag"></div>
-                                                <div class="text-[11px] text-gray-500 truncate" x-text="r.symbol + ' · ' + r.unit"></div>
+                                                <div class="text-sm font-bold font-sans truncate" :class="(r.active_rank || r.rank) === 1 ? 'text-white' : 'text-gray-300'" :title="r.broker_tag" x-text="r.broker_tag"></div>
+                                                <div class="text-[11px] text-gray-500 truncate flex items-center gap-1.5">
+                                                    <span x-text="r.symbol + ' · ' + r.unit"></span>
+                                                    <template x-if="includeCommission && (r.commission_rt_usd > 0)">
+                                                        <span class="px-1 py-0.2 rounded bg-purple-950/80 text-purple-300 border border-purple-800/40 text-[10px]" x-text="'+$' + formatNum(r.commission_rt_usd) + '/lot'"></span>
+                                                    </template>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -234,16 +263,16 @@
                                         <!-- Core Friction Numbers (col 7-9: Right aligned metrics) -->
                                         <div class="md:col-span-3 flex items-center justify-start md:justify-end gap-5 text-right font-mono">
                                             <div>
-                                                <span class="text-gray-500 text-[10px] block">SPREAD</span>
-                                                <span class="text-cyan-400 font-bold" x-text="formatNum(r.spread_bps) + ' bps'"></span>
+                                                <span class="text-gray-500 text-[10px] block" x-text="includeCommission ? 'ALL-IN MED' : 'RAW MED'"></span>
+                                                <span class="text-cyan-400 font-bold" x-text="formatNum(includeCommission ? (r.effective_median_spread ?? r.median_spread) : r.median_spread)"></span>
                                             </div>
                                             <div>
-                                                <span class="text-gray-500 text-[10px] block">STABILITY</span>
-                                                <span class="text-emerald-400" x-text="formatNum(r.stability_ratio || 1) + 'x'"></span>
+                                                <span class="text-gray-500 text-[10px] block" x-text="includeCommission ? 'ALL-IN BPS' : 'RAW BPS'"></span>
+                                                <span class="text-cyan-300 font-bold" x-text="formatNum(includeCommission ? (r.effective_spread_bps ?? r.spread_bps) : r.spread_bps) + ' bps'"></span>
                                             </div>
                                             <div>
-                                                <span class="text-gray-500 text-[10px] block">WIDEN</span>
-                                                <span class="text-amber-400" x-text="formatNum(r.widening_pct_15x_time || 0) + '%'"></span>
+                                                <span class="text-gray-500 text-[10px] block" x-text="includeCommission ? 'ALL-IN SCORE' : 'RAW SCORE'"></span>
+                                                <span class="text-purple-400 font-bold" x-text="formatNum(includeCommission ? (r.effective_quality_score ?? r.composite_score ?? r.quality_score) : r.quality_score, 2)"></span>
                                             </div>
                                         </div>
 
@@ -251,17 +280,17 @@
                                         <div class="md:col-span-3 w-full">
                                             <div class="flex justify-between text-[11px] mb-1">
                                                 <span class="text-gray-400">Delta vs #1:</span>
-                                                <span :class="r.rank === 1 ? 'text-emerald-400 font-bold' : (r.delta_vs_winner_bps <= -0.5 ? 'text-rose-400 font-bold' : 'text-amber-400')"
-                                                      x-text="r.rank === 1 ? 'BEST 0.0' : formatNum(r.delta_vs_winner_bps) + ' bps'"></span>
+                                                <span :class="(r.active_rank || r.rank) === 1 ? 'text-emerald-400 font-bold' : ((r.active_delta ?? r.delta_vs_winner_bps) <= -0.5 ? 'text-rose-400 font-bold' : 'text-amber-400')"
+                                                      x-text="(r.active_rank || r.rank) === 1 ? 'BEST 0.0' : formatNum(r.active_delta ?? r.delta_vs_winner_bps) + ' bps'"></span>
                                             </div>
                                             <div class="h-2 w-full bg-gray-950 rounded-full overflow-hidden border border-gray-800 relative">
-                                                <template x-if="r.rank === 1">
+                                                <template x-if="(r.active_rank || r.rank) === 1">
                                                     <div class="h-full bg-emerald-500 w-full rounded-full"></div>
                                                 </template>
-                                                <template x-if="r.rank > 1">
+                                                <template x-if="(r.active_rank || r.rank) > 1">
                                                     <div class="h-full rounded-full"
-                                                         :class="r.delta_vs_winner_bps <= -0.5 ? 'bg-rose-500' : 'bg-amber-500'"
-                                                         :style="'width: ' + Math.min(Math.abs(r.delta_vs_winner_bps || 0) * 30, 100) + '%;'"></div>
+                                                         :class="(r.active_delta ?? r.delta_vs_winner_bps) <= -0.5 ? 'bg-rose-500' : 'bg-amber-500'"
+                                                         :style="'width: ' + Math.min(Math.abs(r.active_delta ?? r.delta_vs_winner_bps ?? 0) * 30, 100) + '%;'"></div>
                                                 </template>
                                             </div>
                                         </div>
@@ -278,9 +307,9 @@
                         <h2 class="text-base font-semibold text-white">Grouped Head-to-Head Comparisons</h2>
                         <p class="text-xs text-gray-400">Click any column header to sort</p>
                     </div>
-                    <div class="overflow-x-auto custom-scrollbar">
+                    <div class="overflow-auto custom-scrollbar max-h-[calc(100vh-220px)] min-h-[480px]">
                         <table class="w-full text-left text-xs border-collapse font-mono">
-                            <thead class="bg-gray-950/80 uppercase text-gray-400 font-semibold border-b border-gray-800 font-sans">
+                            <thead class="sticky-header sticky top-0 z-20 bg-gray-950 uppercase text-gray-400 font-semibold font-sans">
                                 <tr>
                                     <th @click="sortBy('canonical_symbol')" class="sort-th px-3 py-2.5 whitespace-nowrap"><span class="flex items-center gap-1">Canonical <span class="text-[10px]" :class="sortCol === 'canonical_symbol' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('canonical_symbol')"></span></span></th>
                                     <th @click="sortBy('rank')" class="sort-th px-3 py-2.5 whitespace-nowrap min-w-[75px]"><span class="flex items-center gap-1">Rank <span class="text-[10px]" :class="sortCol === 'rank' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('rank')"></span></span></th>
@@ -288,33 +317,37 @@
                                     <th class="px-3 py-2.5 whitespace-nowrap font-sans">Verdict</th>
                                     <th @click="sortBy('unit')" class="sort-th px-3 py-2.5 whitespace-nowrap"><span class="flex items-center gap-1">Unit <span class="text-[10px]" :class="sortCol === 'unit' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('unit')"></span></span></th>
                                     <th @click="sortBy('min_spread')" class="sort-th px-3 py-2.5 text-green-400 whitespace-nowrap"><span class="flex items-center gap-1">Min <span class="text-[10px]" :class="sortCol === 'min_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('min_spread')"></span></span></th>
-                                    <th @click="sortBy('median_spread')" class="sort-th px-3 py-2.5 text-gray-300 whitespace-nowrap"><span class="flex items-center gap-1">Median <span class="text-[10px]" :class="sortCol === 'median_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('median_spread')"></span></span></th>
+                                    <th @click="sortBy('median_spread')" class="sort-th px-3 py-2.5 text-gray-300 whitespace-nowrap"><span class="flex items-center gap-1">Raw Med <span class="text-[10px]" :class="sortCol === 'median_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('median_spread')"></span></span></th>
+                                    <th @click="sortBy('commission_rt_usd')" class="sort-th px-3 py-2.5 text-purple-400 whitespace-nowrap"><span class="flex items-center gap-1">Comm ($) <span class="text-[10px]" :class="sortCol === 'commission_rt_usd' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('commission_rt_usd')"></span></span></th>
+                                    <th @click="sortBy('effective_median_spread')" class="sort-th px-3 py-2.5 text-white whitespace-nowrap font-bold"><span class="flex items-center gap-1">All-In Med <span class="text-[10px]" :class="sortCol === 'effective_median_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('effective_median_spread')"></span></span></th>
                                     <th @click="sortBy('avg_spread')" class="sort-th px-3 py-2.5 text-amber-400 whitespace-nowrap"><span class="flex items-center gap-1">Avg <span class="text-[10px]" :class="sortCol === 'avg_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('avg_spread')"></span></span></th>
                                     <th @click="sortBy('p95_spread')" class="sort-th px-3 py-2.5 text-gray-300 whitespace-nowrap"><span class="flex items-center gap-1">P95 <span class="text-[10px]" :class="sortCol === 'p95_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('p95_spread')"></span></span></th>
                                     <th @click="sortBy('max_spread')" class="sort-th px-3 py-2.5 text-red-400 whitespace-nowrap"><span class="flex items-center gap-1">Max <span class="text-[10px]" :class="sortCol === 'max_spread' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('max_spread')"></span></span></th>
-                                    <th @click="sortBy('spread_bps')" class="sort-th px-3 py-2.5 text-cyan-400 whitespace-nowrap font-bold"><span class="flex items-center gap-1">Spread (bps) <span class="text-[10px]" :class="sortCol === 'spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('spread_bps')"></span></span></th>
+                                    <th @click="sortBy('spread_bps')" class="sort-th px-3 py-2.5 text-cyan-400 whitespace-nowrap font-bold"><span class="flex items-center gap-1">Raw (bps) <span class="text-[10px]" :class="sortCol === 'spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('spread_bps')"></span></span></th>
+                                    <th @click="sortBy('effective_spread_bps')" class="sort-th px-3 py-2.5 text-cyan-300 whitespace-nowrap font-bold"><span class="flex items-center gap-1">All-In (bps) <span class="text-[10px]" :class="sortCol === 'effective_spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('effective_spread_bps')"></span></span></th>
                                     <th @click="sortBy('core_spread_bps')" class="sort-th px-3 py-2.5 text-cyan-300 whitespace-nowrap font-bold" title="Core trading hours (07:00-20:00 UTC) spread"><span class="flex items-center gap-1">Core (bps) <span class="text-[10px]" :class="sortCol === 'core_spread_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('core_spread_bps')"></span></span></th>
                                     <th @click="sortBy('stability_ratio')" class="sort-th px-3 py-2.5 text-emerald-400 whitespace-nowrap"><span class="flex items-center gap-1">Stability <span class="text-[10px]" :class="sortCol === 'stability_ratio' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('stability_ratio')"></span></span></th>
                                     <th @click="sortBy('widening_pct_15x_time')" class="sort-th px-3 py-2.5 text-amber-400 whitespace-nowrap"><span class="flex items-center gap-1">Widen (>1.5x)% <span class="text-[10px]" :class="sortCol === 'widening_pct_15x_time' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('widening_pct_15x_time')"></span></span></th>
                                     <th @click="sortBy('rollover_multiplier')" class="sort-th px-3 py-2.5 text-purple-400 whitespace-nowrap" title="Rollover window (21:45-22:30 UTC) avg / Core median"><span class="flex items-center gap-1">Roll Mult <span class="text-[10px]" :class="sortCol === 'rollover_multiplier' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('rollover_multiplier')"></span></span></th>
-                                    <th @click="sortBy('quality_score')" class="sort-th px-3 py-2.5 text-purple-400 whitespace-nowrap font-bold"><span class="flex items-center gap-1">Quality Score <span class="text-[10px]" :class="sortCol === 'quality_score' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('quality_score')"></span></span></th>
+                                    <th @click="sortBy('quality_score')" class="sort-th px-3 py-2.5 text-purple-400 whitespace-nowrap font-bold"><span class="flex items-center gap-1">Raw Score <span class="text-[10px]" :class="sortCol === 'quality_score' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('quality_score')"></span></span></th>
+                                    <th @click="sortBy('effective_quality_score')" class="sort-th px-3 py-2.5 text-purple-300 whitespace-nowrap font-bold"><span class="flex items-center gap-1">All-In Score <span class="text-[10px]" :class="sortCol === 'effective_quality_score' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('effective_quality_score')"></span></span></th>
                                     <th @click="sortBy('delta_vs_winner_bps')" class="sort-th px-3 py-2.5 text-emerald-400 whitespace-nowrap min-w-[140px]"><span class="flex items-center gap-1">Delta vs #1 <span class="text-[10px]" :class="sortCol === 'delta_vs_winner_bps' ? 'text-blue-400' : 'text-gray-600'" x-text="getSortIcon('delta_vs_winner_bps')"></span></span></th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-800/60">
                                 <template x-for="r in sortedComparisonRows" :key="r.canonical_symbol + '_' + r.broker_tag">
-                                    <tr class="hover:bg-gray-800/60 transition" :class="r.rank === 1 ? 'bg-emerald-950/10' : ''">
+                                    <tr class="hover:bg-gray-800/60 transition" :class="(r.active_rank || r.rank) === 1 ? 'bg-emerald-950/10' : ''">
                                         <td class="px-3 py-2.5 font-bold text-blue-400 font-mono whitespace-nowrap" x-text="r.canonical_symbol"></td>
                                         <td class="px-3 py-2.5 whitespace-nowrap">
-                                            <template x-if="r.rank === 1">
+                                            <template x-if="(r.active_rank || r.rank) === 1">
                                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 font-mono font-bold whitespace-nowrap">#1 🏆</span>
                                             </template>
-                                            <template x-if="r.rank !== 1">
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 font-mono whitespace-nowrap" x-text="'#' + r.rank"></span>
+                                            <template x-if="(r.active_rank || r.rank) !== 1">
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-800 text-gray-400 font-mono whitespace-nowrap" x-text="'#' + (r.active_rank || r.rank)"></span>
                                             </template>
                                         </td>
                                         <td class="px-3 py-2.5 whitespace-nowrap">
-                                            <span :class="r.rank === 1 ? 'font-semibold text-white' : 'text-gray-400'" x-text="r.broker_tag"></span>
+                                            <span :class="(r.active_rank || r.rank) === 1 ? 'font-semibold text-white' : 'text-gray-400'" x-text="r.broker_tag"></span>
                                             <span class="text-xs text-gray-500 ml-1 font-mono" x-text="'(' + r.symbol + ')'"></span>
                                         </td>
                                         <td class="px-3 py-2.5 whitespace-nowrap font-sans">
@@ -325,10 +358,13 @@
                                         <td class="px-3 py-2.5 text-gray-400" x-text="r.unit"></td>
                                         <td class="px-3 py-2.5 text-green-400" x-text="formatNum(r.min_spread)"></td>
                                         <td class="px-3 py-2.5 text-gray-300" x-text="formatNum(r.median_spread)"></td>
+                                        <td class="px-3 py-2.5" :class="r.commission_rt_usd > 0 ? 'text-purple-300 font-bold' : 'text-gray-500'" x-text="r.commission_rt_usd > 0 ? '$' + formatNum(r.commission_rt_usd) : '-'"></td>
+                                        <td class="px-3 py-2.5 text-white font-bold" x-text="formatNum(r.effective_median_spread || r.median_spread)"></td>
                                         <td class="px-3 py-2.5 text-amber-400" x-text="formatNum(r.avg_spread)"></td>
                                         <td class="px-3 py-2.5 text-gray-300" x-text="formatNum(r.p95_spread)"></td>
                                         <td class="px-3 py-2.5 text-red-400" x-text="formatNum(r.max_spread)"></td>
                                         <td class="px-3 py-2.5 text-cyan-400 font-bold whitespace-nowrap" x-text="formatNum(r.spread_bps) + ' bps'"></td>
+                                        <td class="px-3 py-2.5 text-cyan-300 font-bold whitespace-nowrap" x-text="formatNum(r.effective_spread_bps || r.spread_bps) + ' bps'"></td>
                                         <td class="px-3 py-2.5 text-cyan-300 font-semibold whitespace-nowrap" x-text="formatNum(r.core_spread_bps || r.spread_bps) + ' bps'"></td>
                                         <td class="px-3 py-2.5">
                                             <span class="px-2 py-0.5 rounded text-xs font-medium border"
@@ -346,21 +382,22 @@
                                                   x-text="formatNum(r.rollover_multiplier || 1) + 'x'"></span>
                                         </td>
                                         <td class="px-3 py-2.5 text-purple-400 font-bold whitespace-nowrap" x-text="formatNum(r.quality_score, 3)"></td>
+                                        <td class="px-3 py-2.5 text-purple-300 font-bold whitespace-nowrap" x-text="formatNum(r.effective_quality_score || r.composite_score || r.quality_score, 3)"></td>
                                         <td class="px-3 py-2.5 whitespace-nowrap text-xs">
-                                            <template x-if="r.rank === 1 && r.is_contested">
+                                            <template x-if="(r.active_rank || r.rank) === 1 && r.is_contested">
                                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-emerald-950/80 text-emerald-400 border border-emerald-800/60 font-bold whitespace-nowrap">
-                                                    🏆 Best (+<span x-text="formatNum(r.winner_lead_bps)"></span> lead)
+                                                    🏆 Best (+<span x-text="formatNum(r.active_lead ?? r.winner_lead_bps)"></span> lead)
                                                 </span>
                                             </template>
-                                            <template x-if="r.rank === 1 && !r.is_contested">
+                                            <template x-if="(r.active_rank || r.rank) === 1 && !r.is_contested">
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-emerald-950/60 text-emerald-400 border border-emerald-800/40 font-bold whitespace-nowrap">
                                                     🏆 Best
                                                 </span>
                                             </template>
-                                            <template x-if="r.rank > 1">
+                                            <template x-if="(r.active_rank || r.rank) > 1">
                                                 <span class="font-bold whitespace-nowrap px-1.5 py-0.5 rounded text-xs border"
-                                                      :class="r.delta_vs_winner_bps <= -0.5 ? 'bg-rose-950/60 text-rose-400 border-rose-800/50' : 'bg-amber-950/60 text-amber-400 border-amber-800/50'"
-                                                      x-text="formatNum(r.delta_vs_winner_bps) + ' bps'">
+                                                      :class="(r.active_delta ?? r.delta_vs_winner_bps) <= -0.5 ? 'bg-rose-950/60 text-rose-400 border-rose-800/50' : 'bg-amber-950/60 text-amber-400 border-amber-800/50'"
+                                                      x-text="formatNum(r.active_delta ?? r.delta_vs_winner_bps) + ' bps'">
                                                 </span>
                                             </template>
                                         </td>
@@ -391,6 +428,7 @@
                 sortAsc: true,
                 dragOver: false,
                 loading: false,
+                includeCommission: true,
 
                 getVerdict(m) {
                     if (!m) return { tier: 'skip', label: '🔴 HIGH FRICTION / SKIP', reason: 'No data' };
@@ -449,7 +487,39 @@
                             );
                         });
                     }
-                    return groups;
+
+                    return groups.map(g => {
+                        const recs = [...g.records].sort((a, b) => {
+                            const scoreA = this.includeCommission ? (a.effective_quality_score ?? a.composite_score ?? a.quality_score) : a.quality_score;
+                            const scoreB = this.includeCommission ? (b.effective_quality_score ?? b.composite_score ?? b.quality_score) : b.quality_score;
+                            if (scoreA !== scoreB) return scoreA - scoreB;
+                            const bpsA = this.includeCommission ? (a.effective_spread_bps ?? a.spread_bps) : a.spread_bps;
+                            const bpsB = this.includeCommission ? (b.effective_spread_bps ?? b.spread_bps) : b.spread_bps;
+                            return bpsA - bpsB;
+                        });
+                        const winner = recs[0];
+                        const runnerUp = recs.length > 1 ? recs[1] : null;
+                        const winnerScore = this.includeCommission ? (winner?.effective_quality_score ?? winner?.composite_score ?? winner?.quality_score ?? 0) : (winner?.quality_score ?? 0);
+                        const runnerUpScore = this.includeCommission ? (runnerUp?.effective_quality_score ?? runnerUp?.composite_score ?? runnerUp?.quality_score ?? 0) : (runnerUp?.quality_score ?? 0);
+                        const lead = runnerUp ? Number((runnerUpScore - winnerScore).toFixed(4)) : 0;
+
+                        const updatedRecs = recs.map((r, idx) => {
+                            const rScore = this.includeCommission ? (r.effective_quality_score ?? r.composite_score ?? r.quality_score ?? 0) : (r.quality_score ?? 0);
+                            const delta = idx === 0 ? 0 : Number((winnerScore - rScore).toFixed(4));
+                            return {
+                                ...r,
+                                active_rank: idx + 1,
+                                active_delta: delta,
+                                active_lead: lead,
+                            };
+                        });
+
+                        return {
+                            ...g,
+                            records: updatedRecs,
+                            winner_lead_bps: lead,
+                        };
+                    });
                 },
 
                 init() {
@@ -472,6 +542,9 @@
 
                 loadData(json) {
                     this.data = json;
+                    if (json && json.enable_commission !== undefined) {
+                        this.includeCommission = Boolean(json.enable_commission);
+                    }
                 },
 
                 handleDrop(event) {
@@ -513,14 +586,14 @@
                 get allComparisonRows() {
                     if (!this.data || !this.data.groups) return [];
                     let rows = [];
-                    this.data.groups.forEach(g => {
+                    this.filteredShowdownGroups.forEach(g => {
                         const is_contested = g.records && g.records.length > 1;
                         if (g.records) {
                             g.records.forEach(r => {
                                 rows.push({
                                     ...r,
                                     canonical_symbol: g.canonical_symbol,
-                                    is_contested: is_contested
+                                    is_contested: is_contested,
                                 });
                             });
                         }
@@ -541,8 +614,17 @@
                     const col = this.sortCol;
                     const asc = this.sortAsc;
                     rows.sort((a, b) => {
-                        const valA = a[col];
-                        const valB = b[col];
+                        let valA = a[col];
+                        let valB = b[col];
+
+                        if (col === 'rank') {
+                            valA = a.active_rank || a.rank;
+                            valB = b.active_rank || b.rank;
+                        } else if (col === 'delta_vs_winner_bps') {
+                            valA = a.active_delta ?? a.delta_vs_winner_bps;
+                            valB = b.active_delta ?? b.delta_vs_winner_bps;
+                        }
+
                         if (typeof valA === 'number' && typeof valB === 'number') {
                             return asc ? valA - valB : valB - valA;
                         }

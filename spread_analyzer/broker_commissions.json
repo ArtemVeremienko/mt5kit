@@ -1,0 +1,28 @@
+{
+  "default": {
+    "forex": 7.0,
+    "metals": 7.0,
+    "indices": 0.0,
+    "commodities": 0.0,
+    "crypto": 0.0,
+    "other": 0.0
+  },
+  "brokers": {
+    "RoboForex": {
+      "forex": 5.0,
+      "metals": 8.0
+    },
+    "Fusion_Markets": {
+      "forex": 4.5,
+      "metals": 4.5
+    },
+    "GO_Markets": {
+      "forex": 5.0,
+      "metals": 5.0
+    },
+    "FxPro": {
+      "crypto": 10.0
+    }
+  },
+  "symbols": {}
+}

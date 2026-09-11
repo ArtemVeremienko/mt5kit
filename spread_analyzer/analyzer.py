@@ -61,6 +61,7 @@ class SymbolSpreadMetrics:
     p999_spread: float = 0.0
     tail_blowout_ratio: float = 1.0  # P99.9 / P95 (or Robust Max / P95)
     max_to_median_ratio: float = 1.0  # Max / Median
+    mean_price: float = 0.0
 
 
 def is_24_7_symbol(symbol: str, path: str = "", description: str = "") -> bool:
@@ -382,6 +383,7 @@ def process_ticks_and_resample(
         p999_spread=p999_spread,
         tail_blowout_ratio=tail_blowout_ratio,
         max_to_median_ratio=max_to_median_ratio,
+        mean_price=mean_price,
     )
 
     return resampled, metrics

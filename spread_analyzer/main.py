@@ -202,6 +202,7 @@ def export_csv(metrics_list: List[SymbolSpreadMetrics], csv_path: Path) -> Path:
         "avg_daily_volatility",
         "total_ticks",
         "sampled_minutes",
+        "mean_price",
     ]
 
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
@@ -242,6 +243,7 @@ def export_csv(metrics_list: List[SymbolSpreadMetrics], csv_path: Path) -> Path:
                 "avg_daily_volatility": round(m.avg_daily_volatility, 4),
                 "total_ticks": m.total_ticks,
                 "sampled_minutes": m.sampled_minutes,
+                "mean_price": round(float(getattr(m, "mean_price", 0.0)), 5),
             })
 
     logger.info(f"Summary CSV saved to: {csv_path.resolve()}")

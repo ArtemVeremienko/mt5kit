@@ -110,8 +110,28 @@ python -m spread_analyzer.compare --output-dir spread_analyzer/output --mappings
 - **Winner-Baseline Delta Calculation (`Delta vs #1`)**: Uses the **Rank #1 Winner** as the optimal execution benchmark:
   - **Rank #1 Winner**: Displays `🏆 Best (+X.XX lead)` showing the exact margin over the runner-up.
   - **Runners-Up (#2, #3, ...)**: Displays `-X.XX bps` representing the exact execution cost penalty / drag suffered compared to using the best broker.
-- **Multi-Broker HTML Dashboard**: Outputs [`index.html`](output/index.html) (with `report_data.json` and `report_data.js`) featuring rich leaderboard cards with medal counts (🥇, 🥈, 🥉), live search filtering, sortable head-to-head comparison tables powered by Alpine.js, and drag-and-drop JSON file loading.
-- **Cross-Broker Summary CSV**: Exports [`output/broker_comparison.csv`](output/broker_comparison.csv).
+- **Commission-Aware Total Cost of Ownership (All-In TCA)**:
+  - Supports configurable broker commissions via [`broker_commissions.json`](broker_commissions.json) or `--broker-comm` CLI overrides.
+  - Automatically handles asset class nuances: converts round-turn USD commission per standard lot into equivalent pips (Forex USD-quote, USD-base, cross pairs) and cents (Precious Metals), while defaulting indices and commodities to 0 commission.
+  - Computes **Effective Median / Avg Spread**, **All-In Spread (bps)**, and **All-In Quality Score**:
+    $$\text{Quality Score (bps)} = \left(\text{TWAS}_{\text{bps}} + \mathbf{\text{Comm}_{\text{bps}}}\right) + 0.4 \cdot \text{TailRisk}_{\text{bps}} + 0.2 \cdot \text{BlowoutRisk}_{\text{bps}} + 1.0 \cdot \text{WideningFriction}_{\text{bps}}$$
+  - Preserves raw tick microstructure statistics (stability ratio, tail blowout, quote freeze) so dealer widening quality is never masked or diluted by commission add-ons.
+- **Interactive Dual-Mode HTML Dashboard**: Outputs [`index.html`](output/index.html) (with `report_data.json` and `report_data.js`) featuring an instant `[⚡ All-In (+Comm)]` vs `[💧 Raw Spread Only]` toggle switch that reactively re-ranks brokers, updates horizon delta bars, and swaps showdown metrics client-side.
+- **Cross-Broker Summary CSV**: Exports [`output/broker_comparison.csv`](output/broker_comparison.csv) with both raw and all-in metrics.
+
+### Cross-Broker Comparator CLI Options:
+
+| Argument | Shorthand | Default | Description |
+|---|---|---|---|
+| `--output-dir` | `-o` | `spread_analyzer/output` | Base output directory containing broker account subfolders |
+| `--mappings` | `-m` | `spread_analyzer/symbol_mappings.json` | Path to JSON file containing canonical symbol aliases |
+| `--commissions` | `-c` | `spread_analyzer/broker_commissions.json` | Path to JSON file with broker commission profiles |
+| `--broker-comm` | | `None` | Inline commission overrides, e.g. `"Pepperstone:3.50,RoboForex:4.00"` |
+| `--no-comm` | | `False` | Evaluate pure raw interbank spreads without broker commission |
+| `--save-html` | | `<output-dir>/index.html` | Path to save interactive HTML comparison dashboard |
+| `--save-csv` | | `<output-dir>/broker_comparison.csv` | Path to save comparison summary CSV |
+| `--no-html` | | `False` | Skip generating the interactive HTML dashboard |
+| `--no-csv` | | `False` | Skip exporting the comparison summary CSV |
 
 
 ---

@@ -342,6 +342,7 @@ def generate_html_report(
             "avg_daily_volatility": round(float(m.avg_daily_volatility), 4),
             "total_ticks": int(m.total_ticks),
             "sampled_minutes": int(m.sampled_minutes),
+            "mean_price": round(float(getattr(m, "mean_price", 0.0)), 5),
             "is_24_7": bool(getattr(m, "is_24_7", False)),
         })
 

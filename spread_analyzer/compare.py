@@ -60,6 +60,24 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip generating comparison CSV file",
     )
+    parser.add_argument(
+        "--commissions",
+        "-c",
+        type=Path,
+        default=None,
+        help="Path to JSON file containing broker commission configurations (default: spread_analyzer/broker_commissions.json)",
+    )
+    parser.add_argument(
+        "--broker-comm",
+        type=str,
+        default=None,
+        help="Inline broker commission overrides e.g. 'Pepperstone:7.0,RoboForex:4.0,FxPro:0.0'",
+    )
+    parser.add_argument(
+        "--no-comm",
+        action="store_true",
+        help="Disable commission addition and rank on pure raw market spread",
+    )
     return parser.parse_args()
 
 
@@ -80,6 +98,8 @@ def main() -> None:
 
     output_dir = args.output_dir.resolve()
     mappings_file = args.mappings.resolve()
+    commissions_file = args.commissions.resolve() if args.commissions else None
+    enable_commission = not args.no_comm
 
     if not output_dir.exists():
         logger.error(f"Base output directory not found: {output_dir}")
@@ -87,11 +107,16 @@ def main() -> None:
 
     logger.info(f"Scanning for broker runs in: {output_dir}")
     logger.info(f"Using symbol mappings: {mappings_file}")
-    logger.info("Ranking methodology: QUALITY SCORE (TWAS + 0.5*Tail + 1.0*Widening)")
+    comm_status = "ENABLED (All-In Quality Score)" if enable_commission else "DISABLED (Raw Spread Quality Score)"
+    logger.info(f"Broker Commission: {comm_status}")
+    logger.info("Ranking methodology: QUALITY SCORE (TWAS + Comm_bps + 0.4*Tail + 0.2*Blowout + 1.0*Widening)")
 
     groups, leaderboard = run_cross_broker_comparison(
         output_dir=output_dir,
         mappings_file=mappings_file,
+        commissions_file=commissions_file,
+        broker_comm_overrides=args.broker_comm,
+        enable_commission=enable_commission,
     )
 
     if not groups:
@@ -110,7 +135,7 @@ def main() -> None:
     # 3. HTML Dashboard Generation
     if not args.no_html:
         html_path = args.save_html or (output_dir / "index.html")
-        generate_comparison_html(groups, leaderboard, html_path)
+        generate_comparison_html(groups, leaderboard, html_path, enable_commission=enable_commission)
         logger.info(f"Exported comparison dashboard: {html_path} (with report_data.json & report_data.js)")
 
 

@@ -18,6 +18,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
+from spread_analyzer.commissions import (
+    CommissionProfile,
+    calculate_commission_impact,
+    load_commission_profile,
+)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
 logger = logging.getLogger("spread_comparator")
 
@@ -66,6 +72,16 @@ class BrokerSymbolRecord:
     p999_spread: float = 0.0
     tail_blowout_ratio: float = 1.0
     max_to_median_ratio: float = 1.0
+    mean_price: float = 0.0
+    # Commission & All-In Friction Metrics
+    asset_class: str = "other"
+    commission_rt_usd: float = 0.0
+    commission_spread: float = 0.0
+    commission_bps: float = 0.0
+    effective_median_spread: float = 0.0
+    effective_avg_spread: float = 0.0
+    effective_spread_bps: float = 0.0
+    effective_quality_score: float = 0.0
     # Scoring & Ranking
     quality_score: float = 0.0
     composite_score: float = 0.0
@@ -213,6 +229,7 @@ REQUIRED_SUMMARY_COLUMNS = {
     "avg_daily_volatility",
     "total_ticks",
     "sampled_minutes",
+    "mean_price",
 }
 
 
@@ -271,6 +288,7 @@ def parse_summary_csv(
             max_gap = float(row["max_quote_gap_sec"])
             core_max_gap = float(row["core_max_quote_gap_sec"])
             freeze_cnt = int(float(row["quote_freeze_count"]))
+            mean_p = float(row["mean_price"])
 
             record = BrokerSymbolRecord(
                 broker_tag=broker_tag,
@@ -303,6 +321,7 @@ def parse_summary_csv(
                 max_quote_gap_sec=max_gap,
                 core_max_quote_gap_sec=core_max_gap,
                 quote_freeze_count=freeze_cnt,
+                mean_price=mean_p,
                 composite_score=spread_bps,
             )
             records.append(record)
@@ -313,8 +332,12 @@ def parse_summary_csv(
 def run_cross_broker_comparison(
     output_dir: Path,
     mappings_file: Path,
+    commissions_file: Optional[Path] = None,
+    broker_comm_overrides: Optional[str] = None,
+    enable_commission: bool = True,
 ) -> Tuple[List[CanonicalComparisonGroup], Dict[str, BrokerLeaderboardStats]]:
     reverse_map = load_symbol_mappings(mappings_file)
+    comm_profile = load_commission_profile(commissions_file, broker_comm_overrides)
     files = discover_summary_files(output_dir)
 
     if not files:
@@ -346,13 +369,27 @@ def run_cross_broker_comparison(
     for canonical, recs in sorted(grouped.items()):
         # Institutional Additive Execution Quality Score (Friction in basis points):
         # Quality Score = TWAS (bps) + 0.4 * TailRisk (bps) + 0.2 * BlowoutRisk (bps) + 1.0 * WideningFriction (bps)
-        # Where:
-        # - TWAS (bps): Base time-weighted execution friction (fallback to spread_bps if 0)
-        # - TailRisk (bps): Non-negative normal right-tail spread risk (P95 - Median in bps)
-        # - BlowoutRisk (bps): Extreme tail expansion risk (P99.9 - P95 in bps)
-        # - WideningFriction (bps): TWAS * (widening_pct_15x_time / 100.0)
-        # Properties: Scale-invariant, monotonic, immune to zero-spread collapse.
+        # All-In Quality Score = (TWAS + Comm_bps) + 0.4 * TailRisk + 0.2 * BlowoutRisk + 1.0 * WideningFriction
+        # Note: Quote quality microstructure (tail risk, blowout, widening) is preserved strictly on raw spreads!
         for r in recs:
+            impact = calculate_commission_impact(
+                symbol=r.symbol,
+                broker_tag=r.broker_tag,
+                unit=r.unit,
+                median_spread=r.median_spread,
+                spread_bps=r.spread_bps,
+                mean_price=r.mean_price,
+                profile=comm_profile,
+                enable_commission=enable_commission,
+            )
+            r.asset_class = impact.asset_class
+            r.commission_rt_usd = impact.commission_rt_usd
+            r.commission_spread = impact.commission_spread
+            r.commission_bps = impact.commission_bps
+            r.effective_median_spread = impact.effective_spread
+            r.effective_avg_spread = round(r.avg_spread + impact.commission_spread, 4)
+            r.effective_spread_bps = impact.effective_spread_bps
+
             base_bps = r.time_weighted_bps if r.time_weighted_bps > 0.0 else r.spread_bps
             # 1. Normal right-tail risk (P95 - Median)
             tail_scaled = max(r.p95_spread - r.median_spread, 0.0)
@@ -367,19 +404,34 @@ def run_cross_broker_comparison(
 
             # 3. Widening duration friction
             widen_friction = base_bps * (r.widening_pct_15x_time / 100.0)
+
+            # Raw Quality Score
             r.quality_score = round(base_bps + 0.4 * tail_bps + 0.2 * blowout_bps + 1.0 * widen_friction, 4)
 
-        # Rank by composite quality score, tie-break with spread_bps then median_spread
-        recs_sorted = sorted(recs, key=lambda x: (x.quality_score, x.spread_bps, x.median_spread))
+            # Effective All-In Quality Score with commission
+            eff_base_bps = base_bps + r.commission_bps
+            r.effective_quality_score = round(eff_base_bps + 0.4 * tail_bps + 0.2 * blowout_bps + 1.0 * widen_friction, 4)
+
+            # Composite score used for ranking
+            r.composite_score = r.effective_quality_score if enable_commission else r.quality_score
+
+        # Rank by composite score, tie-break with spread_bps then median_spread
+        recs_sorted = sorted(
+            recs,
+            key=lambda x: (
+                x.composite_score,
+                x.effective_spread_bps if enable_commission else x.spread_bps,
+                x.effective_median_spread if enable_commission else x.median_spread,
+            ),
+        )
 
         is_contested = (len(recs_sorted) > 1)
         winner = recs_sorted[0] if recs_sorted else None
         runner_up = recs_sorted[1] if len(recs_sorted) > 1 else None
-        winner_lead = round(runner_up.quality_score - winner.quality_score, 4) if (winner and runner_up) else 0.0
+        winner_lead = round(runner_up.composite_score - winner.composite_score, 4) if (winner and runner_up) else 0.0
 
         for rank_idx, r in enumerate(recs_sorted, start=1):
             r.rank = rank_idx
-            r.composite_score = r.quality_score
             r.winner_lead_bps = winner_lead
 
             if rank_idx == 1:
@@ -387,7 +439,7 @@ def run_cross_broker_comparison(
                 r.savings_vs_worst_bps = winner_lead  # preserve for backwards compatibility
             else:
                 # Negative delta representing deficit vs winner in execution quality score
-                r.delta_vs_winner_bps = round(winner.quality_score - r.quality_score, 4)
+                r.delta_vs_winner_bps = round(winner.composite_score - r.composite_score, 4)
                 r.savings_vs_worst_bps = 0.0
 
             stats = leaderboard[r.broker_tag]
@@ -463,29 +515,30 @@ def print_comparison_terminal(
         )
 
     h_sym, h_rnk, h_brk, h_unt = "CANONICAL", "RANK", "BROKER ACCOUNT", "UNIT"
-    h_med, h_p95, h_bps = "MEDIAN", "P95", "SPREAD(BPS)"
-    h_stab, h_wid, h_qlt, h_dlt = "STABILITY", "WIDEN(>1.5x)%", "QUALITY", "DELTA VS #1"
-    print(f"\n{BOLD}{h_sym:<10}  {h_rnk:<5}  {h_brk:<35}  {h_unt:<6}  {h_med:<8}  {h_p95:<8}  {h_bps:<12}  {h_stab:<10}  {h_wid:<14}  {h_qlt:<8}  {h_dlt:<22}{RESET}")
-    print(f"{GRAY}{'-'*145}{RESET}")
+    h_med, h_comm, h_eff_med = "RAW MED", "COMM($)", "ALL-IN"
+    h_p95, h_bps, h_eff_bps = "P95", "RAW(BPS)", "ALL-IN(BPS)"
+    h_stab, h_score, h_dlt = "STABILITY", "SCORE", "DELTA VS #1"
+    print(f"\n{BOLD}{h_sym:<10}  {h_rnk:<5}  {h_brk:<32}  {h_unt:<6}  {h_med:<8}  {h_comm:<8}  {h_eff_med:<8}  {h_p95:<8}  {h_bps:<10}  {h_eff_bps:<11}  {h_stab:<10}  {h_score:<8}  {h_dlt:<20}{RESET}")
+    print(f"{GRAY}{'-'*155}{RESET}")
 
     for g in groups:
         is_contested = len(g.records) > 1
         for r in g.records:
             if r.rank == 1:
                 rank_str = f"{GREEN}{BOLD}#1 [BEST]{RESET}"
-                broker_str = f"{GREEN}{BOLD}{r.broker_tag:<35}{RESET}"
+                broker_str = f"{GREEN}{BOLD}{r.broker_tag:<32}{RESET}"
                 delta_str = f"{GREEN}+ {r.winner_lead_bps:.2f} bps lead{RESET}" if is_contested else f"{GREEN}[Best]{RESET}"
             elif r.rank == 2:
                 rank_str = f"{ORANGE}#2{RESET}"
-                broker_str = f"{r.broker_tag:<35}"
+                broker_str = f"{r.broker_tag:<32}"
                 delta_str = f"{ORANGE}{r.delta_vs_winner_bps:.2f} bps{RESET}"
             else:
                 rank_str = f"{GRAY}#{r.rank}{RESET}"
-                broker_str = f"{GRAY}{r.broker_tag:<35}{RESET}"
+                broker_str = f"{GRAY}{r.broker_tag:<32}{RESET}"
                 delta_str = f"{RED}{r.delta_vs_winner_bps:.2f} bps{RESET}"
 
             stab_color = GREEN if r.stability_ratio < 1.3 else (ORANGE if r.stability_ratio <= 2.0 else RED)
-            wid_color = GREEN if r.widening_pct_15x_time < 2.0 else (ORANGE if r.widening_pct_15x_time <= 10.0 else RED)
+            comm_str = f"${r.commission_rt_usd:.2f}" if r.commission_rt_usd > 0 else "-"
 
             print(
                 f"{BOLD}{g.canonical_symbol:<10}{RESET}  "
@@ -493,14 +546,16 @@ def print_comparison_terminal(
                 f"{broker_str}  "
                 f"{r.unit:<6}  "
                 f"{r.median_spread:<8.2f}  "
+                f"{comm_str:<8}  "
+                f"{BOLD}{r.effective_median_spread:<8.2f}{RESET}  "
                 f"{r.p95_spread:<8.2f}  "
-                f"{BOLD}{r.spread_bps:<12.2f}{RESET}  "
+                f"{r.spread_bps:<10.2f}  "
+                f"{BOLD}{r.effective_spread_bps:<11.2f}{RESET}  "
                 f"{stab_color}{f'{r.stability_ratio:.2f}x':<10}{RESET}  "
-                f"{wid_color}{f'{r.widening_pct_15x_time:.2f}%':<14}{RESET}  "
-                f"{r.quality_score:<8.3f}  "
-                f"{delta_str:<22}"
+                f"{r.composite_score:<8.3f}  "
+                f"{delta_str:<20}"
             )
-        print(f"{GRAY}{'.' * 145}{RESET}")
+        print(f"{GRAY}{'.' * 155}{RESET}")
     print()
 
 
@@ -519,6 +574,15 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
         "p95_spread",
         "max_spread",
         "spread_bps",
+        "mean_price",
+        "asset_class",
+        "commission_rt_usd",
+        "commission_spread",
+        "commission_bps",
+        "effective_median_spread",
+        "effective_avg_spread",
+        "effective_spread_bps",
+        "effective_quality_score",
         "stability_ratio",
         "widening_pct_15x_time",
         "widening_pct_20x_time",
@@ -528,6 +592,7 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
         "core_max_quote_gap_sec",
         "quote_freeze_count",
         "quality_score",
+        "composite_score",
         "delta_vs_winner_bps",
         "winner_lead_bps",
         "total_ticks",
@@ -552,6 +617,15 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
                     "p95_spread": r.p95_spread,
                     "max_spread": r.max_spread,
                     "spread_bps": round(r.spread_bps, 4),
+                    "mean_price": round(r.mean_price, 5),
+                    "asset_class": r.asset_class,
+                    "commission_rt_usd": round(r.commission_rt_usd, 2),
+                    "commission_spread": round(r.commission_spread, 4),
+                    "commission_bps": round(r.commission_bps, 4),
+                    "effective_median_spread": round(r.effective_median_spread, 4),
+                    "effective_avg_spread": round(r.effective_avg_spread, 4),
+                    "effective_spread_bps": round(r.effective_spread_bps, 4),
+                    "effective_quality_score": round(r.effective_quality_score, 4),
                     "stability_ratio": round(r.stability_ratio, 4),
                     "widening_pct_15x_time": round(r.widening_pct_15x_time, 4),
                     "widening_pct_20x_time": round(r.widening_pct_20x_time, 4),
@@ -561,6 +635,7 @@ def export_comparison_csv(groups: List[CanonicalComparisonGroup], csv_path: Path
                     "core_max_quote_gap_sec": round(r.core_max_quote_gap_sec, 4),
                     "quote_freeze_count": r.quote_freeze_count,
                     "quality_score": round(r.quality_score, 4),
+                    "composite_score": round(r.composite_score, 4),
                     "delta_vs_winner_bps": round(r.delta_vs_winner_bps, 4),
                     "winner_lead_bps": round(r.winner_lead_bps, 4),
                     "total_ticks": r.total_ticks,
@@ -573,6 +648,7 @@ def generate_comparison_html(
     groups: List[CanonicalComparisonGroup],
     leaderboard: Dict[str, BrokerLeaderboardStats],
     output_path: Path,
+    enable_commission: bool = True,
 ) -> Path:
     """
     Generates a decoupled cross-broker comparison package:
@@ -626,6 +702,15 @@ def generate_comparison_html(
                 "max_spread": round(float(r.max_spread), 4),
                 "metric_basis": r.metric_basis,
                 "spread_bps": round(float(r.spread_bps), 4),
+                "mean_price": round(float(r.mean_price), 5),
+                "asset_class": r.asset_class,
+                "commission_rt_usd": round(float(r.commission_rt_usd), 2),
+                "commission_spread": round(float(r.commission_spread), 4),
+                "commission_bps": round(float(r.commission_bps), 4),
+                "effective_median_spread": round(float(r.effective_median_spread), 4),
+                "effective_avg_spread": round(float(r.effective_avg_spread), 4),
+                "effective_spread_bps": round(float(r.effective_spread_bps), 4),
+                "effective_quality_score": round(float(r.effective_quality_score), 4),
                 "stability_ratio": round(float(r.stability_ratio), 4),
                 "tail_blowout_ratio": round(float(getattr(r, "tail_blowout_ratio", 1.0)), 4),
                 "max_to_median_ratio": round(float(getattr(r, "max_to_median_ratio", 1.0)), 4),
@@ -637,6 +722,7 @@ def generate_comparison_html(
                 "core_max_quote_gap_sec": round(float(r.core_max_quote_gap_sec), 4),
                 "quote_freeze_count": int(r.quote_freeze_count),
                 "quality_score": round(float(r.quality_score), 4),
+                "composite_score": round(float(r.composite_score), 4),
                 "rank": int(r.rank),
                 "delta_vs_winner_bps": round(float(r.delta_vs_winner_bps), 4),
                 "winner_lead_bps": round(float(r.winner_lead_bps), 4),
@@ -653,6 +739,7 @@ def generate_comparison_html(
     report_data = {
         "metric": metric_title,
         "rank_by": "quality",
+        "enable_commission": enable_commission,
         "leaderboard": leaderboard_data,
         "groups": groups_data,
     }
